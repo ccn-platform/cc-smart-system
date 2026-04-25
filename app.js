@@ -1,11 +1,7 @@
 const express =
 require("express");
 const cors = require("cors");
-const {
-  markOverdueLoans
-} = require(
-  "./services/overdueService"
-);
+ 
 const reportRoutes =require("./routes/reportRoutes");
 const cashRoutes =require("./routes/cashRoutes");
 const auditRoutes =require("./routes/auditRoutes");
@@ -35,7 +31,5 @@ app.use("/api/sales",salesRoutes);
 app.use("/api/orders",orderRoutes);
 app.use("/api/cash",cashRoutes);
 app.use("/api/credit",creditRoutes);
-setInterval(() => {
-  markOverdueLoans();
-}, 60000);
+ 
 module.exports = app;
