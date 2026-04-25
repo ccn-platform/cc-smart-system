@@ -2,7 +2,7 @@ const DebtLoan =
 require("../models/DebtLoan");
 
 const CustomerIdentity =
-require("../models/customerIdentity");
+require("../models/CustomerIdentity");
 
 const markOverdueLoans =
 async () => {
