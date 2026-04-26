@@ -1,4 +1,4 @@
-{
+ {
   "name": "backend-api",
   "version": "1.0.0",
   "description": "CCN Smart Retail Backend",
@@ -16,7 +16,8 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.4.1"
+    "mongoose": "^9.4.1",
+    "openai": "^6.34.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
