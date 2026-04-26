@@ -1,5 +1,4 @@
-  const fs = require("fs");
-const OpenAI =
+  const OpenAI =
 require("openai");
 
 const client =
@@ -9,16 +8,12 @@ new OpenAI({
 });
 
 const readImageText =
-async (imageUri) => {
+async (file) => {
   try {
 
     const imageBase64 =
-      fs.readFileSync(
-        imageUri,
-        {
-          encoding:
-            "base64"
-        }
+      file.buffer.toString(
+        "base64"
       );
 
     const response =
@@ -58,7 +53,7 @@ ProductName Qty TotalPrice
                   "image_url",
                 image_url: {
                   url:
-`data:image/jpeg;base64,${imageBase64}`
+`data:${file.mimetype};base64,${imageBase64}`
                 }
               }
             ]
@@ -77,6 +72,8 @@ ProductName Qty TotalPrice
     return text;
 
   } catch (error) {
+    console.log(error);
+
     throw new Error(
       "Failed to read image text"
     );
