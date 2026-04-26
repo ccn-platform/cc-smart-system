@@ -71,13 +71,17 @@ ProductName Qty TotalPrice
 
     return text;
 
-  } catch (error) {
-    console.log(error);
+  }  
+  catch (error) {
+  console.log(
+    "OCR ERROR:",
+    error
+  );
 
-    throw new Error(
-      "Failed to read image text"
-    );
-  }
+  throw new Error(
+    "Failed to read image text"
+  );
+}
 };
 
 module.exports = {
