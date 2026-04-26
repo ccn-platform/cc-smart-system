@@ -1,5 +1,8 @@
- const express =
+  const express =
 require("express");
+
+const multer =
+require("multer");
 
 const router =
 express.Router();
@@ -20,6 +23,18 @@ const {
 );
 
 
+// Memory storage
+const upload =
+multer({
+  storage:
+    multer.memoryStorage(),
+  limits: {
+    fileSize:
+      10 * 1024 * 1024
+  }
+});
+
+
 // Scan pasted text
 router.post(
   "/scan",
@@ -32,6 +47,9 @@ router.post(
 router.post(
   "/scan-image",
   protect,
+  upload.single(
+    "image"
+  ),
   scanImage
 );
 
