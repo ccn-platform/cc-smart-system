@@ -1,4 +1,4 @@
- const Order =
+  const Order =
 require("../models/Order");
 
 const cleanOCRText =
@@ -52,22 +52,23 @@ async (req, res) => {
         req.user.id,
         items
       );
- 
-      const order =
-await Order.create({
-  user:
-    req.user.id,
-  rawText:
-    cleanText,
-  items:
-    result.items,
-  buyTotal:
-    result.buyTotal,
-  sellTotal:
-    result.sellTotal,
-  totalProfit:
-    result.totalProfit
-});
+
+    const order =
+      await Order.create({
+        user:
+          req.user.id,
+        rawText:
+          cleanText,
+        items:
+          result.items,
+        buyTotal:
+          result.buyTotal,
+        sellTotal:
+          result.sellTotal,
+        totalProfit:
+          result.totalProfit
+      });
+
     res.status(200).json({
       orderId:
         order._id,
@@ -75,6 +76,7 @@ await Order.create({
         cleanText,
       ...result
     });
+
   } catch (error) {
     res.status(500).json({
       message:
@@ -88,10 +90,8 @@ await Order.create({
 const scanImage =
 async (req, res) => {
   try {
-    const { imageUri } =
-      req.body;
 
-    if (!imageUri) {
+    if (!req.file) {
       return res.status(400).json({
         message:
           "Image required"
@@ -100,7 +100,7 @@ async (req, res) => {
 
     const text =
       await readImageText(
-        imageUri
+        req.file
       );
 
     const cleanText =
@@ -111,24 +111,36 @@ async (req, res) => {
         cleanText
       );
 
+    if (
+      items.length === 0
+    ) {
+      return res.status(400).json({
+        message:
+          "No items detected"
+      });
+    }
+
     const result =
       await analyzeProfit(
         req.user.id,
         items
       );
 
-  const order =
-await Order.create({
-  user:req.user.id,
-  rawText:cleanText,
-  items:result.items,
-  buyTotal:
-    result.buyTotal,
-  sellTotal:
-    result.sellTotal,
-  totalProfit:
-    result.totalProfit
-});
+    const order =
+      await Order.create({
+        user:
+          req.user.id,
+        rawText:
+          cleanText,
+        items:
+          result.items,
+        buyTotal:
+          result.buyTotal,
+        sellTotal:
+          result.sellTotal,
+        totalProfit:
+          result.totalProfit
+      });
 
     res.status(200).json({
       orderId:
@@ -137,6 +149,7 @@ await Order.create({
         cleanText,
       ...result
     });
+
   } catch (error) {
     res.status(500).json({
       message:
@@ -159,12 +172,13 @@ async (req, res) => {
         createdAt: -1
       })
       .select(
-         "_id buyTotal sellTotal totalProfit createdAt"
-       );
+        "_id buyTotal sellTotal totalProfit createdAt"
+      );
 
     res.status(200).json(
       orders
     );
+
   } catch (error) {
     res.status(500).json({
       message:
@@ -196,6 +210,7 @@ async (req, res) => {
     res.status(200).json(
       order
     );
+
   } catch (error) {
     res.status(500).json({
       message:
