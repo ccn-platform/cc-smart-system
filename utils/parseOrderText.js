@@ -1,108 +1,57 @@
-   const parseOrderText = (text) => {
-  const lines = String(text)
-    .split("\n")
+ const parseOrderText = (text) => {
+  const parts = String(text)
+    .split(/\s+/)
     .map(x => x.trim())
     .filter(Boolean);
 
   const items = [];
- 
-   for (let line of lines) {
+  let words = [];
 
-  line = line
-    .replace(/[=:,-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  for (let i = 0; i < parts.length; i++) {
+    const token = parts[i];
 
-  let rowNo = null;
+    const isNum =
+      /^\d+$/.test(token);
 
-  const rowMatch =
-    line.match(/^(\d+)\s+/);
+    if (!isNum) {
+      words.push(token);
+      continue;
+    }
 
-  if (rowMatch) {
-    rowNo =
-      Number(rowMatch[1]);
+    const qty =
+      Number(token);
 
-    line = line.replace(
-      /^(\d+)\s+/,
-      ""
-    );
-  }
+    const next =
+      parts[i + 1];
 
-  const nums =
-    line.match(/\d+/g) || [];
+    if (
+      next &&
+      /^\d+$/.test(next)
+    ) {
+      const total =
+        Number(next);
 
-  if (nums.length < 2)
-    continue;
+      if (
+        words.length > 0 &&
+        qty > 0 &&
+        total > qty
+      ) {
+        items.push({
+          no:
+            items.length + 1,
+          name:
+            words.join(" "),
+          qty,
+          buyPrice:
+            Math.round(
+              total / qty
+            ),
+        });
 
-  const qty =
-    Number(
-      nums[
-        nums.length - 2
-      ]
-    );
-
-  const totalPrice =
-    Number(
-      nums[
-        nums.length - 1
-      ]
-    );
-
-  if (!qty || !totalPrice)
-    continue;
-
-  let name = line;
-    // remove qty
-    name = name.replace(
-      new RegExp(
-        "\\b" +
-          qty +
-          "\\b"
-      ),
-      ""
-    );
-
-    // remove total
-    name = name.replace(
-      new RegExp(
-        "\\b" +
-          totalPrice +
-          "\\b"
-      ),
-      ""
-    );
-
-    name = name
-  .replace(
-    /x|pcs|pc|pkt|kg|g|ltr|ml/gi,
-    " "
-  )
-  .replace(
-    /great|grove|=|:|\./gi,
-    " "
-  )
-  .replace(/\d+/g, " ")
-  .replace(/\s+/g, " ")
-  .trim();
-
-if (
-  !name ||
-  name.length < 2
-)
-  continue;
-
-     items.push({
-  no:
-    rowNo ||
-    items.length + 1,
-  name,
-  qty,
-  buyPrice:
-    Math.round(
-      totalPrice /
-      qty
-    ),
-});
+        words = [];
+        i++; // skip total
+      }
+    }
   }
 
   return items;
