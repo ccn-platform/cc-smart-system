@@ -1,64 +1,144 @@
- const parseOrderText = (text) => {
-  const raw = String(text)
-    .replace(/\r/g, "\n")
-    .replace(/[|,]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+ const Product =
+require("../models/Product");
 
-  const lines = raw
-    .split(/\n+/)
-    .map(x => x.trim())
-    .filter(Boolean);
+const normalizeProductName =
+require("../utils/normalizeProductName");
 
-  const items = [];
+const analyzeProfit =
+async (
+  userId,
+  items,
+  branchId = null
+) => {
+  const query = {
+    user: userId,
+    isActive: true,
+  };
 
-  for (let line of lines) {
-    const nums = line.match(/\d+/g) || [];
-
-    if (nums.length < 2) continue;
-
-    const qty = Number(nums[0]);
-    const totalPrice =
-      Number(nums[nums.length - 1]);
-
-    if (!qty || !totalPrice) continue;
-
-    let name = line;
-
-    name = name.replace(nums[0], "");
-
-    const pos =
-      name.lastIndexOf(
-        String(totalPrice)
-      );
-
-    if (pos !== -1) {
-      name =
-        name.slice(0, pos) +
-        name.slice(
-          pos +
-          String(totalPrice).length
-        );
-    }
-
-    name = name
-      .replace(/x|pcs|pc|pkt|kg/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!name) continue;
-
-    items.push({
-      name,
-      qty,
-      buyPrice:
-        Math.round(
-          totalPrice / qty
-        ),
-    });
+  if (branchId) {
+    query.branch = branchId;
   }
 
-  return items;
+  const products =
+    await Product.find(query);
+
+  let results = [];
+  let buyTotal = 0;
+  let sellTotal = 0;
+  let totalProfit = 0;
+
+  let matchedCount = 0;
+  let unmatchedCount = 0;
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+
+    const clean =
+      normalizeProductName(
+        item.name
+      );
+
+    const matched =
+      products.find((p) => {
+        const pname =
+          normalizeProductName(
+            p.name
+          );
+
+        return (
+          pname.includes(clean) ||
+          clean.includes(pname)
+        );
+      });
+
+    const qty =
+      Number(item.qty) || 0;
+
+    const buyPrice =
+      Number(item.buyPrice) || 0;
+
+    const itemBuyTotal =
+      qty * buyPrice;
+
+    buyTotal += itemBuyTotal;
+
+    if (matched) {
+      const sellPrice =
+        Number(
+          matched.sellPrice
+        ) || 0;
+
+      const itemSellTotal =
+        qty * sellPrice;
+
+      const profitEach =
+        sellPrice -
+        buyPrice;
+
+      const profitTotal =
+        profitEach *
+        qty;
+
+      sellTotal +=
+        itemSellTotal;
+
+      totalProfit +=
+        profitTotal;
+
+      matchedCount++;
+
+      results.push({
+        no: i + 1,
+        name: item.name,
+        qty,
+        buyPrice,
+        buyTotal:
+          itemBuyTotal,
+        sellPrice,
+        sellTotal:
+          itemSellTotal,
+        profitEach,
+        profitTotal,
+        matched: true,
+      });
+    } else {
+      unmatchedCount++;
+
+      results.push({
+        no: i + 1,
+        name: item.name,
+        qty,
+        buyPrice,
+        buyTotal:
+          itemBuyTotal,
+        sellPrice: 0,
+        sellTotal: 0,
+        profitEach: 0,
+        profitTotal: 0,
+        matched: false,
+      });
+    }
+  }
+
+  return {
+    items: results,
+    buyTotal:
+      Math.round(
+        buyTotal
+      ),
+    sellTotal:
+      Math.round(
+        sellTotal
+      ),
+    totalProfit:
+      Math.round(
+        totalProfit
+      ),
+    matchedCount,
+    unmatchedCount,
+  };
 };
 
-module.exports = parseOrderText;
+module.exports = {
+  analyzeProfit,
+}; 
