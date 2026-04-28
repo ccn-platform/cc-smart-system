@@ -1,5 +1,5 @@
- const parseOrderText = (text) => {
-  const parts = String(text)
+const parseOrderText = (text) => {
+  const tokens = String(text)
     .split(/\s+/)
     .map(x => x.trim())
     .filter(Boolean);
@@ -7,8 +7,8 @@
   const items = [];
   let words = [];
 
-  for (let i = 0; i < parts.length; i++) {
-    const token = parts[i];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
 
     const isNum =
       /^\d+$/.test(token);
@@ -21,36 +21,50 @@
     const qty =
       Number(token);
 
-    const next =
-      parts[i + 1];
+    if (qty <= 0)
+      continue;
+
+    // search next big number as total
+    let total = null;
+    let jump = i;
+
+    for (
+      let j = i + 1;
+      j < tokens.length;
+      j++
+    ) {
+      if (/^\d+$/.test(tokens[j])) {
+        const n =
+          Number(tokens[j]);
+
+        if (n > qty) {
+          total = n;
+          jump = j;
+          break;
+        }
+      } else {
+        break;
+      }
+    }
 
     if (
-      next &&
-      /^\d+$/.test(next)
+      words.length > 0 &&
+      total !== null
     ) {
-      const total =
-        Number(next);
+      items.push({
+        no:
+          items.length + 1,
+        name:
+          words.join(" "),
+        qty,
+        buyPrice:
+          Math.round(
+            total / qty
+          ),
+      });
 
-      if (
-        words.length > 0 &&
-        qty > 0 &&
-        total > qty
-      ) {
-        items.push({
-          no:
-            items.length + 1,
-          name:
-            words.join(" "),
-          qty,
-          buyPrice:
-            Math.round(
-              total / qty
-            ),
-        });
-
-        words = [];
-        i++; // skip total
-      }
+      words = [];
+      i = jump;
     }
   }
 
