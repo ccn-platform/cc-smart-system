@@ -1,87 +1,49 @@
-  const OpenAI =
-require("openai");
+  const axios = require("axios");
 
-const client =
-new OpenAI({
-  apiKey:
-    process.env.OPENAI_API_KEY
-});
-
-const readImageText =
-async (file) => {
+const readImageText = async (file) => {
   try {
-
     const imageBase64 =
-      file.buffer.toString(
-        "base64"
-      );
+      file.buffer.toString("base64");
+
+    const url =
+`https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`;
 
     const response =
-      await client.chat.completions.create({
-        model:
-          "gpt-4o-mini",
-        messages: [
+      await axios.post(url, {
+        requests: [
           {
-            role:
-              "system",
-            content:
-`You read handwritten supplier orders.
-
-Convert the image into clean typed product lines only.
-
-Rules:
-1. Return only order items.
-2. One item per line.
-3. Format:
-ProductName Qty TotalPrice
-4. Fix spelling if obvious.
-5. No explanation.
-6. No JSON.`
-          },
-          {
-            role:
-              "user",
-            content: [
+            image: {
+              content: imageBase64
+            },
+            features: [
               {
                 type:
-                  "text",
-                text:
-                  "Read this order image"
-              },
-              {
-                type:
-                  "image_url",
-                image_url: {
-                  url:
-`data:${file.mimetype};base64,${imageBase64}`
-                }
+                  "DOCUMENT_TEXT_DETECTION"
               }
             ]
           }
-        ],
-        temperature: 0
+        ]
       });
 
     const text =
-      response
-      .choices[0]
-      .message
-      .content
-      .trim();
+      response.data
+      ?.responses?.[0]
+      ?.fullTextAnnotation
+      ?.text || "";
 
-    return text;
+    return text.trim();
 
-  }  
-  catch (error) {
-  console.log(
-    "OCR ERROR:",
-    error
-  );
+  } catch (error) {
+    console.log(
+      "OCR ERROR:",
+      error.response?.data ||
+      error.message
+    );
 
-  throw new Error(
-    "Failed to read image text"
-  );
-}
+    throw new Error(
+      "Failed to read image text"
+    );
+  }
 };
 
 module.exports = {
