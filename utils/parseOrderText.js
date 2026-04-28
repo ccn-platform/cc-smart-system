@@ -67,15 +67,23 @@
     );
 
     name = name
-      .replace(
-        /x|pcs|pc|pkt|kg|g|ltr|ml/gi,
-        " "
-      )
-      .replace(/\s+/g, " ")
-      .trim();
+  .replace(
+    /x|pcs|pc|pkt|kg|g|ltr|ml/gi,
+    " "
+  )
+  .replace(
+    /great|grove|=|:|\./gi,
+    " "
+  )
+  .replace(/\d+/g, " ")
+  .replace(/\s+/g, " ")
+  .trim();
 
-    if (!name)
-      continue;
+if (
+  !name ||
+  name.length < 2
+)
+  continue;
 
      items.push({
   no:
