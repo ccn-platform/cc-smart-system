@@ -1,53 +1,79 @@
- const nums =
-  line.match(/\d+/g) || [];
+ const parseOrderText = (text) => {
+  const lines = String(text)
+    .split("\n")
+    .map(x => x.trim())
+    .filter(Boolean);
 
-if (nums.length < 2)
-  continue;
+  const items = [];
 
-const qty =
-  Number(nums[nums.length - 2]);
+  for (const line of lines) {
+    const nums =
+      line.match(/\d+/g) || [];
 
-const totalPrice =
-  Number(nums[nums.length - 1]);
+    if (nums.length < 2)
+      continue;
 
-if (!qty || !totalPrice)
-  continue;
+    const qty =
+      Number(
+        nums[
+          nums.length - 2
+        ]
+      );
 
-let name = line;
+    const totalPrice =
+      Number(
+        nums[
+          nums.length - 1
+        ]
+      );
 
-// remove qty mwisho karibu
-name = name.replace(
-  new RegExp(
-    "\\b" + qty + "\\b"
-  ),
-  ""
-);
+    if (!qty || !totalPrice)
+      continue;
 
-// remove total mwisho
-name = name.replace(
-  new RegExp(
-    "\\b" +
-    totalPrice +
-    "\\b"
-  ),
-  ""
-);
+    let name = line;
 
-name = name
-  .replace(
-    /x|pcs|pc|pkt|kg|g|ltr|ml/gi,
-    " "
-  )
-  .replace(/\s+/g, " ")
-  .trim();
+    name = name.replace(
+      new RegExp(
+        "\\b" +
+          qty +
+          "\\b"
+      ),
+      ""
+    );
 
-if (!name) continue;
+    name = name.replace(
+      new RegExp(
+        "\\b" +
+          totalPrice +
+          "\\b"
+      ),
+      ""
+    );
 
-items.push({
-  name,
-  qty,
-  buyPrice:
-    Math.round(
-      totalPrice / qty
-    ),
-});
+    name = name
+      .replace(
+        /x|pcs|pc|pkt|kg|g|ltr|ml/gi,
+        " "
+      )
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!name)
+      continue;
+
+    items.push({
+      name,
+      qty,
+      buyPrice:
+        Math.round(
+          totalPrice /
+            qty
+        ),
+    });
+  }
+
+  return items;
+};
+
+module.exports =
+  parseOrderText;
