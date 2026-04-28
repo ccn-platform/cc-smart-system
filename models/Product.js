@@ -25,7 +25,13 @@ new mongoose.Schema(
       trim: true,
       index: true
     },
-
+     aliases: [
+  {
+    type: String,
+    trim: true
+  }
+]
+    
     barcode: {
       type: String,
       default: "",
