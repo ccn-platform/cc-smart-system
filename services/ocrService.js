@@ -9,8 +9,8 @@ async (file) => {
         "base64"
       );
 
- const url =
-`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    const url =
+`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
 
     const prompt = `
 Read this supplier order image carefully.
@@ -29,7 +29,7 @@ Return plain text only.
 
 One item per line.
 
-Use this format:
+Use this exact format:
 
 ProductName Qty Total
 
@@ -41,14 +41,16 @@ Soap 24 36000
 
 Rules:
 
-- Detect any type of product
+- Detect all products
+- Detect many rows
 - Ignore headings
+- Ignore dates
 - Ignore signatures
 - Ignore phone numbers
-- Ignore dates
 - Ignore grand totals
-- Ignore random noise text
+- Ignore random text
 - No explanation
+- No numbering
 `;
 
     const response =
@@ -77,8 +79,17 @@ Rules:
           ],
           generationConfig:
             {
-              temperature: 0
+              temperature: 0,
+              topK: 1,
+              topP: 1,
+              maxOutputTokens: 2048
             }
+        },
+        {
+          headers: {
+            "Content-Type":
+              "application/json"
+          }
         }
       );
 
