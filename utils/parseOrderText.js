@@ -1,45 +1,51 @@
- const parseOrderText = (text) => {
+   const parseOrderText = (text) => {
   const lines = String(text)
     .split("\n")
     .map(x => x.trim())
     .filter(Boolean);
 
   const items = [];
-
+ 
   for (let line of lines) {
-    const nums =
-      line.match(/\d+/g) || [];
+  let rowNo = null;
 
-    if (nums.length < 2)
-      continue;
+  const rowMatch =
+    line.match(/^(\d+)\s+/);
 
-    // qty = second last
-    const qty =
-      Number(
-        nums[
-          nums.length - 2
-        ]
-      );
+  if (rowMatch) {
+    rowNo =
+      Number(rowMatch[1]);
 
-    // total = last
-    const totalPrice =
-      Number(
-        nums[
-          nums.length - 1
-        ]
-      );
-
-    if (!qty || !totalPrice)
-      continue;
-
-    let name = line;
-
-    // remove row number at start
-    name = name.replace(
-      /^\d+\s*/,
+    line = line.replace(
+      /^(\d+)\s+/,
       ""
     );
+  }
 
+  const nums =
+    line.match(/\d+/g) || [];
+
+  if (nums.length < 2)
+    continue;
+
+  const qty =
+    Number(
+      nums[
+        nums.length - 2
+      ]
+    );
+
+  const totalPrice =
+    Number(
+      nums[
+        nums.length - 1
+      ]
+    );
+
+  if (!qty || !totalPrice)
+    continue;
+
+  let name = line;
     // remove qty
     name = name.replace(
       new RegExp(
@@ -71,15 +77,18 @@
     if (!name)
       continue;
 
-    items.push({
-      name,
-      qty,
-      buyPrice:
-        Math.round(
-          totalPrice /
-            qty
-        ),
-    });
+     items.push({
+  no:
+    rowNo ||
+    items.length + 1,
+  name,
+  qty,
+  buyPrice:
+    Math.round(
+      totalPrice /
+      qty
+    ),
+});
   }
 
   return items;
