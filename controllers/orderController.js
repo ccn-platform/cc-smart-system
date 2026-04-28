@@ -1,4 +1,4 @@
-  const Order =
+   const Order =
 require("../models/Order");
 
 const cleanOCRText =
@@ -99,17 +99,32 @@ async (req, res) => {
     }
 
     const text =
-      await readImageText(
-        req.file
-      );
+  await readImageText(
+    req.file
+  );
 
-    const cleanText =
-      cleanOCRText(text);
+console.log(
+  "RAW OCR TEXT:\n",
+  text
+);
 
-    const items =
-      parseOrderText(
-        cleanText
-      );
+const cleanText =
+  cleanOCRText(text);
+
+console.log(
+  "CLEAN TEXT:\n",
+  cleanText
+);
+
+const items =
+  parseOrderText(
+    cleanText
+  );
+
+console.log(
+  "PARSED ITEMS:",
+  items
+);
 
     if (
       items.length === 0
@@ -224,4 +239,4 @@ module.exports = {
   scanImage,
   getOrderHistory,
   getOrderById
-};
+};    
