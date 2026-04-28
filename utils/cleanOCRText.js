@@ -1,37 +1,37 @@
-const cleanOCRText = (text) => {
+ const cleanOCRText = (text) => {
   const lines = String(text)
     .replace(/\r/g, "")
     .replace(/\t/g, " ")
-    .replace(/[|]/g, " ")
+    .replace(/[|=:]/g, " ")
     .replace(/ +/g, " ")
     .split("\n")
     .map(x => x.trim())
     .filter(Boolean);
 
-  const merged = [];
+  const rows = [];
+  let current = "";
 
-  for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
-
-    // row starts with number
+  for (const line of lines) {
+    // new row starts with number
     if (/^\d+\s+/.test(line)) {
-      while (
-        i + 1 < lines.length &&
-        !/^\d+\s+/.test(
-          lines[i + 1]
-        )
-      ) {
-        line +=
-          " " +
-          lines[i + 1];
-        i++;
-      }
+      if (current)
+        rows.push(current);
 
-      merged.push(line);
+      current = line;
+    } else {
+      // append only if no new row
+      current += " " + line;
     }
   }
 
-  return merged.join("\n");
+  if (current)
+    rows.push(current);
+
+  return rows
+    .map(x =>
+      x.replace(/\s+/g, " ").trim()
+    )
+    .join("\n");
 };
 
 module.exports =
