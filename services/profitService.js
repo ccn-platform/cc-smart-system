@@ -38,18 +38,20 @@ async (
         item.name
       );
 
-    const matched =
-      products.find((p) => {
-        const pname =
-          normalizeProductName(
-            p.name
-          );
+   const matched =
+  products.find((p) => {
+    const pname =
+      normalizeProductName(
+        p.name
+      );
 
-        return (
-          pname.includes(clean) ||
-          clean.includes(pname)
-        );
-      });
+    return (
+      pname.includes(clean) ||
+      clean.includes(pname) ||
+      pname.startsWith(clean) ||
+      clean.startsWith(pname)
+    );
+  });
 
     const qty =
       Number(item.qty) || 0;
