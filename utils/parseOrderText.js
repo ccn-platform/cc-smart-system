@@ -1,144 +1,53 @@
-  const Product =
-require("../models/Product");
+ const nums =
+  line.match(/\d+/g) || [];
 
-const normalizeProductName =
-require("../utils/normalizeProductName");
+if (nums.length < 2)
+  continue;
 
-const analyzeProfit =
-async (
-  userId,
-  items,
-  branchId = null
-) => {
-  const query = {
-    user: userId,
-    isActive: true,
-  };
+const qty =
+  Number(nums[nums.length - 2]);
 
-  if (branchId) {
-    query.branch = branchId;
-  }
+const totalPrice =
+  Number(nums[nums.length - 1]);
 
-  const products =
-    await Product.find(query);
+if (!qty || !totalPrice)
+  continue;
 
-  let results = [];
-  let buyTotal = 0;
-  let sellTotal = 0;
-  let totalProfit = 0;
+let name = line;
 
-  let matchedCount = 0;
-  let unmatchedCount = 0;
+// remove qty mwisho karibu
+name = name.replace(
+  new RegExp(
+    "\\b" + qty + "\\b"
+  ),
+  ""
+);
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
+// remove total mwisho
+name = name.replace(
+  new RegExp(
+    "\\b" +
+    totalPrice +
+    "\\b"
+  ),
+  ""
+);
 
-    const clean =
-      normalizeProductName(
-        item.name
-      );
+name = name
+  .replace(
+    /x|pcs|pc|pkt|kg|g|ltr|ml/gi,
+    " "
+  )
+  .replace(/\s+/g, " ")
+  .trim();
 
-    const matched =
-      products.find((p) => {
-        const pname =
-          normalizeProductName(
-            p.name
-          );
+if (!name) continue;
 
-        return (
-          pname.includes(clean) ||
-          clean.includes(pname)
-        );
-      });
-
-    const qty =
-      Number(item.qty) || 0;
-
-    const buyPrice =
-      Number(item.buyPrice) || 0;
-
-    const itemBuyTotal =
-      qty * buyPrice;
-
-    buyTotal += itemBuyTotal;
-
-    if (matched) {
-      const sellPrice =
-        Number(
-          matched.sellPrice
-        ) || 0;
-
-      const itemSellTotal =
-        qty * sellPrice;
-
-      const profitEach =
-        sellPrice -
-        buyPrice;
-
-      const profitTotal =
-        profitEach *
-        qty;
-
-      sellTotal +=
-        itemSellTotal;
-
-      totalProfit +=
-        profitTotal;
-
-      matchedCount++;
-
-      results.push({
-        no: i + 1,
-        name: item.name,
-        qty,
-        buyPrice,
-        buyTotal:
-          itemBuyTotal,
-        sellPrice,
-        sellTotal:
-          itemSellTotal,
-        profitEach,
-        profitTotal,
-        matched: true,
-      });
-    } else {
-      unmatchedCount++;
-
-      results.push({
-        no: i + 1,
-        name: item.name,
-        qty,
-        buyPrice,
-        buyTotal:
-          itemBuyTotal,
-        sellPrice: 0,
-        sellTotal: 0,
-        profitEach: 0,
-        profitTotal: 0,
-        matched: false,
-      });
-    }
-  }
-
-  return {
-    items: results,
-    buyTotal:
-      Math.round(
-        buyTotal
-      ),
-    sellTotal:
-      Math.round(
-        sellTotal
-      ),
-    totalProfit:
-      Math.round(
-        totalProfit
-      ),
-    matchedCount,
-    unmatchedCount,
-  };
-};
-
-module.exports = {
-  analyzeProfit,
-};
+items.push({
+  name,
+  qty,
+  buyPrice:
+    Math.round(
+      totalPrice / qty
+    ),
+});
