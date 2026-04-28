@@ -6,7 +6,13 @@
 
   const items = [];
  
-  for (let line of lines) {
+   for (let line of lines) {
+
+  line = line
+    .replace(/[=:,-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
   let rowNo = null;
 
   const rowMatch =
