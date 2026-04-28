@@ -1,12 +1,6 @@
 const axios =
 require("axios");
 
-const PROJECT_ID =
-"striking-bot-494704-u3";
-
-const REGION =
-"us-central1";
-
 const readImageText =
 async (file) => {
   try {
@@ -16,7 +10,7 @@ async (file) => {
       );
 
     const url =
-`https://${REGION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${REGION}/publishers/google/models/gemini-2.0-flash:generateContent`;
+`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
 
     const prompt = `
 Read this supplier order image carefully.
@@ -64,16 +58,15 @@ Rules:
         {
           contents: [
             {
-              role: "user",
               parts: [
                 {
                   text:
                     prompt
                 },
                 {
-                  inlineData:
+                  inline_data:
                     {
-                      mimeType:
+                      mime_type:
                         file.mimetype ||
                         "image/jpeg",
                       data:
@@ -86,17 +79,10 @@ Rules:
           generationConfig:
             {
               temperature: 0,
+              topK: 1,
               topP: 1,
               maxOutputTokens: 2048
             }
-        },
-        {
-          headers: {
-            Authorization:
-`Bearer ${process.env.GEMINI_API_KEY}`,
-            "Content-Type":
-              "application/json"
-          }
         }
       );
 
@@ -115,7 +101,7 @@ Rules:
 
   } catch (error) {
     console.log(
-      "VERTEX GEMINI ERROR:",
+      "GEMINI ERROR:",
       error.response
         ?.data ||
         error.message
