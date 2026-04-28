@@ -1,51 +1,48 @@
  const parseOrderText = (text) => {
-  const lines = String(text)
-    .split("\n")
+  const raw = String(text)
+    .replace(/\r/g, "\n")
+    .replace(/[|,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const lines = raw
+    .split(/\n+/)
     .map(x => x.trim())
     .filter(Boolean);
 
   const items = [];
 
-  for (const line of lines) {
-    const nums =
-      line.match(/\d+/g) || [];
+  for (let line of lines) {
+    const nums = line.match(/\d+/g) || [];
 
-    if (nums.length < 2)
-      continue;
+    if (nums.length < 2) continue;
 
-    const qty =
-      Number(nums[0]);
-
+    const qty = Number(nums[0]);
     const totalPrice =
       Number(nums[nums.length - 1]);
 
-    if (!qty || !totalPrice)
-      continue;
+    if (!qty || !totalPrice) continue;
 
     let name = line;
 
-    name = name.replace(
-      nums[0],
-      ""
-    );
+    name = name.replace(nums[0], "");
 
-    const last =
+    const pos =
       name.lastIndexOf(
         String(totalPrice)
       );
 
-    if (last !== -1) {
+    if (pos !== -1) {
       name =
-        name.slice(0, last) +
+        name.slice(0, pos) +
         name.slice(
-          last +
-          String(totalPrice)
-            .length
+          pos +
+          String(totalPrice).length
         );
     }
 
     name = name
-      .replace(/[-x*]/gi, " ")
+      .replace(/x|pcs|pc|pkt|kg/gi, " ")
       .replace(/\s+/g, " ")
       .trim();
 
@@ -64,5 +61,4 @@
   return items;
 };
 
-module.exports =
-  parseOrderText;
+module.exports = parseOrderText;
