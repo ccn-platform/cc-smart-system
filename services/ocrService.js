@@ -1,4 +1,4 @@
-const axios =
+ const axios =
 require("axios");
 
 const readImageText =
@@ -10,55 +10,94 @@ async (file) => {
       );
 
     const url =
-`https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`;
+`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+
+    const prompt = `
+Read this supplier order image carefully.
+
+The image may contain many different products.
+
+Identify every product row/item.
+
+For each item extract:
+
+1. Product name
+2. Quantity
+3. Total purchase amount
+
+Return plain text only.
+
+One item per line.
+
+Use this format:
+
+ProductName Qty Total
+
+Examples:
+
+Sugar 5 25000
+Rice 10 78000
+Soap 24 36000
+
+Rules:
+
+- Detect any type of product
+- Ignore headings
+- Ignore signatures
+- Ignore phone numbers
+- Ignore dates
+- Ignore grand totals
+- Ignore random noise text
+- No explanation
+`;
 
     const response =
       await axios.post(
         url,
         {
-          requests: [
+          contents: [
             {
-              image: {
-                content:
-                  imageBase64
-              },
-              features: [
+              parts: [
                 {
-                  type:
-"DOCUMENT_TEXT_DETECTION"
+                  text:
+                    prompt
+                },
+                {
+                  inline_data:
+                    {
+                      mime_type:
+                        file.mimetype ||
+                        "image/jpeg",
+                      data:
+                        imageBase64
+                    }
                 }
               ]
             }
-          ]
+          ],
+          generationConfig:
+            {
+              temperature: 0
+            }
         }
       );
 
-    const data =
+    const text =
       response.data
-      ?.responses?.[0];
+        ?.candidates?.[0]
+        ?.content
+        ?.parts?.[0]
+        ?.text || "";
 
-    let text =
-      data
-        ?.fullTextAnnotation
-        ?.text ||
-      data
-        ?.textAnnotations?.[0]
-        ?.description ||
-      "";
-
-    text = String(text)
+    return String(text)
       .replace(/\r/g, "")
-      .replace(/[|]/g, " ")
-      .replace(/[=:]/g, " ")
       .replace(/\n{2,}/g, "\n")
       .replace(/[ ]{2,}/g, " ")
       .trim();
 
-    return text;
-
   } catch (error) {
     console.log(
-      "OCR ERROR:",
+      "GEMINI ERROR:",
       error.response
         ?.data ||
         error.message
@@ -72,4 +111,4 @@ async (file) => {
 
 module.exports = {
   readImageText
-}; 
+};
