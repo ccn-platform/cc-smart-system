@@ -1,32 +1,55 @@
  const parseOrderText = (text) => {
-  const clean = String(text)
-    .replace(/\r/g, " ")
-    .replace(/\n/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  const parts =
-    clean.match(/([A-Za-z0-9\s]+?)\s+(\d+)\s+(\d+)/g) || [];
+  const lines = String(text)
+    .split("\n")
+    .map(x => x.trim())
+    .filter(Boolean);
 
   const items = [];
 
-  for (const part of parts) {
-    const m = part.match(
-      /(.+?)\s+(\d+)\s+(\d+)/
-    );
+  for (const line of lines) {
+    const nums =
+      line.match(/\d+/g) || [];
 
-    if (!m) continue;
-
-    const name =
-      m[1].trim();
+    if (nums.length < 2)
+      continue;
 
     const qty =
-      Number(m[2]);
+      Number(nums[0]);
 
     const totalPrice =
-      Number(m[3]);
+      Number(nums[nums.length - 1]);
 
-    if (!name || !qty) continue;
+    if (!qty || !totalPrice)
+      continue;
+
+    let name = line;
+
+    name = name.replace(
+      nums[0],
+      ""
+    );
+
+    const last =
+      name.lastIndexOf(
+        String(totalPrice)
+      );
+
+    if (last !== -1) {
+      name =
+        name.slice(0, last) +
+        name.slice(
+          last +
+          String(totalPrice)
+            .length
+        );
+    }
+
+    name = name
+      .replace(/[-x*]/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!name) continue;
 
     items.push({
       name,
