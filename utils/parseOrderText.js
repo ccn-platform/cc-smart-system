@@ -6,13 +6,14 @@
 
   const items = [];
 
-  for (const line of lines) {
+  for (let line of lines) {
     const nums =
       line.match(/\d+/g) || [];
 
     if (nums.length < 2)
       continue;
 
+    // qty = second last
     const qty =
       Number(
         nums[
@@ -20,6 +21,7 @@
         ]
       );
 
+    // total = last
     const totalPrice =
       Number(
         nums[
@@ -32,6 +34,13 @@
 
     let name = line;
 
+    // remove row number at start
+    name = name.replace(
+      /^\d+\s*/,
+      ""
+    );
+
+    // remove qty
     name = name.replace(
       new RegExp(
         "\\b" +
@@ -41,6 +50,7 @@
       ""
     );
 
+    // remove total
     name = name.replace(
       new RegExp(
         "\\b" +
