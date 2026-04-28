@@ -1,4 +1,4 @@
- const Product =
+  const Product =
 require("../models/Product");
 
 const normalizeProductName =
@@ -141,4 +141,4 @@ async (
 
 module.exports = {
   analyzeProfit,
-}; 
+};
