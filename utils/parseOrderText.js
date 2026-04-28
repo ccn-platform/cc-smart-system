@@ -4,7 +4,7 @@
   const items = [];
 
   for (let raw of lines) {
-    let line = raw.trim();
+    const line = raw.trim();
 
     if (!line) continue;
 
@@ -13,17 +13,53 @@
 
     if (nums.length < 2) continue;
 
-    const qty = Number(nums[0]);
+    const qty =
+      Number(nums[0]);
 
     const totalPrice =
       Number(nums[nums.length - 1]);
 
-    const buyPrice =
-      Math.round(totalPrice / qty);
+    if (!qty || qty <= 0)
+      continue;
 
-    const name = line
-      .replace(/\d+/g, "")
+    const buyPrice =
+      Math.round(
+        totalPrice / qty
+      );
+
+    let name = line;
+
+    // remove first qty only
+    name = name.replace(
+      nums[0],
+      ""
+    );
+
+    // remove last total only
+    const lastIndex =
+      name.lastIndexOf(
+        String(totalPrice)
+      );
+
+    if (lastIndex !== -1) {
+      name =
+        name.slice(
+          0,
+          lastIndex
+        ) +
+        name.slice(
+          lastIndex +
+            String(
+              totalPrice
+            ).length
+        );
+    }
+
+    name = name
+      .replace(/\s+/g, " ")
       .trim();
+
+    if (!name) continue;
 
     items.push({
       name,
@@ -35,4 +71,5 @@
   return items;
 };
 
-module.exports = parseOrderText;
+module.exports =
+  parseOrderText;
