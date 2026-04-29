@@ -1,4 +1,4 @@
-const mongoose =
+ const mongoose =
 require("mongoose");
 
 const debtPaymentSchema =
@@ -13,12 +13,13 @@ new mongoose.Schema(
     },
 
     customer: {
-      type:
-        mongoose.Schema.Types.ObjectId,
-      ref:
-        "CustomerIdentity",
-      required: true
-    },
+  type:
+    mongoose.Schema.Types.ObjectId,
+  ref:
+    "CustomerIdentity",
+  required: true,
+  index: true
+},
 
     user: {
       type:
@@ -40,6 +41,11 @@ new mongoose.Schema(
       min: 1
     },
 
+paymentDate: {
+  type: Date,
+  default: Date.now
+},
+
     paymentMethod: {
       type: String,
       enum: [
@@ -51,6 +57,16 @@ new mongoose.Schema(
       default:
         "cash"
     },
+    channel: {
+  type: String,
+  enum: [
+    "app",
+    "staff",
+    "import",
+    "system"
+  ],
+  default: "staff"
+},
 
     reference: {
       type: String,
@@ -58,6 +74,12 @@ new mongoose.Schema(
       trim: true
     },
 
+    externalId: {
+  type: String,
+  default: "",
+  trim: true,
+  index: true
+},
     note: {
       type: String,
       default: ""
@@ -85,6 +107,15 @@ new mongoose.Schema(
   }
 );
 
+debtPaymentSchema.index({
+  loan: 1,
+  createdAt: -1
+});
+
+debtPaymentSchema.index({
+  customer: 1,
+  createdAt: -1
+});
 module.exports =
 mongoose.model(
   "DebtPayment",
