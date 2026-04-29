@@ -1,4 +1,4 @@
- const CustomerIdentity =
+  const CustomerIdentity =
 require("../models/CustomerIdentity");
 
 const DebtLoan =
@@ -15,25 +15,46 @@ const {
 
 
 // FIND OR CREATE CUSTOMER
+ 
 const findOrCreateCustomer =
 async (req, res) => {
   try {
     const {
       fullName,
-      phone
+      phone,
+      fingerprintId
     } = req.body;
 
-    if (!phone) {
+    if (
+      !phone &&
+      !fingerprintId
+    ) {
       return res.status(400).json({
         message:
-          "Phone required"
+          "Phone or fingerprint required"
       });
     }
 
-    let customer =
-      await CustomerIdentity.findOne({
-        phone
-      });
+    let customer = null;
+
+    if (
+      fingerprintId
+    ) {
+      customer =
+        await CustomerIdentity.findOne({
+          fingerprintId
+        });
+    }
+
+    if (
+      !customer &&
+      phone
+    ) {
+      customer =
+        await CustomerIdentity.findOne({
+          phone
+        });
+    }
 
     if (!customer) {
       customer =
@@ -41,8 +62,22 @@ async (req, res) => {
           fullName:
             fullName ||
             "Unknown",
-          phone
+          phone:
+            phone ||
+            fingerprintId,
+          fingerprintId:
+            fingerprintId || ""
         });
+    } else {
+      if (
+        fingerprintId &&
+        !customer.fingerprintId
+      ) {
+        customer.fingerprintId =
+          fingerprintId;
+
+        await customer.save();
+      }
     }
 
     res.status(200).json(
@@ -55,7 +90,6 @@ async (req, res) => {
     });
   }
 };
-
 
 // CHECK CREDIT
 const checkCredit =
@@ -187,6 +221,52 @@ async (req, res) => {
     res.status(500).json({
       message:
         error.message
+    });
+  }
+};
+
+
+const scanFingerprint = async (req, res) => {
+  try {
+    const { fingerprintId } = req.body;
+
+    if (!fingerprintId) {
+      return res.status(400).json({
+        message: "fingerprintId required"
+      });
+    }
+
+    const customer =
+      await CustomerIdentity.findOne({
+        fingerprintId
+      });
+
+    if (!customer) {
+      return res.status(200).json({
+        found: false,
+        message: "New customer"
+      });
+    }
+
+    const activeLoans =
+      await DebtLoan.find({
+        customer: customer._id,
+        status: {
+          $in: [
+            "active",
+            "overdue"
+          ]
+        }
+      });
+
+    res.status(200).json({
+      found: true,
+      customer,
+      loans: activeLoans
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
     });
   }
 };
@@ -355,5 +435,6 @@ module.exports = {
   getLoanHistory,
   getLoanById,
   receivePayment,
+  scanFingerprint,
   getOverdueLoans
 };
