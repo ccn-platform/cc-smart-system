@@ -9,9 +9,9 @@ async (file) => {
         "base64"
       );
 
- const url =
-`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${process.env.GEMINI_API_KEY}`;
-
+ 
+const url =
+`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`;
     const prompt = `
 Read this supplier order image carefully.
 
