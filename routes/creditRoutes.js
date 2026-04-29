@@ -1,4 +1,4 @@
- const express =
+  const express =
 require("express");
 
 const router =
@@ -17,11 +17,12 @@ const {
   receivePayment,
   getLoanHistory,
   getLoanById,
+  scanFingerprint,
   getOverdueLoans
 } = require(
   "../controllers/creditController"
 );
-
+router.post("/scan-fingerprint",protect,scanFingerprint);
 
 // FIND OR CREATE CUSTOMER
 router.post("/customer",protect,findOrCreateCustomer);
