@@ -1,4 +1,4 @@
-const mongoose =
+ const mongoose =
 require("mongoose");
 
 const customerIdentitySchema =
@@ -11,12 +11,14 @@ new mongoose.Schema(
       index: true
     },
 
-    phone: {
-      type: String,
-      required: true,
-      trim: true,
-      unique: true
-    },
+     phone: {
+  type: String,
+  trim: true,
+  index: true,
+  sparse: true,
+  unique: true,
+  default: null
+},
 
     nationalId: {
       type: String,
@@ -74,9 +76,13 @@ new mongoose.Schema(
     },
 
     fingerprintId: {
-      type: String,
-      default: ""
-    },
+  type: String,
+  trim: true,
+  index: true,
+  sparse: true,
+  unique: true,
+  default: null
+},
 
     status: {
       type: String,
@@ -89,10 +95,12 @@ new mongoose.Schema(
         "active"
     },
 
-    riskScore: {
-      type: Number,
-      default: 50
-    },
+   riskScore: {
+  type: Number,
+  default: 500,
+  min: 0,
+  max: 1000
+},
 
     totalLoans: {
       type: Number,
