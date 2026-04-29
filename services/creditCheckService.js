@@ -94,7 +94,7 @@ async ({
   // risk score
   if (
     customer.riskScore <
-    30
+    300
   ) {
     return {
       approved: false,
