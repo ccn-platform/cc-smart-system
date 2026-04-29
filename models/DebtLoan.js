@@ -1,4 +1,4 @@
-const mongoose =
+ const mongoose =
 require("mongoose");
 
 const debtLoanSchema =
@@ -34,30 +34,43 @@ new mongoose.Schema(
     },
 
     loanNumber: {
-      type: String,
-      unique: true
-    },
+  type: String,
+  unique: true,
+  index: true,
+  required: true
+},
+     principalAmount: {
+  type: Number,
+  required: true,
+  min: 1
+},
 
-    principalAmount: {
-      type: Number,
-      required: true
-    },
+     balanceAmount: {
+  type: Number,
+  required: true,
+  min: 0
+},
 
-    balanceAmount: {
-      type: Number,
-      required: true
-    },
-
-    paidAmount: {
-      type: Number,
-      default: 0
-    },
+     paidAmount: {
+  type: Number,
+  default: 0,
+  min: 0
+},
 
     dueDate: {
       type: Date,
       required: true
     },
 
+    daysLate: {
+  type: Number,
+  default: 0
+},
+
+lastPaymentDate: {
+  type: Date,
+  default: null
+},
     status: {
       type: String,
       enum: [
@@ -84,17 +97,37 @@ new mongoose.Schema(
       default: ""
     },
 
-    approvedBy: {
-      type:
-        mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null
-    }
+   approvedBy: {
+  type:
+    mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  default: null
+},
+
+approvalMethod: {
+  type: String,
+  enum: [
+    "auto",
+    "manual"
+  ],
+  default: "auto"
+}
+
   },
   {
     timestamps: true
   }
 );
+
+debtLoanSchema.index({
+  customer: 1,
+  status: 1
+});
+
+debtLoanSchema.index({
+  dueDate: 1,
+  status: 1
+});
 
 module.exports =
 mongoose.model(
