@@ -1,4 +1,4 @@
-const Sale =
+ const Sale =
 require("../models/Sale");
 
 const Order =
@@ -228,7 +228,7 @@ async (req, res) => {
           0
         );
 
-    const cashExpense =
+     const totalExpense =
       cash
         .filter(
           x =>
@@ -287,12 +287,33 @@ async (req, res) => {
       });
 
     // NET POSITION
-    const netPosition =
-      totalSales +
-      cashIncome +
-      debtCollected -
-      cashExpense -
-      totalBuy;
+     const netPosition =
+       totalSales +
+       cashIncome +
+       debtCollected -
+       totalExpense -   
+       totalBuy;
+
+
+// 🔥 NEW: BUSINESS PROFIT
+const totalBusinessProfit =
+  totalSalesProfit +
+  totalOrderProfit;
+
+// 🔥 NEW: NET PROFIT (after expense)
+ const netProfit =
+  totalBusinessProfit -
+  totalExpense; 
+
+const profitMargin =
+  totalBusinessProfit > 0
+    ? (netProfit / totalBusinessProfit) * 100
+    : 0;
+
+ const profitStatus =
+    netProfit >= 0
+    ? "BIASHARA INA FAIDA"
+    : "BIASHARA INA HASARA";
 
     res.status(200).json({
       date: today,
@@ -314,7 +335,7 @@ async (req, res) => {
 
       cash: {
         cashIncome,
-        cashExpense
+        totalExpense 
       },
 
       credit: {
@@ -322,12 +343,18 @@ async (req, res) => {
         debtCollected,
         overdueCount
       },
-
-      summary: {
-        netPosition
-      }
+     summary: {
+       netCashFlow: netPosition,
+      totalBusinessProfit,
+      netProfit,
+      profitMargin,
+      profitStatus
+    }
+     
     });
-  } catch (error) {
+  } 
+  
+  catch (error) {
     res.status(500).json({
       message:
         error.message
@@ -393,6 +420,8 @@ async (req, res) => {
         }
       });
 
+
+
     const totalBuy =
       orders.reduce(
         (sum, x) =>
@@ -400,6 +429,23 @@ async (req, res) => {
           (x.buyTotal || 0),
         0
       );
+
+const totalSellValue =
+  orders.reduce(
+    (sum, x) =>
+      sum +
+      (x.sellTotal || 0),
+    0
+  );
+
+const totalOrderProfit =
+  orders.reduce(
+    (sum, x) =>
+      sum +
+      (x.totalProfit || 0),
+    0
+  );
+
 
     // CASH
     const cash =
@@ -426,8 +472,7 @@ async (req, res) => {
             x.amount,
           0
         );
-
-    const expense =
+ const totalExpense =
       cash
         .filter(
           x =>
@@ -489,8 +534,27 @@ async (req, res) => {
       totalSales +
       income +
       collected -
-      expense -
+       totalExpense - 
       totalBuy;
+
+// 🔥 NEW
+const totalBusinessProfit =
+  totalProfit +
+  totalOrderProfit;
+
+const netProfit =
+  totalBusinessProfit -
+   totalExpense; 
+
+  const profitMargin =
+  totalBusinessProfit > 0
+    ? (netProfit / totalBusinessProfit) * 100
+    : 0;
+
+  const profitStatus =
+    netProfit >= 0
+    ? "BIASHARA INA FAIDA"
+    : "BIASHARA INA HASARA";
 
     res.status(200).json({
       month:
@@ -505,26 +569,31 @@ async (req, res) => {
           sales.length
       },
 
-      purchases: {
-        totalBuy,
-        count:
-          orders.length
-      },
+       purchases: {
+         totalBuy,
+         totalSellValue,
+         totalOrderProfit,
+         count: orders.length
+       },
 
-      cash: {
-        income,
-        expense
-      },
-
+       cash: {
+         income,
+         totalExpense 
+       },
       credit: {
         loansIssued,
         collected,
         overdueCount
       },
 
-      summary: {
-        netPosition
-      }
+       summary: {
+         netCashFlow: netPosition,
+         totalBusinessProfit,
+         netProfit,
+          profitMargin,
+         profitStatus
+       }
+      
     });
   } catch (error) {
     res.status(500).json({
@@ -603,6 +672,22 @@ async (req, res) => {
         }
       });
 
+      const totalSellValue =
+  orders.reduce(
+    (sum, x) =>
+      sum +
+      (x.sellTotal || 0),
+    0
+  );
+
+const totalOrderProfit =
+  orders.reduce(
+    (sum, x) =>
+      sum +
+      (x.totalProfit || 0),
+    0
+  );
+
     const totalBuy =
       orders.reduce(
         (sum, x) =>
@@ -636,7 +721,7 @@ async (req, res) => {
           0
         );
 
-    const expense =
+    const totalExpense =
       cash
         .filter(
           x =>
@@ -695,8 +780,27 @@ async (req, res) => {
       totalSales +
       income +
       collected -
-      expense -
+       totalExpense - 
       totalBuy;
+
+// 🔥 NEW
+const totalBusinessProfit =
+  totalProfit +
+  totalOrderProfit;
+
+const netProfit =
+  totalBusinessProfit -
+ totalExpense; 
+
+  const profitMargin =
+  totalBusinessProfit > 0
+    ? (netProfit / totalBusinessProfit) * 100
+    : 0;
+
+ const profitStatus =
+   netProfit >= 0
+    ? "BIASHARA INA FAIDA"
+    : "BIASHARA INA HASARA";
 
     res.status(200).json({
       startDate: start,
@@ -711,14 +815,14 @@ async (req, res) => {
 
       purchases: {
         totalBuy,
-        count:
-          orders.length
-      },
-
-      cash: {
-        income,
-        expense
-      },
+        totalSellValue,
+        totalOrderProfit,
+        count: orders.length
+       },
+       cash: {
+         income,
+         totalExpense 
+       },
 
       credit: {
         loansIssued,
@@ -726,9 +830,13 @@ async (req, res) => {
         overdueCount
       },
 
-      summary: {
-        netPosition
-      }
+     summary: {
+       netCashFlow: netPosition,
+       totalBusinessProfit,
+       netProfit,
+        profitMargin,
+       profitStatus
+    }
     });
   } catch (error) {
     res.status(500).json({
