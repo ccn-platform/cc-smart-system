@@ -1,4 +1,29 @@
- const mongoose = require("mongoose");
+  const mongoose = require("mongoose");
+
+ // 🔥 SUBSCRIPTION SCHEMA (inajitegemea)
+const subscriptionSchema = new mongoose.Schema({
+  plan: {
+    type: String,
+    enum: ["trial", "weekly", "monthly", "six_months", "yearly"],
+    default: "trial"
+  },
+
+  startDate: {
+    type: Date,
+    default: Date.now
+  },
+
+  expiresAt: {
+    type: Date,
+    default: () =>
+      new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 🔥 wiki 2 bure
+  },
+
+  isActive: {
+    type: Boolean,
+    default: true
+  }
+});
 
 const userSchema = new mongoose.Schema(
   {
@@ -52,10 +77,15 @@ const userSchema = new mongoose.Schema(
       default: true
     },
 
-    role: {
-      type: String,
-      default: "owner"
-    }
+   role: {
+  type: String,
+  default: "owner"
+},
+
+subscription: {
+  type: subscriptionSchema,
+  default: () => ({})
+},
   },
   { timestamps: true }
 );
