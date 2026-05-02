@@ -1,8 +1,13 @@
-const express =
+ const express =
 require("express");
 const cors = require("cors");
- 
+const {
+  markOverdueLoans
+} = require(
+  "./services/overdueService"
+);
 const reportRoutes =require("./routes/reportRoutes");
+ const subscriptionRoutes = require("./routes/subscriptionRoutes");
 const cashRoutes =require("./routes/cashRoutes");
 const auditRoutes =require("./routes/auditRoutes");
 const orderRoutes =require("./routes/orderRoutes");
@@ -20,7 +25,7 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.send("CCN Backend Running");
 });
-
+ 
 app.use("/api/reports",reportRoutes);
 app.use("/api/audit",auditRoutes);
 app.use("/api/shop", shopRoutes);
@@ -31,5 +36,8 @@ app.use("/api/sales",salesRoutes);
 app.use("/api/orders",orderRoutes);
 app.use("/api/cash",cashRoutes);
 app.use("/api/credit",creditRoutes);
- 
+app.use("/api/subscription", subscriptionRoutes);
+setInterval(() => {
+  markOverdueLoans();
+}, 60000);
 module.exports = app;
