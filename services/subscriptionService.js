@@ -1,4 +1,4 @@
-const PLANS = require("../utils/subscriptionPlans");
+  const PLANS = require("../utils/subscriptionPlans");
 
 const activatePlan = async (user, planName) => {
   const plan = PLANS[planName];
@@ -29,6 +29,10 @@ const activatePlan = async (user, planName) => {
     expiresAt,
     isActive: true
   };
+
+  // 🔥 NEW (MUHIMU SANA)
+  user.pendingPlan = null;
+  user.paymentReference = null;
 
   await user.save();
 
