@@ -48,17 +48,22 @@ const registerUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // create user
-    const user = await User.create({
-      name,
-      businessName,
-      phone,
-      password: hashedPassword,
-      businessCategory,
-      mkoa,
-      wilaya,
-      mtaa
-    });
-
+     const user = await User.create({
+  name,
+  businessName,
+  phone,
+  password: hashedPassword,
+  businessCategory,
+  mkoa,
+  wilaya,
+  mtaa,
+  subscription: {
+    plan: "trial",
+    startDate: new Date(),
+    expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    isActive: true
+  }
+});
     // token
     const token = jwt.sign(
       { id: user._id },
@@ -73,7 +78,8 @@ const registerUser = async (req, res) => {
         name: user.name,
         businessName: user.businessName,
         phone: user.phone,
-        role: user.role
+        role: user.role,
+        subscription: user.subscription
       }
     });
   } catch (error) {
@@ -132,7 +138,9 @@ const loginUser = async (req, res) => {
         name: user.name,
         businessName: user.businessName,
         phone: user.phone,
-        role: user.role
+
+        role: user.role,
+        subscription: user.subscription
       }
     });
   } catch (error) {
