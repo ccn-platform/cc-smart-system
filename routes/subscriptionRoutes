@@ -1,18 +1,27 @@
- const express = require("express");
+  const express = require("express");
 const router = express.Router();
 
 const { protect } = require("../middleware/authMiddleware");
 const User = require("../models/User");
+const clickpesa = require("../services/clickpesaService");
 const { activatePlan } = require("../services/subscriptionService");
 
-// 🔥 SECURED ROUTE
-router.post("/activate", protect, async (req, res) => {
+// 🔥 PLAN PRICES
+const plans = {
+  weekly: 2000,
+  monthly: 5200,
+  six_months: 30000,
+  yearly: 60000
+};
+
+// 🔥 1. INITIATE PAYMENT
+router.post("/pay", protect, async (req, res) => {
   try {
     const { plan } = req.body;
 
-    if (!plan) {
+    if (!plan || !plans[plan]) {
       return res.status(400).json({
-        message: "Plan is required"
+        message: "Invalid plan"
       });
     }
 
@@ -24,12 +33,103 @@ router.post("/activate", protect, async (req, res) => {
       });
     }
 
+    // 🔥 USIRUHUSU MALIPO MAPYA KAMA BADO KUNA YANAYOSUBIRI
+    if (user.pendingPlan) {
+      return res.status(400).json({
+        message: "You have a pending payment"
+      });
+    }
+
+    const amount = plans[plan];
+    const reference = `CCN-${Date.now()}`;
+
+    // 🔥 SAVE BEFORE PAYMENT
+    user.pendingPlan = plan;
+    user.paymentReference = reference;
+    await user.save();
+
+    // 🔥 CALL CLICKPESA
+    await clickpesa.mobilePush(
+      user.phone,
+      amount,
+      reference
+    );
+
+    res.json({
+      message: "Payment initiated",
+      reference
+    });
+
+  } catch (e) {
+    console.error(e);
+    res.status(400).json({
+      message: e.message
+    });
+  }
+});
+
+
+// 🔥 2. CALLBACK (CLICKPESA WILL HIT THIS)
+router.post("/callback", async (req, res) => {
+  try {
+    const { reference, status } = req.body;
+
+    console.log("CALLBACK:", req.body);
+
+    // 🔥 ignore failed payments
+    if (status !== "SUCCESS") {
+      return res.sendStatus(200);
+    }
+
+    const user = await User.findOne({
+      paymentReference: reference
+    });
+
+    if (!user) {
+      return res.sendStatus(404);
+    }
+
+    // 🔥 kuhakikisha kuna pending plan
+    if (!user.pendingPlan) {
+      return res.sendStatus(200);
+    }
+
+    // 🔥 ACTIVATE PLAN
+    const subscription = await activatePlan(
+      user,
+      user.pendingPlan
+    );
+
+    // 🔥 CLEANUP (redundant but safe)
+    user.pendingPlan = null;
+    user.paymentReference = null;
+    await user.save();
+
+    console.log("SUBSCRIPTION ACTIVATED:", subscription);
+
+    res.sendStatus(200);
+
+  } catch (e) {
+    console.error("CALLBACK ERROR:", e);
+    res.sendStatus(500);
+  }
+});
+
+
+// 🔥 (OPTIONAL) OLD ROUTE FOR TESTING ONLY
+router.post("/activate", protect, async (req, res) => {
+  try {
+    const { plan } = req.body;
+
+    const user = await User.findById(req.user.id);
+
     const subscription = await activatePlan(user, plan);
 
     res.json({
-      message: "Subscription activated",
+      message: "Activated (TEST MODE)",
       subscription
     });
+
   } catch (e) {
     res.status(400).json({
       message: e.message
