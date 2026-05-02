@@ -1,0 +1,40 @@
+ const express = require("express");
+const router = express.Router();
+
+const { protect } = require("../middleware/authMiddleware");
+const User = require("../models/User");
+const { activatePlan } = require("../services/subscriptionService");
+
+// 🔥 SECURED ROUTE
+router.post("/activate", protect, async (req, res) => {
+  try {
+    const { plan } = req.body;
+
+    if (!plan) {
+      return res.status(400).json({
+        message: "Plan is required"
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found"
+      });
+    }
+
+    const subscription = await activatePlan(user, plan);
+
+    res.json({
+      message: "Subscription activated",
+      subscription
+    });
+  } catch (e) {
+    res.status(400).json({
+      message: e.message
+    });
+  }
+});
+
+module.exports = router;
