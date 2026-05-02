@@ -1,6 +1,6 @@
   const mongoose = require("mongoose");
 
- // 🔥 SUBSCRIPTION SCHEMA (inajitegemea)
+// 🔥 SUBSCRIPTION SCHEMA (inajitegemea)
 const subscriptionSchema = new mongoose.Schema({
   plan: {
     type: String,
@@ -53,10 +53,10 @@ const userSchema = new mongoose.Schema(
 
     businessCategory: {
       type: mongoose.Schema.Types.ObjectId,
-       ref: "BusinessCategory",
-       required: true
-     },
-    
+      ref: "BusinessCategory",
+      required: true
+    },
+
     mkoa: {
       type: String,
       required: true
@@ -77,15 +77,27 @@ const userSchema = new mongoose.Schema(
       default: true
     },
 
-   role: {
-  type: String,
-  default: "owner"
-},
+    role: {
+      type: String,
+      default: "owner"
+    },
 
-subscription: {
-  type: subscriptionSchema,
-  default: () => ({})
-},
+    subscription: {
+      type: subscriptionSchema,
+      default: () => ({})
+    },
+
+    // 🔥 NEW (IMEHAMISHWA HAPA — SAHIHI)
+    pendingPlan: {
+      type: String,
+      enum: ["weekly", "monthly", "six_months", "yearly"],
+      default: null
+    },
+
+    paymentReference: {
+      type: String,
+      default: null
+    }
   },
   { timestamps: true }
 );
