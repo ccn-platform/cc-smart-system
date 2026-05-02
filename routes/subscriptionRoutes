@@ -41,7 +41,9 @@ router.post("/pay", protect, async (req, res) => {
     }
 
     const amount = plans[plan];
-    const reference = `CCN-${Date.now()}`;
+
+// 🔥 FIX HAPA
+const reference = `CCN${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
     // 🔥 SAVE BEFORE PAYMENT
     user.pendingPlan = plan;
