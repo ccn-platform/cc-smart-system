@@ -1,97 +1,60 @@
-const axios =
-require("axios");
+ const axios = require("axios");
 
-const readImageText =
-async (file) => {
+const readImageText = async (file) => {
   try {
-    const imageBase64 =
-      file.buffer.toString(
-        "base64"
-      );
+    console.log("➡️ Starting OCR...");
 
- const url =
-`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
- 
+    const imageBase64 = file.buffer.toString("base64");
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+
+    // 🔥 prompt fupi (fast)
     const prompt = `
-Read this supplier order image carefully.
+Extract product items from this receipt.
 
-The image may contain many different products.
-
-Identify every product row/item.
-
-For each item extract:
-
-1. Product name
-2. Quantity
-3. Total purchase amount
-
-Return plain text only.
-
-One item per line.
-
-Use this exact format:
-
+Format:
 ProductName Qty Total
 
-Examples:
-
+Example:
 Sugar 5 25000
 Rice 10 78000
-Soap 24 36000
 
 Rules:
-
-- Detect all products
-- Ignore headings
-- Ignore dates
+- Ignore totals
 - Ignore phone numbers
-- Ignore signatures
-- Ignore grand totals
-- Ignore random text
-- No numbering
 - No explanation
 `;
 
-    const response =
-      await axios.post(
-        url,
-        {
-          contents: [
-            {
-              parts: [
-                {
-                  text:
-                    prompt
+    const response = await axios.post(
+      url,
+      {
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: file.mimetype || "image/jpeg",
+                  data: imageBase64,
                 },
-                {
-                  inline_data:
-                    {
-                      mime_type:
-                        file.mimetype ||
-                        "image/jpeg",
-                      data:
-                        imageBase64
-                    }
-                }
-              ]
-            }
-          ],
-          generationConfig:
-            {
-              temperature: 0,
-              topK: 1,
-              topP: 1,
-              maxOutputTokens: 2048
-            }
-        }
-      );
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 1024,
+        },
+      },
+      {
+        timeout: 20000, // 🔥 muhimu
+      }
+    );
+
+    console.log("✅ OCR done");
 
     const text =
-      response.data
-        ?.candidates?.[0]
-        ?.content
-        ?.parts?.[0]
-        ?.text || "";
+      response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     return String(text)
       .replace(/\r/g, "")
@@ -100,19 +63,13 @@ Rules:
       .trim();
 
   } catch (error) {
-    console.log(
-      "GEMINI ERROR:",
-      error.response
-        ?.data ||
-        error.message
-    );
+    console.log("❌ GEMINI ERROR:", {
+      message: error.message,
+      data: error.response?.data,
+    });
 
-    throw new Error(
-      "Failed to read image text"
-    );
+    throw new Error("OCR failed");
   }
 };
 
-module.exports = {
-  readImageText
-};
+module.exports = { readImageText };
