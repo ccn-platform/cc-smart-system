@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+ const mongoose = require("mongoose");
  const Order = require("../models/Order");
 const cleanOCRText = require("../utils/cleanOCRText");
 const parseOrderText = require("../utils/parseOrderText");
@@ -137,10 +137,16 @@ const getOrderById = async (req, res) => {
 
 // 🔥 ORDER PROFIT SUMMARY
  
-
 const getOrderProfitSummary = async (req, res) => {
   try {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const userId = req.user._id;
+
+    // 🔥 TODAY RANGE
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
     const result = await Order.aggregate([
       {
@@ -159,6 +165,22 @@ const getOrderProfitSummary = async (req, res) => {
       }
     ]);
 
+    // 🔥 TODAY ONLY
+    const todayAgg = await Order.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          todayOrderProfit: { $sum: "$totalProfit" }
+        }
+      }
+    ]);
+
     const data = result[0] || {
       totalOrderProfit: 0,
       totalBuy: 0,
@@ -166,16 +188,22 @@ const getOrderProfitSummary = async (req, res) => {
       count: 0
     };
 
-    res.status(200).json(data);
+    const todayData = todayAgg[0] || {
+      todayOrderProfit: 0
+    };
+
+    res.status(200).json({
+      ...data,
+      todayOrderProfit: todayData.todayOrderProfit
+    });
 
   } catch (error) {
-    console.log("❌ PROFIT ERROR:", error);
     res.status(500).json({
       message: error.message
     });
   }
 };
-
+ 
 module.exports = {
   scanOrder,
   scanImage,
