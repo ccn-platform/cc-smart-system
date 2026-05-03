@@ -1,4 +1,4 @@
- const express = require("express");
+  const express = require("express");
 const router = express.Router();
 
 const { protect } = require("../middleware/authMiddleware");
@@ -33,21 +33,40 @@ router.post("/pay", protect, async (req, res) => {
       });
     }
 
-    // 🔥 USIRUHUSU MALIPO MAPYA KAMA BADO KUNA YANAYOSUBIRI
-    if (user.pendingPlan) {
+    // 🔥 CHECK PENDING + EXPIRY
+    if (
+      user.pendingPlan &&
+      user.pendingExpiresAt &&
+      user.pendingExpiresAt > new Date()
+    ) {
       return res.status(400).json({
         message: "You have a pending payment"
       });
     }
 
+    // 🔥 CLEAN EXPIRED
+    if (
+      user.pendingExpiresAt &&
+      user.pendingExpiresAt <= new Date()
+    ) {
+      user.pendingPlan = null;
+      user.paymentReference = null;
+      user.pendingExpiresAt = null;
+    }
+
     const amount = plans[plan];
 
-// 🔥 FIX HAPA
-const reference = `CCN${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const reference = `CCN${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
     // 🔥 SAVE BEFORE PAYMENT
     user.pendingPlan = plan;
     user.paymentReference = reference;
+
+    // 🔥 EXPIRY (dakika 5)
+    user.pendingExpiresAt = new Date(
+      Date.now() + 5 * 60 * 1000
+    );
+
     await user.save();
 
     // 🔥 CALL CLICKPESA
@@ -78,7 +97,6 @@ router.post("/callback", async (req, res) => {
 
     console.log("CALLBACK:", req.body);
 
-    // 🔥 ignore failed payments
     if (status !== "SUCCESS") {
       return res.sendStatus(200);
     }
@@ -91,7 +109,15 @@ router.post("/callback", async (req, res) => {
       return res.sendStatus(404);
     }
 
-    // 🔥 kuhakikisha kuna pending plan
+    // 🔥 CHECK EXPIRY
+    if (
+      user.pendingExpiresAt &&
+      user.pendingExpiresAt <= new Date()
+    ) {
+      console.log("Payment expired, ignoring...");
+      return res.sendStatus(200);
+    }
+
     if (!user.pendingPlan) {
       return res.sendStatus(200);
     }
@@ -102,9 +128,11 @@ router.post("/callback", async (req, res) => {
       user.pendingPlan
     );
 
-    // 🔥 CLEANUP (redundant but safe)
+    // 🔥 CLEANUP
     user.pendingPlan = null;
     user.paymentReference = null;
+    user.pendingExpiresAt = null;
+
     await user.save();
 
     console.log("SUBSCRIPTION ACTIVATED:", subscription);
@@ -118,7 +146,7 @@ router.post("/callback", async (req, res) => {
 });
 
 
-// 🔥 (OPTIONAL) OLD ROUTE FOR TESTING ONLY
+// 🔥 (OPTIONAL) TEST ROUTE
 router.post("/activate", protect, async (req, res) => {
   try {
     const { plan } = req.body;
