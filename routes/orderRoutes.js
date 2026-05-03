@@ -6,73 +6,65 @@ const router = express.Router();
 const { protect } = require("../middleware/authMiddleware");
 
 const {
-scanOrder,
-scanImage,
-getOrderHistory,
-getOrderById
+  scanOrder,
+  scanImage,
+  getOrderHistory,
+  getOrderById
 } = require("../controllers/orderController");
 
-// 🔥 MEMORY STORAGE (SAFE VERSION)
+
+// 🔥 Memory storage (same as yours)
 const upload = multer({
-storage: multer.memoryStorage(),
-limits: {
-fileSize: 10 * 1024 * 1024 // 🔥 rudisha 10MB (important)
-}
-// ❌ fileFilter imeondolewa kwa sasa (ilikuwa inakata request mapema)
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 🔥 reduce 10MB → 5MB (safer)
+  },
+  fileFilter: (req, file, cb) => {
+    // 🔥 accept only images
+    if (
+      file.mimetype.startsWith("image/")
+    ) {
+      cb(null, true);
+    } else {
+      cb(
+        new Error("Only images allowed"),
+        false
+      );
+    }
+  }
 });
+
 
 // 🔥 TEXT SCAN
 router.post(
-"/scan",
-protect,
-scanOrder
+  "/scan",
+  protect,
+  scanOrder
 );
 
-// 🔥 IMAGE OCR (SAFE MULTER HANDLING)
+
+// 🔥 IMAGE OCR
 router.post(
-"/scan-image",
-protect,
-(req, res, next) => {
-console.log("📸 Upload request received");
-
-```
-upload.single("image")(req, res, function (err) {
-  if (err) {
-    console.log("UPLOAD ERROR:", err.message);
-
-    return res.status(400).json({
-      message:
-        err.message ||
-        "Upload failed or cancelled",
-    });
-  }
-
-  if (!req.file) {
-    return res.status(400).json({
-      message: "No image uploaded"
-    });
-  }
-
-  next();
-});
-```
-
-},
-scanImage
+  "/scan-image",
+  protect,
+  upload.single("image"),
+  scanImage
 );
 
-// 🔥 HISTORY (PAGINATION ?page=0)
+
+// 🔥 HISTORY (with pagination ?page=0)
 router.get(
-"/history",
-protect,
-getOrderHistory
+  "/history",
+  protect,
+  getOrderHistory
 );
+
 
 // 🔥 SINGLE ORDER
 router.get(
-"/:id",
-protect,
-getOrderById
+  "/:id",
+  protect,
+  getOrderById
 );
 
 module.exports = router;
