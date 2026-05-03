@@ -1,4 +1,4 @@
- const Product = require("../models/Product");
+  const Product = require("../models/Product");
 
 
 // CREATE PRODUCT
@@ -23,22 +23,19 @@ const createProduct = async (req, res) => {
       });
     }
 
-    const product =
-      await Product.create({
-        user: req.user.id,
-
-        name,
-        barcode,
-        category,
-        unit,
-        description,
-        image,
-
-        buyPrice,
-        sellPrice,
-        stockQty,
-        lowStockAlert
-      });
+    const product = await Product.create({
+      user: req.user.id,
+      name,
+      barcode,
+      category,
+      unit,
+      description,
+      image,
+      buyPrice,
+      sellPrice,
+      stockQty,
+      lowStockAlert
+    });
 
     res.status(201).json(product);
   } catch (error) {
@@ -49,16 +46,21 @@ const createProduct = async (req, res) => {
 };
 
 
-// GET PRODUCTS
+// GET PRODUCTS (🔥 PAGINATION ADDED)
 const getProducts = async (req, res) => {
   try {
-    const products =
-      await Product.find({
-        user: req.user.id,
-        isActive: true
-      }).sort({
-        createdAt: -1
-      });
+    const page = Number(req.query.page) || 0;
+    const limit = 20;
+    const skip = page * limit;
+
+    const products = await Product.find({
+      user: req.user.id,
+      isActive: true
+    })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(skip)
+      .select("name sellPrice stockQty barcode");
 
     res.status(200).json(products);
   } catch (error) {
@@ -69,24 +71,46 @@ const getProducts = async (req, res) => {
 };
 
 
-// SEARCH PRODUCTS
-const searchProducts = async (
-  req,
-  res
-) => {
+// SEARCH PRODUCTS (🔥 FAST SEARCH)
+const searchProducts = async (req, res) => {
   try {
-    const keyword =
-      req.query.keyword || "";
+    const keyword = req.query.keyword || "";
+    const page = Number(req.query.page) || 0;
 
-    const products =
-      await Product.find({
+    const limit = 20;
+    const skip = page * limit;
+
+    // 🔥 TEXT SEARCH (fast)
+    let products = await Product.find(
+      {
         user: req.user.id,
         isActive: true,
-        name: {
-          $regex: keyword,
-          $options: "i"
-        }
-      });
+        $text: { $search: keyword }
+      },
+      {
+        score: { $meta: "textScore" }
+      }
+    )
+      .sort({ score: { $meta: "textScore" } })
+      .limit(limit)
+      .skip(skip)
+      .select("name sellPrice stockQty barcode");
+
+    // 🔥 FALLBACK (regex + barcode)
+    if (!products.length && keyword) {
+      products = await Product.find({
+        user: req.user.id,
+        isActive: true,
+        $or: [
+          { name: { $regex: keyword, $options: "i" } },
+          { aliases: { $regex: keyword, $options: "i" } },
+          { barcode: keyword }
+        ]
+      })
+        .limit(limit)
+        .skip(skip)
+        .select("name sellPrice stockQty barcode");
+    }
 
     res.status(200).json(products);
   } catch (error) {
@@ -97,31 +121,28 @@ const searchProducts = async (
 };
 
 
-// UPDATE PRODUCT
-const updateProduct = async (
-  req,
-  res
-) => {
+// UPDATE PRODUCT (🔥 SAFE UPDATE)
+const updateProduct = async (req, res) => {
   try {
-    const product =
-      await Product.findOne({
-        _id: req.params.id,
-        user: req.user.id
-      });
+    const product = await Product.findOne({
+      _id: req.params.id,
+      user: req.user.id
+    });
 
     if (!product) {
       return res.status(404).json({
-        message:
-          "Product not found"
+        message: "Product not found"
       });
     }
 
-    const updated =
-      await Product.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        { new: true }
-      );
+    const updated = await Product.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      {
+        new: true,
+        runValidators: true // 🔥 important
+      }
+    );
 
     res.status(200).json(updated);
   } catch (error) {
@@ -132,22 +153,17 @@ const updateProduct = async (
 };
 
 
-// DELETE PRODUCT
-const deleteProduct = async (
-  req,
-  res
-) => {
+// DELETE PRODUCT (SOFT DELETE)
+const deleteProduct = async (req, res) => {
   try {
-    const product =
-      await Product.findOne({
-        _id: req.params.id,
-        user: req.user.id
-      });
+    const product = await Product.findOne({
+      _id: req.params.id,
+      user: req.user.id
+    });
 
     if (!product) {
       return res.status(404).json({
-        message:
-          "Product not found"
+        message: "Product not found"
       });
     }
 
@@ -156,8 +172,7 @@ const deleteProduct = async (
     await product.save();
 
     res.status(200).json({
-      message:
-        "Product deleted"
+      message: "Product deleted"
     });
   } catch (error) {
     res.status(500).json({
