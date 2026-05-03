@@ -1,4 +1,4 @@
-  const express = require("express");
+   const express = require("express");
 const multer = require("multer");
 
 const router = express.Router();
@@ -9,7 +9,8 @@ const {
   scanOrder,
   scanImage,
   getOrderHistory,
-  getOrderById
+  getOrderById,
+  getOrderProfitSummary
 } = require("../controllers/orderController");
 
 
@@ -42,7 +43,8 @@ router.post(
   scanOrder
 );
 
-router.post(
+
+ router.post(
   "/scan-image",
   protect,
   (req, res, next) => {
@@ -70,8 +72,6 @@ router.post(
   },
   scanImage
 );
- 
-
 
 // 🔥 HISTORY (with pagination ?page=0)
 router.get(
@@ -88,4 +88,10 @@ router.get(
   getOrderById
 );
 
+// 🔥 ORDER PROFIT SUMMARY
+router.get(
+  "/profit-summary",
+  protect,
+  getOrderProfitSummary
+);
 module.exports = router;
