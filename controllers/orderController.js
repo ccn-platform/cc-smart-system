@@ -134,9 +134,46 @@ const getOrderById = async (req, res) => {
   }
 };
 
+// 🔥 ORDER PROFIT SUMMARY
+const getOrderProfitSummary = async (req, res) => {
+  try {
+    const result = await Order.aggregate([
+      {
+        $match: {
+          user: req.user._id
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalOrderProfit: { $sum: "$totalProfit" },
+          totalBuy: { $sum: "$buyTotal" },
+          totalSell: { $sum: "$sellTotal" },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const data = result[0] || {
+      totalOrderProfit: 0,
+      totalBuy: 0,
+      totalSell: 0,
+      count: 0
+    };
+
+    res.status(200).json(data);
+
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   scanOrder,
   scanImage,
   getOrderHistory,
-  getOrderById
+  getOrderById,
+   getOrderProfitSummary // 🔥 ADD THIS
 };
