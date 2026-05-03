@@ -1,7 +1,5 @@
 
-const express =
-require("express");
-
+ const express = require("express");
 const router =
 express.Router();
 
@@ -24,46 +22,19 @@ const {
 );
 
 
-// DAILY REPORT
-router.get(
-  "/daily",
-  protect,
-  getDailyReport
-);
-router.get(
-  "/monthly",
-  protect,
-  getMonthlyReport
-);
+ 
+ // TIME-BASED
+router.get("/daily", protect, getDailyReport);
+router.get("/weekly", protect, getWeeklyReport);
+router.get("/monthly", protect, getMonthlyReport);
 
-router.get(
-  "/weekly",
-  protect,
-  getWeeklyReport
-);
+// BUSINESS REPORTS
+router.get("/inventory", protect, getInventoryReport);
+router.get("/top-products", protect, getTopProductsReport);
 
-router.get(
-  "/top-products",
-  protect,
-  getTopProductsReport
-);
+// FINANCIAL
+router.get("/credit", protect, getCreditReport);
+router.get("/expense", protect, getExpenseReport);
 
-router.get(
-  "/credit",
-  protect,
-  getCreditReport
-);
-
-router.get(
-  "/expense",
-  protect,
-  getExpenseReport
-);
-
-router.get(
-  "/inventory",
-  protect,
-  getInventoryReport
-);
 module.exports =
 router;
