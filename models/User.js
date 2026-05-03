@@ -87,7 +87,7 @@ const userSchema = new mongoose.Schema(
       default: () => ({})
     },
 
-    // 🔥 NEW (IMEHAMISHWA HAPA — SAHIHI)
+    // 🔥 PENDING PAYMENT SYSTEM
     pendingPlan: {
       type: String,
       enum: ["weekly", "monthly", "six_months", "yearly"],
@@ -96,6 +96,12 @@ const userSchema = new mongoose.Schema(
 
     paymentReference: {
       type: String,
+      default: null
+    },
+
+    // 🔥 FIX IKO HAPA (COMMA IMEONGEZWA)
+    pendingExpiresAt: {
+      type: Date,
       default: null
     }
   },
