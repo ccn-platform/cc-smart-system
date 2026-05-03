@@ -1,41 +1,41 @@
-  const express =
-require("express");
+  const express = require("express");
+const multer = require("multer");
 
-const multer =
-require("multer");
+const router = express.Router();
 
-const router =
-express.Router();
-
-const {
-  protect
-} = require(
-  "../middleware/authMiddleware"
-);
+const { protect } = require("../middleware/authMiddleware");
 
 const {
   scanOrder,
   scanImage,
   getOrderHistory,
   getOrderById
-} = require(
-  "../controllers/orderController"
-);
+} = require("../controllers/orderController");
 
 
-// Memory storage
-const upload =
-multer({
-  storage:
-    multer.memoryStorage(),
+// 🔥 Memory storage (same as yours)
+const upload = multer({
+  storage: multer.memoryStorage(),
   limits: {
-    fileSize:
-      10 * 1024 * 1024
+    fileSize: 5 * 1024 * 1024 // 🔥 reduce 10MB → 5MB (safer)
+  },
+  fileFilter: (req, file, cb) => {
+    // 🔥 accept only images
+    if (
+      file.mimetype.startsWith("image/")
+    ) {
+      cb(null, true);
+    } else {
+      cb(
+        new Error("Only images allowed"),
+        false
+      );
+    }
   }
 });
 
 
-// Scan pasted text
+// 🔥 TEXT SCAN
 router.post(
   "/scan",
   protect,
@@ -43,18 +43,16 @@ router.post(
 );
 
 
-// Scan image OCR
+// 🔥 IMAGE OCR
 router.post(
   "/scan-image",
   protect,
-  upload.single(
-    "image"
-  ),
+  upload.single("image"),
   scanImage
 );
 
 
-// Order history
+// 🔥 HISTORY (with pagination ?page=0)
 router.get(
   "/history",
   protect,
@@ -62,12 +60,11 @@ router.get(
 );
 
 
-// Single order detail
+// 🔥 SINGLE ORDER
 router.get(
   "/:id",
   protect,
   getOrderById
 );
 
-module.exports =
-router;
+module.exports = router;
