@@ -80,6 +80,12 @@ router.get(
   getOrderHistory
 );
 
+// 🔥 ORDER PROFIT SUMMARY (iwe juu ya :id)
+router.get(
+  "/profit-summary",
+  protect,
+  getOrderProfitSummary
+);
 
 // 🔥 SINGLE ORDER
 router.get(
@@ -88,10 +94,5 @@ router.get(
   getOrderById
 );
 
-// 🔥 ORDER PROFIT SUMMARY
-router.get(
-  "/profit-summary",
-  protect,
-  getOrderProfitSummary
-);
+ 
 module.exports = router;
