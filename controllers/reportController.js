@@ -17,16 +17,17 @@ require("../models/DebtPayment");
 
 const Product =
 require("../models/Product");
+ 
+
 const getInventoryReport = async (req, res) => {
   try {
-     
-const userId = new mongoose.Types.ObjectId(req.user.id);
-    // 🔥 SUMMARY (FAST - AGGREGATE)
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+
+    // 🔥 SUMMARY (NO DATE FILTER)
     const summaryAgg = await Product.aggregate([
       {
         $match: {
-          user: userId,
-           
+          user: userId
         }
       },
       {
@@ -58,29 +59,31 @@ const userId = new mongoose.Types.ObjectId(req.user.id);
     const expectedProfit =
       summary.stockSaleValue - summary.stockCostValue;
 
+    // 🔥 LOW STOCK (FIXED)
     const lowStock = await Product.find({
-       user: userId,
-       isActive: true,
-       stockQty: { $gt: 0 }
-     }).where("stockQty").lte("lowStockAlert")
-      .select("name stockQty lowStockAlert");
+      user: userId,
+      isActive: true,
+      stockQty: { $gt: 0 },
+      $expr: {
+        $lte: ["$stockQty", "$lowStockAlert"]
+      }
+    }).select("name stockQty lowStockAlert");
 
     // 🔥 OUT OF STOCK
-     
-const outOfStock = await Product.find({
-  user: userId,
-  isActive: true,
-  stockQty: { $lte: 0 }
-}).select("name stockQty");
+    const outOfStock = await Product.find({
+      user: userId,
+      isActive: true,
+      stockQty: { $lte: 0 }
+    }).select("name stockQty");
+
     // 🔥 TOP VALUE PRODUCTS
-    
     const topValue = await Product.find({
-  user: userId,
-  isActive: true
-})
-.select("name stockQty sellPrice")
-.sort({ stockQty: -1, sellPrice: -1 })
-.limit(10);
+      user: userId,
+      isActive: true
+    })
+      .select("name stockQty sellPrice")
+      .sort({ stockQty: -1, sellPrice: -1 })
+      .limit(10);
 
     res.status(200).json({
       summary: {
@@ -100,195 +103,199 @@ const outOfStock = await Product.find({
     });
 
   } catch (error) {
+    console.log("INVENTORY ERROR:", error);
     res.status(500).json({
       message: error.message
     });
   }
 };
- 
-// DAILY MASTER REPORT
-const getDailyReport =
-async (req, res) => {
+
+const getDailyReport = async (req, res) => {
   try {
-    const today =
-      new Date();
+    // 🔥 USE UTC (important for consistency)
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
 
-    today.setHours(
-      0, 0, 0, 0
-    );
+    const tomorrow = new Date(today);
+    tomorrow.setUTCDate(today.getUTCDate() + 1);
 
-    const tomorrow =
-      new Date(today);
+    const userId = new mongoose.Types.ObjectId(req.user.id);
 
-    tomorrow.setDate(
-      tomorrow.getDate() + 1
-    );
-
- const userId = new mongoose.Types.ObjectId(req.user.id);
+    // =====================
     // SALES
+    // =====================
     const salesAgg = await Sale.aggregate([
-  {
-    $match: {
-      user: userId,
-      createdAt: { $gte: today, $lt: tomorrow }
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalSales: { $sum: "$totalAmount" },
-      totalProfit: { $sum: "$totalProfit" },
-      count: { $sum: 1 }
-    }
-  }
-]);
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalSales: { $sum: "$totalAmount" },
+          totalProfit: { $sum: "$totalProfit" },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
 
-const totalSales = salesAgg[0]?.totalSales || 0;
-const totalSalesProfit = salesAgg[0]?.totalProfit || 0;
-const salesCount = salesAgg[0]?.count || 0;
+    const totalSales = salesAgg[0]?.totalSales || 0;
+    const totalSalesProfit = salesAgg[0]?.totalProfit || 0;
+    const salesCount = salesAgg[0]?.count || 0;
 
-    
+    // =====================
+    // PURCHASES (ORDERS)
+    // =====================
+    const ordersAgg = await Order.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalBuy: { $sum: "$buyTotal" },
+          totalSellValue: { $sum: "$sellTotal" },
+          totalOrderProfit: { $sum: "$totalProfit" },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
 
-    // PURCHASES
-     const ordersAgg = await Order.aggregate([
-  {
-    $match: {
-      user: userId,
-       
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalBuy: { $sum: "$buyTotal" },
-      totalSellValue: { $sum: "$sellTotal" },
-      totalOrderProfit: { $sum: "$totalProfit" },
-      count: { $sum: 1 }
-    }
-  }
-]);
+    const totalBuy = ordersAgg[0]?.totalBuy || 0;
+    const totalSellValue = ordersAgg[0]?.totalSellValue || 0;
+    const totalOrderProfit = ordersAgg[0]?.totalOrderProfit || 0;
+    const orderCount = ordersAgg[0]?.count || 0;
 
-const totalBuy = ordersAgg[0]?.totalBuy || 0;
-const totalSellValue = ordersAgg[0]?.totalSellValue || 0;
-const totalOrderProfit = ordersAgg[0]?.totalOrderProfit || 0;
-const orderCount = ordersAgg[0]?.count || 0;
-
+    // =====================
     // CASH
+    // =====================
     const cashAgg = await CashEntry.aggregate([
-  {
-    $match: {
+      {
+        $match: {
+          user: userId,
+          status: "active",
+          createdAt: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $group: {
+          _id: "$type",
+          total: { $sum: "$amount" }
+        }
+      }
+    ]);
+
+    let cashIncome = 0;
+    let totalExpense = 0;
+
+    cashAgg.forEach(c => {
+      if (c._id === "income") cashIncome = c.total;
+      if (c._id === "expense") totalExpense = c.total;
+    });
+
+    // =====================
+    // CREDIT (LOANS)
+    // =====================
+    const loanAgg = await DebtLoan.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalIssued: { $sum: "$principalAmount" }
+        }
+      }
+    ]);
+
+    const loansIssued = loanAgg[0]?.totalIssued || 0;
+
+    // =====================
+    // PAYMENTS (IMPORTANT FIX)
+    // =====================
+    const paymentAgg = await DebtPayment.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: today, $lt: tomorrow } // 🔥 muhimu (ulikuwa umeikosa)
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalCollected: { $sum: "$amount" }
+        }
+      }
+    ]);
+
+    const debtCollected = paymentAgg[0]?.totalCollected || 0;
+
+    // =====================
+    // OVERDUE (ALL TIME - OK)
+    // =====================
+    const overdueCount = await DebtLoan.countDocuments({
       user: userId,
-      status: "active",
-      
-    }
-  },
-  {
-    $group: {
-      _id: "$type",
-      total: { $sum: "$amount" }
-    }
-  }
-]);
+      status: "overdue"
+    });
 
-let cashIncome = 0;
-let totalExpense = 0;
+    // =====================
+    // CALCULATIONS
+    // =====================
+    const netPosition =
+      totalSales +
+      cashIncome +
+      debtCollected -
+      totalExpense -
+      totalBuy;
 
-cashAgg.forEach(c => {
-  if (c._id === "income") cashIncome = c.total;
-  if (c._id === "expense") totalExpense = c.total;
-});
+    const totalBusinessProfit =
+      totalSalesProfit +
+      totalOrderProfit;
 
-    // CREDIT LOANS
- const loanAgg = await DebtLoan.aggregate([
-  {
-    $match: {
-      user: userId,
-       
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalIssued: { $sum: "$principalAmount" }
-    }
-  }
-]);
+    const netProfit =
+      totalBusinessProfit -
+      totalExpense;
 
-const paymentAgg = await DebtPayment.aggregate([
-  {
-    $match: {
-      user: userId,
-       
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalCollected: { $sum: "$amount" }
-    }
-  }
-]);
+    const profitMargin =
+      totalBusinessProfit > 0
+        ? (netProfit / totalBusinessProfit) * 100
+        : 0;
 
-    // PAYMENTS
-     
-const debtCollected = paymentAgg[0]?.totalCollected || 0;
-const loansIssued = loanAgg[0]?.totalIssued || 0;
-    // OVERDUE
-    const overdueCount =
-      await DebtLoan.countDocuments({
-        user: userId,
-        status:
-          "overdue"
-      });
+    const profitStatus =
+      netProfit >= 0
+        ? "BIASHARA INA FAIDA"
+        : "BIASHARA INA HASARA";
 
-    // NET POSITION
-     const netPosition =
-       totalSales +
-       cashIncome +
-       debtCollected -
-       totalExpense -   
-       totalBuy;
-
-
-// 🔥 NEW: BUSINESS PROFIT
-const totalBusinessProfit =
-  totalSalesProfit +
-  totalOrderProfit;
-
-// 🔥 NEW: NET PROFIT (after expense)
- const netProfit =
-  totalBusinessProfit -
-  totalExpense; 
-
-const profitMargin =
-  totalBusinessProfit > 0
-    ? (netProfit / totalBusinessProfit) * 100
-    : 0;
-
- const profitStatus =
-    netProfit >= 0
-    ? "BIASHARA INA FAIDA"
-    : "BIASHARA INA HASARA";
-
+    // =====================
+    // RESPONSE
+    // =====================
     res.status(200).json({
       date: today,
 
       sales: {
         totalSales,
         totalSalesProfit,
-         count: salesCount
+        count: salesCount
       },
 
       purchases: {
         totalBuy,
         totalSellValue,
         totalOrderProfit,
-         count: orderCount
+        count: orderCount
       },
 
       cash: {
         cashIncome,
-        totalExpense 
+        totalExpense
       },
 
       credit: {
@@ -296,200 +303,193 @@ const profitMargin =
         debtCollected,
         overdueCount
       },
-     summary: {
-       netCashFlow: netPosition,
-      totalBusinessProfit,
-      netProfit,
-      profitMargin,
-      profitStatus
-    }
-     
+
+      summary: {
+        netCashFlow: netPosition,
+        totalBusinessProfit,
+        netProfit,
+        profitMargin,
+        profitStatus
+      }
     });
-  } 
-  
-  catch (error) {
+
+  } catch (error) {
+    console.log("DAILY REPORT ERROR:", error);
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
-const getMonthlyReport =
-async (req, res) => {
+
+const getMonthlyReport = async (req, res) => {
   try {
-    const now =
-      new Date();
+    const now = new Date();
 
-    const start =
-      new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        1
-      );
+    // 🔥 USE UTC (important)
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
-    const end =
-      new Date(
-        now.getFullYear(),
-        now.getMonth() + 1,
-        1
-      );
+    const userId = new mongoose.Types.ObjectId(req.user.id);
 
-     const userId = new mongoose.Types.ObjectId(req.user.id);
-
+    // =====================
     // SALES
-    
+    // =====================
+    const salesAgg = await Sale.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalSales: { $sum: "$totalAmount" },
+          totalProfit: { $sum: "$totalProfit" },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
 
-    
+    const totalSales = salesAgg[0]?.totalSales || 0;
+    const totalProfit = salesAgg[0]?.totalProfit || 0;
+    const salesCount = salesAgg[0]?.count || 0;
 
- const salesAgg = await Sale.aggregate([
-  {
-    $match: {
-      user: userId,
-      createdAt: { $gte: start, $lt: end }
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalSales: { $sum: "$totalAmount" },
-      totalProfit: { $sum: "$totalProfit" },
-      count: { $sum: 1 }
-    }
-  }
-]);
-
-const totalSales = salesAgg[0]?.totalSales || 0;
-const totalProfit = salesAgg[0]?.totalProfit || 0;
-const salesCount = salesAgg[0]?.count || 0;
-
+    // =====================
     // PURCHASES
-     const ordersAgg = await Order.aggregate([
-  {
-    $match: {
-      user: userId,
-      createdAt: { $gte: start, $lt: end }
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalBuy: { $sum: "$buyTotal" },
-      totalSellValue: { $sum: "$sellTotal" },
-      totalOrderProfit: { $sum: "$totalProfit" },
-      count: { $sum: 1 }
-    }
-  }
-]);
+    // =====================
+    const ordersAgg = await Order.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalBuy: { $sum: "$buyTotal" },
+          totalSellValue: { $sum: "$sellTotal" },
+          totalOrderProfit: { $sum: "$totalProfit" },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
 
-const totalBuy = ordersAgg[0]?.totalBuy || 0;
-const totalSellValue = ordersAgg[0]?.totalSellValue || 0;
-const totalOrderProfit = ordersAgg[0]?.totalOrderProfit || 0;
-const orderCount = ordersAgg[0]?.count || 0;
+    const totalBuy = ordersAgg[0]?.totalBuy || 0;
+    const totalSellValue = ordersAgg[0]?.totalSellValue || 0;
+    const totalOrderProfit = ordersAgg[0]?.totalOrderProfit || 0;
+    const orderCount = ordersAgg[0]?.count || 0;
 
+    // =====================
     // CASH
+    // =====================
     const cashAgg = await CashEntry.aggregate([
-  {
-    $match: {
-      user: userId,
-      status: "active",
-      createdAt: { $gte: start, $lt: end }
-    }
-  },
-  {
-    $group: {
-      _id: "$type",
-      total: { $sum: "$amount" }
-    }
-  }
-]);
+      {
+        $match: {
+          user: userId,
+          status: "active",
+          createdAt: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $group: {
+          _id: "$type",
+          total: { $sum: "$amount" }
+        }
+      }
+    ]);
 
-let income = 0;
-let totalExpense = 0;
+    let income = 0;
+    let totalExpense = 0;
 
-cashAgg.forEach(c => {
-  if (c._id === "income") income = c.total;
-  if (c._id === "expense") totalExpense = c.total;
-});
-    
- 
-   const loanAgg = await DebtLoan.aggregate([
-  {
-    $match: {
-      user: userId,
-      createdAt: { $gte: start, $lt: end }
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalIssued: { $sum: "$principalAmount" }
-    }
-  }
-]);
+    cashAgg.forEach(c => {
+      if (c._id === "income") income = c.total;
+      if (c._id === "expense") totalExpense = c.total;
+    });
 
-const loansIssued = loanAgg[0]?.totalIssued || 0;
+    // =====================
+    // CREDIT (LOANS)
+    // =====================
+    const loanAgg = await DebtLoan.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalIssued: { $sum: "$principalAmount" }
+        }
+      }
+    ]);
 
-     
+    const loansIssued = loanAgg[0]?.totalIssued || 0;
 
+    // =====================
     // PAYMENTS
-     const paymentAgg = await DebtPayment.aggregate([
-  {
-    $match: {
+    // =====================
+    const paymentAgg = await DebtPayment.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalCollected: { $sum: "$amount" }
+        }
+      }
+    ]);
+
+    const collected = paymentAgg[0]?.totalCollected || 0;
+
+    // =====================
+    // OVERDUE (ALL TIME)
+    // =====================
+    const overdueCount = await DebtLoan.countDocuments({
       user: userId,
-      createdAt: { $gte: start, $lt: end }
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalCollected: { $sum: "$amount" }
-    }
-  }
-]);
+      status: "overdue"
+    });
 
-const collected = paymentAgg[0]?.totalCollected || 0;
-
-     
-
-    // OVERDUE
-    const overdueCount =
-      await DebtLoan.countDocuments({
-        user: userId,
-        status:
-          "overdue"
-      });
-
+    // =====================
+    // CALCULATIONS
+    // =====================
     const netPosition =
       totalSales +
       income +
       collected -
-       totalExpense - 
+      totalExpense -
       totalBuy;
 
-// 🔥 NEW
-const totalBusinessProfit =
-  totalProfit +
-  totalOrderProfit;
+    const totalBusinessProfit =
+      totalProfit +
+      totalOrderProfit;
 
-const netProfit =
-  totalBusinessProfit -
-   totalExpense; 
+    const netProfit =
+      totalBusinessProfit -
+      totalExpense;
 
-  const profitMargin =
-  totalBusinessProfit > 0
-    ? (netProfit / totalBusinessProfit) * 100
-    : 0;
+    const profitMargin =
+      totalBusinessProfit > 0
+        ? (netProfit / totalBusinessProfit) * 100
+        : 0;
 
-  const profitStatus =
-    netProfit >= 0
-    ? "BIASHARA INA FAIDA"
-    : "BIASHARA INA HASARA";
+    const profitStatus =
+      netProfit >= 0
+        ? "BIASHARA INA FAIDA"
+        : "BIASHARA INA HASARA";
 
+    // =====================
+    // RESPONSE
+    // =====================
     res.status(200).json({
-      month:
-        now.getMonth() + 1,
-      year:
-        now.getFullYear(),
+      month: now.getUTCMonth() + 1,
+      year: now.getUTCFullYear(),
 
       sales: {
         totalSales,
@@ -497,215 +497,215 @@ const netProfit =
         count: salesCount
       },
 
-       purchases: {
-         totalBuy,
-         totalSellValue,
-         totalOrderProfit,
-          count: orderCount
-       },
+      purchases: {
+        totalBuy,
+        totalSellValue,
+        totalOrderProfit,
+        count: orderCount
+      },
 
-       cash: {
-         income,
-         totalExpense 
-       },
+      cash: {
+        income,
+        totalExpense
+      },
+
       credit: {
         loansIssued,
         collected,
         overdueCount
       },
 
-       summary: {
-         netCashFlow: netPosition,
-         totalBusinessProfit,
-         netProfit,
-          profitMargin,
-         profitStatus
-       }
-      
+      summary: {
+        netCashFlow: netPosition,
+        totalBusinessProfit,
+        netProfit,
+        profitMargin,
+        profitStatus
+      }
     });
+
   } catch (error) {
+    console.log("MONTHLY REPORT ERROR:", error);
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
 
-const getWeeklyReport =
-async (req, res) => {
-  try {
-    const now =
-      new Date();
-
-    const day =
-      now.getDay();
-
-    const diff =
-      day === 0
-        ? 6
-        : day - 1;
-
-    const start =
-      new Date(now);
-
-    start.setDate(
-      now.getDate() - diff
-    );
-
-    start.setHours(
-      0, 0, 0, 0
-    );
-
-    const end =
-      new Date(start);
-
-    end.setDate(
-      start.getDate() + 7
-    );
-
-     const userId = new mongoose.Types.ObjectId(req.user.id);
-
-  const salesAgg = await Sale.aggregate([
-  {
-    $match: {
-      user: userId,
-      createdAt: { $gte: start, $lt: end }
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalSales: { $sum: "$totalAmount" },
-      totalProfit: { $sum: "$totalProfit" },
-      count: { $sum: 1 }
-    }
-  }
-]);
-
-const totalSales = salesAgg[0]?.totalSales || 0;
-
-const totalProfit = salesAgg[0]?.totalProfit || 0;
-const salesCount = salesAgg[0]?.count || 0;
  
-const ordersAgg = await Order.aggregate([
-  {
-    $match: {
-      user: userId,
-      createdAt: { $gte: start, $lt: end }
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalBuy: { $sum: "$buyTotal" },
-      totalSellValue: { $sum: "$sellTotal" },
-      totalOrderProfit: { $sum: "$totalProfit" },
-      count: { $sum: 1 }
-    }
-  }
-]);
+const getWeeklyReport = async (req, res) => {
+  try {
+    const now = new Date();
 
-const totalBuy = ordersAgg[0]?.totalBuy || 0;
-const totalSellValue = ordersAgg[0]?.totalSellValue || 0;
-const totalOrderProfit = ordersAgg[0]?.totalOrderProfit || 0;
-const orderCount = ordersAgg[0]?.count || 0;
-  
+    // 🔥 GET CURRENT WEEK (MONDAY → SUNDAY) IN UTC
+    const day = now.getUTCDay();
+    const diff = day === 0 ? 6 : day - 1;
+
+    const start = new Date(now);
+    start.setUTCDate(now.getUTCDate() - diff);
+    start.setUTCHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setUTCDate(start.getUTCDate() + 7);
+
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+
+    // =====================
+    // SALES
+    // =====================
+    const salesAgg = await Sale.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalSales: { $sum: "$totalAmount" },
+          totalProfit: { $sum: "$totalProfit" },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const totalSales = salesAgg[0]?.totalSales || 0;
+    const totalProfit = salesAgg[0]?.totalProfit || 0;
+    const salesCount = salesAgg[0]?.count || 0;
+
+    // =====================
+    // PURCHASES
+    // =====================
+    const ordersAgg = await Order.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalBuy: { $sum: "$buyTotal" },
+          totalSellValue: { $sum: "$sellTotal" },
+          totalOrderProfit: { $sum: "$totalProfit" },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const totalBuy = ordersAgg[0]?.totalBuy || 0;
+    const totalSellValue = ordersAgg[0]?.totalSellValue || 0;
+    const totalOrderProfit = ordersAgg[0]?.totalOrderProfit || 0;
+    const orderCount = ordersAgg[0]?.count || 0;
+
+    // =====================
+    // CASH
+    // =====================
     const cashAgg = await CashEntry.aggregate([
-  {
-    $match: {
-      user: userId,
-      status: "active",
-      createdAt: { $gte: start, $lt: end }
-    }
-  },
-  {
-    $group: {
-      _id: "$type",
-      total: { $sum: "$amount" }
-    }
-  }
-]);
+      {
+        $match: {
+          user: userId,
+          status: "active",
+          createdAt: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $group: {
+          _id: "$type",
+          total: { $sum: "$amount" }
+        }
+      }
+    ]);
 
-let income = 0;
-let totalExpense = 0;
+    let income = 0;
+    let totalExpense = 0;
 
-cashAgg.forEach(c => {
-  if (c._id === "income") income = c.total;
-  if (c._id === "expense") totalExpense = c.total;
-});
+    cashAgg.forEach(c => {
+      if (c._id === "income") income = c.total;
+      if (c._id === "expense") totalExpense = c.total;
+    });
 
-    
-    
-
+    // =====================
+    // CREDIT (LOANS)
+    // =====================
     const loanAgg = await DebtLoan.aggregate([
-  {
-    $match: {
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalIssued: { $sum: "$principalAmount" }
+        }
+      }
+    ]);
+
+    const loansIssued = loanAgg[0]?.totalIssued || 0;
+
+    // =====================
+    // PAYMENTS
+    // =====================
+    const paymentAgg = await DebtPayment.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: start, $lt: end }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalCollected: { $sum: "$amount" }
+        }
+      }
+    ]);
+
+    const collected = paymentAgg[0]?.totalCollected || 0;
+
+    // =====================
+    // OVERDUE (ALL TIME)
+    // =====================
+    const overdueCount = await DebtLoan.countDocuments({
       user: userId,
-      createdAt: { $gte: start, $lt: end }
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalIssued: { $sum: "$principalAmount" }
-    }
-  }
-]);
+      status: "overdue"
+    });
 
-const loansIssued = loanAgg[0]?.totalIssued || 0;
-
-     
-
-   const paymentAgg = await DebtPayment.aggregate([
-  {
-    $match: {
-      user: userId,
-      createdAt: { $gte: start, $lt: end }
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalCollected: { $sum: "$amount" }
-    }
-  }
-]);
-
-const collected = paymentAgg[0]?.totalCollected || 0;
-    
-    const overdueCount =
-      await DebtLoan.countDocuments({
-        user: userId,
-        status:
-          "overdue"
-      });
-
+    // =====================
+    // CALCULATIONS
+    // =====================
     const netPosition =
       totalSales +
       income +
       collected -
-       totalExpense - 
+      totalExpense -
       totalBuy;
 
-// 🔥 NEW
-const totalBusinessProfit =
-  totalProfit +
-  totalOrderProfit;
+    const totalBusinessProfit =
+      totalProfit +
+      totalOrderProfit;
 
-const netProfit =
-  totalBusinessProfit -
- totalExpense; 
+    const netProfit =
+      totalBusinessProfit -
+      totalExpense;
 
-  const profitMargin =
-  totalBusinessProfit > 0
-    ? (netProfit / totalBusinessProfit) * 100
-    : 0;
+    const profitMargin =
+      totalBusinessProfit > 0
+        ? (netProfit / totalBusinessProfit) * 100
+        : 0;
 
- const profitStatus =
-   netProfit >= 0
-    ? "BIASHARA INA FAIDA"
-    : "BIASHARA INA HASARA";
+    const profitStatus =
+      netProfit >= 0
+        ? "BIASHARA INA FAIDA"
+        : "BIASHARA INA HASARA";
 
+    // =====================
+    // RESPONSE
+    // =====================
     res.status(200).json({
       startDate: start,
       endDate: end,
@@ -713,19 +713,20 @@ const netProfit =
       sales: {
         totalSales,
         totalProfit,
-         count: salesCount
+        count: salesCount
       },
 
       purchases: {
         totalBuy,
         totalSellValue,
         totalOrderProfit,
-         count: orderCount
-       },
-       cash: {
-         income,
-         totalExpense 
-       },
+        count: orderCount
+      },
+
+      cash: {
+        income,
+        totalExpense
+      },
 
       credit: {
         loansIssued,
@@ -733,35 +734,61 @@ const netProfit =
         overdueCount
       },
 
-     summary: {
-       netCashFlow: netPosition,
-       totalBusinessProfit,
-       netProfit,
+      summary: {
+        netCashFlow: netPosition,
+        totalBusinessProfit,
+        netProfit,
         profitMargin,
-       profitStatus
-    }
+        profitStatus
+      }
     });
+
   } catch (error) {
+    console.log("WEEKLY REPORT ERROR:", error);
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
-}; 
+};
 
- const getTopProductsReport = async (req, res) => {
+const getTopProductsReport = async (req, res) => {
   try {
-   const userId = new mongoose.Types.ObjectId(req.user.id);
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+
+    // 🔥 DEFAULT RANGE = THIS MONTH (UNAWEZA BADILI BAADAE)
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
     const result = await Sale.aggregate([
-      { $match: { user: userId } },
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: start, $lt: end } // 🔥 muhimu (ondoa kama unataka ALL TIME)
+        }
+      },
+
+      // 🔥 BREAK ITEMS ARRAY
       { $unwind: "$items" },
+
       {
         $group: {
           _id: "$items.name",
+
           name: { $first: "$items.name" },
-          qty: { $sum: { $ifNull: ["$items.qty", 0] } },
-          revenue: { $sum: { $ifNull: ["$items.total", 0] } },
+
+          qty: {
+            $sum: {
+              $ifNull: ["$items.qty", 0]
+            }
+          },
+
+          revenue: {
+            $sum: {
+              $ifNull: ["$items.total", 0]
+            }
+          },
+
           profit: {
             $sum: {
               $multiply: [
@@ -775,143 +802,218 @@ const netProfit =
               ]
             }
           },
+
           count: { $sum: 1 }
         }
       },
-      { $sort: { qty: -1 } },
+
+      // 🔥 SORT (BEST SELLERS FIRST)
+      {
+        $sort: {
+          qty: -1,
+          revenue: -1
+        }
+      },
+
+      // 🔥 LIMIT
       { $limit: 20 }
     ]);
 
     res.status(200).json(result);
 
   } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-const getCreditReport =
-async (req, res) => {
-  try {
-const userId = new mongoose.Types.ObjectId(req.user.id);
-
- const loanAgg = await DebtLoan.aggregate([
-  {
-    $match: { user: userId }
-  },
-  {
-    $group: {
-      _id: "$status",
-      count: { $sum: 1 },
-      totalIssued: { $sum: "$principalAmount" },
-      outstanding: { $sum: "$balanceAmount" }
-    }
-  }
-]);
- 
-const paymentAgg = await DebtPayment.aggregate([
-  {
-  $match: {
-    user: userId,
-      
-  }
-},
-  {
-    $group: {
-      _id: null,
-      totalCollected: { $sum: "$amount" }
-    }
-  }
-]);
-
-let overdueCount = 0;
-let activeCount = 0;
-let paidCount = 0;
-
-let totalLoans = 0;
-let totalIssued = 0;
-let outstanding = 0;
-
-loanAgg.forEach(l => {
-  totalLoans += l.count;
-  totalIssued += l.totalIssued;
-  outstanding += l.outstanding;
-
-  if (l._id === "overdue") overdueCount = l.count;
-  if (l._id === "active") activeCount = l.count;
-  if (l._id === "paid") paidCount = l.count;
-});
-
-const totalCollected = paymentAgg[0]?.totalCollected || 0;
-
-res.status(200).json({
-  summary: {
-    totalLoans,
-    totalIssued,
-    totalCollected,
-    outstanding,
-    overdueCount,
-    activeCount,
-    paidCount
-  },
-  riskyCustomers: []
-});
-
-  } catch (error) {
+    console.log("TOP PRODUCTS ERROR:", error);
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
 
-const getExpenseReport =
-async (req, res) => {
-  try {
-     const userId = new mongoose.Types.ObjectId(req.user.id);
 
+ 
+
+const getCreditReport = async (req, res) => {
+  try {
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+
+    // 🔥 DEFAULT RANGE = THIS MONTH (unaweza badili)
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+    // =====================
+    // LOANS
+    // =====================
+    const loanAgg = await DebtLoan.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: start, $lt: end } // 🔥 muhimu
+        }
+      },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+          totalIssued: { $sum: "$principalAmount" },
+          outstanding: { $sum: "$balanceAmount" }
+        }
+      }
+    ]);
+
+    // =====================
+    // PAYMENTS
+    // =====================
+    const paymentAgg = await DebtPayment.aggregate([
+      {
+        $match: {
+          user: userId,
+          createdAt: { $gte: start, $lt: end } // 🔥 muhimu
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalCollected: { $sum: "$amount" }
+        }
+      }
+    ]);
+
+    // =====================
+    // PROCESS RESULTS
+    // =====================
+    let overdueCount = 0;
+    let activeCount = 0;
+    let paidCount = 0;
+
+    let totalLoans = 0;
+    let totalIssued = 0;
+    let outstanding = 0;
+
+    loanAgg.forEach(l => {
+      totalLoans += l.count || 0;
+      totalIssued += l.totalIssued || 0;
+      outstanding += l.outstanding || 0;
+
+      if (l._id === "overdue") overdueCount = l.count;
+      if (l._id === "active") activeCount = l.count;
+      if (l._id === "paid") paidCount = l.count;
+    });
+
+    const totalCollected = paymentAgg[0]?.totalCollected || 0;
+
+    // =====================
+    // OPTIONAL: RISKY CUSTOMERS
+    // =====================
+    const riskyCustomers = await DebtLoan.find({
+      user: userId,
+      status: "overdue"
+    })
+      .sort({ balanceAmount: -1 })
+      .limit(5)
+      .populate("customer", "fullName phone riskScore");
+
+    // =====================
+    // RESPONSE
+    // =====================
+    res.status(200).json({
+      summary: {
+        totalLoans,
+        totalIssued,
+        totalCollected,
+        outstanding,
+        overdueCount,
+        activeCount,
+        paidCount
+      },
+      riskyCustomers
+    });
+
+  } catch (error) {
+    console.log("CREDIT REPORT ERROR:", error);
+    res.status(500).json({
+      message: error.message
+    });
+  }
+};
+
+const getExpenseReport = async (req, res) => {
+  try {
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+
+    // 🔥 DEFAULT RANGE = THIS MONTH (consistent na reports zako)
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+    // =====================
+    // CATEGORY AGGREGATION
+    // =====================
     const expenseAgg = await CashEntry.aggregate([
-  {
-    $match: {
+      {
+        $match: {
+          user: userId,
+          status: "active",
+          type: "expense",
+          createdAt: { $gte: start, $lt: end } // 🔥 muhimu
+        }
+      },
+      {
+        $group: {
+          _id: "$category",
+          category: { $first: "$category" },
+          amount: { $sum: "$amount" },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { amount: -1 }
+      }
+    ]);
+
+    // =====================
+    // TOTAL
+    // =====================
+    const totalExpense = expenseAgg.reduce(
+      (sum, x) => sum + (x.amount || 0),
+      0
+    );
+
+    // =====================
+    // TOP 3
+    // =====================
+    const top3 = expenseAgg.slice(0, 3);
+
+    // =====================
+    // RECENT EXPENSES (NEW)
+    // =====================
+    const recent = await CashEntry.find({
       user: userId,
       status: "active",
-      type: "expense"
-    }
-  },
-  {
-    $group: {
-      _id: "$category",
-      amount: { $sum: "$amount" },
-      count: { $sum: 1 }
-    }
-  },
-  {
-    $sort: { amount: -1 }
-  }
-]);
+      type: "expense",
+      createdAt: { $gte: start, $lt: end }
+    })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .select("category amount createdAt");
 
-const totalExpense = expenseAgg.reduce(
-  (sum, x) => sum + x.amount,
-  0
-);
- 
-     
-const categories = expenseAgg;
-const top3 = expenseAgg.slice(0, 3);
+    // =====================
+    // RESPONSE
+    // =====================
+    res.status(200).json({
+      summary: {
+        totalExpense,
+        entries: recent.length
+      },
+      categories: expenseAgg,
+      top3,
+      recent
+    });
 
-res.status(200).json({
-  summary: {
-    totalExpense,
-    entries: expenseAgg.length
-  },
-  categories,
-  top3,
-  recent: []
-});
-    
   } catch (error) {
+    console.log("EXPENSE REPORT ERROR:", error);
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
