@@ -42,14 +42,35 @@ router.post(
   scanOrder
 );
 
-
-// 🔥 IMAGE OCR
 router.post(
   "/scan-image",
   protect,
-  upload.single("image"),
+  (req, res, next) => {
+    console.log("📸 Upload request received");
+
+    upload.single("image")(req, res, function (err) {
+      if (err) {
+        console.log("❌ MULTER ERROR:", err.message);
+
+        return res.status(400).json({
+          message: err.message || "Upload failed",
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({
+          message: "No image uploaded",
+        });
+      }
+
+      console.log("✅ File received:", req.file.size, "bytes");
+
+      next();
+    });
+  },
   scanImage
 );
+ 
 
 
 // 🔥 HISTORY (with pagination ?page=0)
