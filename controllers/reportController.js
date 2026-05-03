@@ -1,3 +1,4 @@
+  const mongoose = require("mongoose");
   const Sale =
 require("../models/Sale");
 
@@ -18,8 +19,8 @@ const Product =
 require("../models/Product");
 const getInventoryReport = async (req, res) => {
   try {
-    const userId = req.user.id;
-
+     
+const userId = new mongoose.Types.ObjectId(req.user.id);
     // 🔥 SUMMARY (FAST - AGGREGATE)
     const summaryAgg = await Product.aggregate([
       {
@@ -123,9 +124,7 @@ async (req, res) => {
       tomorrow.getDate() + 1
     );
 
-    const userId =
-      req.user.id;
-
+ const userId = new mongoose.Types.ObjectId(req.user.id);
     // SALES
     const salesAgg = await Sale.aggregate([
   {
@@ -155,7 +154,7 @@ const salesCount = salesAgg[0]?.count || 0;
   {
     $match: {
       user: userId,
-      
+       
     }
   },
   {
@@ -180,7 +179,7 @@ const orderCount = ordersAgg[0]?.count || 0;
     $match: {
       user: userId,
       status: "active",
-      createdAt: { $gte: today, $lt: tomorrow }
+      
     }
   },
   {
@@ -204,7 +203,7 @@ cashAgg.forEach(c => {
   {
     $match: {
       user: userId,
-      createdAt: { $gte: today, $lt: tomorrow }
+       
     }
   },
   {
@@ -219,7 +218,7 @@ const paymentAgg = await DebtPayment.aggregate([
   {
     $match: {
       user: userId,
-      createdAt: { $gte: today, $lt: tomorrow }
+       
     }
   },
   {
@@ -335,8 +334,7 @@ async (req, res) => {
         1
       );
 
-    const userId =
-      req.user.id;
+     const userId = new mongoose.Types.ObjectId(req.user.id);
 
     // SALES
     
@@ -565,8 +563,7 @@ async (req, res) => {
       start.getDate() + 7
     );
 
-    const userId =
-      req.user.id;
+     const userId = new mongoose.Types.ObjectId(req.user.id);
 
   const salesAgg = await Sale.aggregate([
   {
@@ -754,7 +751,7 @@ const netProfit =
 
  const getTopProductsReport = async (req, res) => {
   try {
-    const userId = req.user.id;
+   const userId = new mongoose.Types.ObjectId(req.user.id);
 
     const result = await Sale.aggregate([
       { $match: { user: userId } },
@@ -795,8 +792,7 @@ const netProfit =
 const getCreditReport =
 async (req, res) => {
   try {
-    const userId =
-      req.user.id;
+const userId = new mongoose.Types.ObjectId(req.user.id);
 
  const loanAgg = await DebtLoan.aggregate([
   {
@@ -871,8 +867,7 @@ res.status(200).json({
 const getExpenseReport =
 async (req, res) => {
   try {
-    const userId =
-      req.user.id;
+     const userId = new mongoose.Types.ObjectId(req.user.id);
 
     const expenseAgg = await CashEntry.aggregate([
   {
