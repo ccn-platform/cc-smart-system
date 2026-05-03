@@ -1,4 +1,4 @@
- const Sale =
+  const Sale =
 require("../models/Sale");
 
 const Order =
@@ -155,7 +155,7 @@ const salesCount = salesAgg[0]?.count || 0;
   {
     $match: {
       user: userId,
-      createdAt: { $gte: today, $lt: tomorrow }
+      
     }
   },
   {
