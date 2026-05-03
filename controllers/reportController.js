@@ -1,4 +1,4 @@
-  const mongoose = require("mongoose");
+   const mongoose = require("mongoose");
   const Sale =
 require("../models/Sale");
 
@@ -26,7 +26,7 @@ const userId = new mongoose.Types.ObjectId(req.user.id);
       {
         $match: {
           user: userId,
-          isActive: true
+           
         }
       },
       {
