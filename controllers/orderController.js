@@ -1,4 +1,5 @@
-  const Order = require("../models/Order");
+const mongoose = require("mongoose");
+ const Order = require("../models/Order");
 const cleanOCRText = require("../utils/cleanOCRText");
 const parseOrderText = require("../utils/parseOrderText");
 const { analyzeProfit } = require("../services/profitService");
@@ -135,12 +136,16 @@ const getOrderById = async (req, res) => {
 };
 
 // 🔥 ORDER PROFIT SUMMARY
+ 
+
 const getOrderProfitSummary = async (req, res) => {
   try {
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+
     const result = await Order.aggregate([
       {
         $match: {
-          user: req.user._id
+          user: userId
         }
       },
       {
@@ -164,6 +169,7 @@ const getOrderProfitSummary = async (req, res) => {
     res.status(200).json(data);
 
   } catch (error) {
+    console.log("❌ PROFIT ERROR:", error);
     res.status(500).json({
       message: error.message
     });
