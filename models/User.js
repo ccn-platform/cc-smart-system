@@ -1,24 +1,20 @@
   const mongoose = require("mongoose");
 
-// 🔥 SUBSCRIPTION SCHEMA (inajitegemea)
 const subscriptionSchema = new mongoose.Schema({
   plan: {
     type: String,
     enum: ["trial", "weekly", "monthly", "six_months", "yearly"],
     default: "trial"
   },
-
   startDate: {
     type: Date,
     default: Date.now
   },
-
   expiresAt: {
     type: Date,
     default: () =>
-      new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 🔥 wiki 2 bure
+      new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
   },
-
   isActive: {
     type: Boolean,
     default: true
@@ -57,20 +53,9 @@ const userSchema = new mongoose.Schema(
       required: true
     },
 
-    mkoa: {
-      type: String,
-      required: true
-    },
-
-    wilaya: {
-      type: String,
-      required: true
-    },
-
-    mtaa: {
-      type: String,
-      required: true
-    },
+    mkoa: String,
+    wilaya: String,
+    mtaa: String,
 
     isActive: {
       type: Boolean,
@@ -79,15 +64,24 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
+      enum: ["owner", "staff"],
       default: "owner"
+    },
+
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true
     },
 
     subscription: {
       type: subscriptionSchema,
-      default: () => ({})
+      default: function () {
+        return this.role === "owner" ? {} : undefined;
+      }
     },
 
-    // 🔥 PENDING PAYMENT SYSTEM
     pendingPlan: {
       type: String,
       enum: ["weekly", "monthly", "six_months", "yearly"],
@@ -99,7 +93,6 @@ const userSchema = new mongoose.Schema(
       default: null
     },
 
-    // 🔥 FIX IKO HAPA (COMMA IMEONGEZWA)
     pendingExpiresAt: {
       type: Date,
       default: null
@@ -107,5 +100,18 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// 🔥 VALIDATION
+userSchema.pre("save", function (next) {
+  if (this.role === "staff" && !this.owner) {
+    return next(new Error("Staff must have owner"));
+  }
+
+  if (this.role === "owner" && this.owner) {
+    return next(new Error("Owner cannot have owner"));
+  }
+
+  next();
+});
 
 module.exports = mongoose.model("User", userSchema);
