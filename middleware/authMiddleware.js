@@ -76,14 +76,21 @@ const protect = async (req, res, next) => {
   }
 };
 
-// 🔥 OWNER ONLY
+ // 🔥 OWNER ONLY (FIXED)
 const onlyOwner = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      message: "User not authenticated"
+    });
+  }
+
   if (req.user.role !== "owner") {
     return res.status(403).json({
       message: "Owner only action"
     });
   }
-  next();
+
+  return next(); // 🔥 muhimu
 };
 
 // 🔥 STAFF OR OWNER (optional)
