@@ -1,4 +1,4 @@
- const CustomerIdentity = require("../models/CustomerIdentity");
+  const CustomerIdentity = require("../models/CustomerIdentity");
 const DebtLoan = require("../models/DebtLoan");
 const DebtPayment = require("../models/DebtPayment");
 
@@ -31,10 +31,11 @@ const findOrCreateCustomer = async (req, res) => {
     }
 
     if (!customer) {
-      const data = {
-        fullName: fullName.trim()
-      };
-
+     const data = {
+       owner: req.ownerId,          // 🔥 ADD THIS
+       createdBy: req.user.id,      // 🔥 recommended
+       fullName: fullName.trim()
+     };
       if (phone && phone.trim() !== "") {
         data.phone = phone.trim();
       }
