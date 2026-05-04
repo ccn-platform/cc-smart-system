@@ -81,7 +81,7 @@ const registerUser = async (req, res) => {
         role: user.role,
 
         owner: user.owner || null, // ✅ ONGEZA HII
-        
+
         subscription: user.subscription
       }
     });
@@ -221,8 +221,27 @@ const addStaff = async (req, res) => {
     });
   }
 };
+// 🔥 GET STAFF LIST (owner only)
+const getStaff = async (req, res) => {
+  try {
+    // ownerId tayari unatoka middleware (req.ownerId)
+    const staff = await User.find({
+      owner: req.ownerId,
+      role: "staff",
+      isActive: true
+    })
+      .select("name phone role createdAt")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json(staff);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
 module.exports = {
   registerUser,
   loginUser,
+   getStaff,
    addStaff // 🔥 ongeza hii
 }; 
