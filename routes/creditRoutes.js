@@ -45,8 +45,8 @@ router.get("/history",protect,getLoanHistory);
 
 
 // SINGLE LOAN
-router.get("/:id",protect,getLoanById);
+ router.get("/overdue", protect, getOverdueLoans); // 🔥 iwe juu
 
-router.get("/overdue",protect,getOverdueLoans);
+router.get("/:id", protect, getLoanById);         // 🔥 iwe chini
 module.exports =
 router;
