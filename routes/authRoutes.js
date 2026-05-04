@@ -4,7 +4,8 @@ const router = express.Router();
 const {
   registerUser,
   loginUser,
-  addStaff
+  addStaff,
+   getStaff
 } = require("../controllers/authController");
 
 // 🔥 IMPORT MIDDLEWARE
@@ -18,6 +19,8 @@ router.post("/register", registerUser);
 router.post("/login", loginUser);
 
 // 🔥 OWNER ONLY
-  router.post("/add-staff", protect, onlyOwner, addStaff);
+router.post("/add-staff", protect, onlyOwner, addStaff);
+
+router.get("/staff", protect, onlyOwner, getStaff); // 🔥 mpya
 
 module.exports = router;
