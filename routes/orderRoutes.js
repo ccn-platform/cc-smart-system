@@ -43,35 +43,27 @@ router.post(
   scanOrder
 );
 
-
- router.post(
+router.post(
   "/scan-image",
   protect,
+  upload.single("image"), // ✅ hii tu inatosha
   (req, res, next) => {
     console.log("📸 Upload request received");
 
-    upload.single("image")(req, res, function (err) {
-      if (err) {
-        console.log("❌ MULTER ERROR:", err.message);
+    if (!req.file) {
+      return res.status(400).json({
+        message: "No image uploaded",
+      });
+    }
 
-        return res.status(400).json({
-          message: err.message || "Upload failed",
-        });
-      }
+    console.log("✅ File received:", req.file.size, "bytes");
 
-      if (!req.file) {
-        return res.status(400).json({
-          message: "No image uploaded",
-        });
-      }
-
-      console.log("✅ File received:", req.file.size, "bytes");
-
-      next();
-    });
+    next();
   },
   scanImage
 );
+ 
+ 
 
 // 🔥 HISTORY (with pagination ?page=0)
 router.get(
