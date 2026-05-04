@@ -103,12 +103,17 @@ const userSchema = new mongoose.Schema(
 
 // 🔥 VALIDATION
  userSchema.pre("save", async function () {
-  if (this.role === "staff" && !this.owner) {
-    throw new Error("Staff must have owner");
-  }
+  // 🔥 only run on NEW document
+  if (this.isNew) {
 
-  if (this.role === "owner" && this.owner) {
-    throw new Error("Owner cannot have owner");
+    if (this.role === "staff" && !this.owner) {
+      throw new Error("Staff must have owner");
+    }
+
+    if (this.role === "owner" && this.owner) {
+      throw new Error("Owner cannot have owner");
+    }
+
   }
 });
 
