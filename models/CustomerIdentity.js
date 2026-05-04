@@ -1,8 +1,6 @@
- const mongoose =
-require("mongoose");
+ const mongoose = require("mongoose");
 
-const customerIdentitySchema =
-new mongoose.Schema(
+const customerIdentitySchema = new mongoose.Schema(
   {
     fullName: {
       type: String,
@@ -11,14 +9,13 @@ new mongoose.Schema(
       index: true
     },
 
-     phone: {
-  type: String,
-  trim: true,
-  index: true,
-  sparse: true,
-  unique: true,
-  default: null
-},
+    phone: {
+      type: String,
+      trim: true,
+      index: true,
+      sparse: true,
+      unique: true
+    },
 
     nationalId: {
       type: String,
@@ -29,17 +26,12 @@ new mongoose.Schema(
 
     gender: {
       type: String,
-      enum: [
-        "",
-        "male",
-        "female"
-      ],
+      enum: ["", "male", "female"],
       default: ""
     },
 
     dateOfBirth: {
-      type: Date,
-      default: null
+      type: Date
     },
 
     region: {
@@ -76,66 +68,34 @@ new mongoose.Schema(
     },
 
     fingerprintId: {
-  type: String,
-  trim: true,
-  index: true,
-  sparse: true,
-  unique: true,
-  default: null
-},
+      type: String,
+      trim: true,
+      index: true,
+      sparse: true,
+      unique: true
+    },
 
     status: {
       type: String,
-      enum: [
-        "active",
-        "blocked",
-        "blacklisted"
-      ],
-      default:
-        "active"
+      enum: ["active", "blocked", "blacklisted"],
+      default: "active"
     },
 
-   riskScore: {
-  type: Number,
-  default: 500,
-  min: 0,
-  max: 1000
-},
-
-    totalLoans: {
+    riskScore: {
       type: Number,
-      default: 0
+      default: 500,
+      min: 0,
+      max: 1000
     },
 
-    activeLoans: {
-      type: Number,
-      default: 0
-    },
+    totalLoans: { type: Number, default: 0 },
+    activeLoans: { type: Number, default: 0 },
+    overdueLoans: { type: Number, default: 0 },
+    paidLoans: { type: Number, default: 0 },
+    defaultedLoans: { type: Number, default: 0 },
 
-    overdueLoans: {
-      type: Number,
-      default: 0
-    },
-
-    paidLoans: {
-      type: Number,
-      default: 0
-    },
-
-    defaultedLoans: {
-      type: Number,
-      default: 0
-    },
-
-    totalBorrowed: {
-      type: Number,
-      default: 0
-    },
-
-    totalPaid: {
-      type: Number,
-      default: 0
-    },
+    totalBorrowed: { type: Number, default: 0 },
+    totalPaid: { type: Number, default: 0 },
 
     notes: {
       type: String,
@@ -143,10 +103,8 @@ new mongoose.Schema(
     },
 
     createdBy: {
-      type:
-        mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User"
     }
   },
   {
@@ -154,8 +112,7 @@ new mongoose.Schema(
   }
 );
 
-module.exports =
-mongoose.model(
+module.exports = mongoose.model(
   "CustomerIdentity",
   customerIdentitySchema
 );
