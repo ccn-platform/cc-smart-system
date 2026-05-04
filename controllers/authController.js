@@ -1,4 +1,4 @@
-  const User = require("../models/User");
+ const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const normalizePhone = require("../utils/normalizePhone");
@@ -155,11 +155,11 @@ res.status(200).json({
     });
   }
 };
-
+ 
 const addStaff = async (req, res) => {
   try {
-    // 🔥 CHECK OWNER (IMPORTANT)
-    if (!req.ownerId) {
+    // 🔥 CHECK AUTH + OWNER
+    if (!req.user || !req.ownerId) {
       return res.status(401).json({
         message: "Invalid owner session"
       });
@@ -191,15 +191,15 @@ const addStaff = async (req, res) => {
     // 🔥 HASH PASSWORD
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 🔥 CREATE STAFF
-    const staff = await User.create({
+    // 🔥 CREATE USER INSTANCE (SAFE)
+    const staff = new User({
       name: name.trim(),
       phone: normalizedPhone,
       password: hashedPassword,
 
       role: "staff",
 
-      // 🔥 LINK TO OWNER (FIXED)
+      // 🔥 LINK OWNER
       owner: req.ownerId,
 
       // 🔥 COPY BUSINESS DATA
@@ -209,6 +209,9 @@ const addStaff = async (req, res) => {
       wilaya: req.user.wilaya,
       mtaa: req.user.mtaa
     });
+
+    // 🔥 SAVE (important for schema hooks)
+    await staff.save();
 
     // 🔥 RESPONSE
     return res.status(201).json({
@@ -222,10 +225,10 @@ const addStaff = async (req, res) => {
     });
 
   } catch (error) {
-    console.log("ADD STAFF ERROR:", error.message);
+    console.log("ADD STAFF ERROR FULL:", error);
 
     return res.status(500).json({
-      message: "Failed to create staff"
+      message: error.message || "Failed to create staff"
     });
   }
 };
