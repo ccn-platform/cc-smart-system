@@ -1,4 +1,4 @@
-  const Product = require("../models/Product");
+   const Product = require("../models/Product");
 
 
 // CREATE PRODUCT
@@ -24,7 +24,7 @@ const createProduct = async (req, res) => {
     }
 
     const product = await Product.create({
-      user: req.user.id,
+      owner: req.ownerId,
       name,
       barcode,
       category,
@@ -54,7 +54,7 @@ const getProducts = async (req, res) => {
     const skip = page * limit;
 
     const products = await Product.find({
-      user: req.user.id,
+       owner: req.ownerId,
       isActive: true
     })
       .sort({ createdAt: -1 })
@@ -83,7 +83,7 @@ const searchProducts = async (req, res) => {
     // 🔥 TEXT SEARCH (fast)
     let products = await Product.find(
       {
-        user: req.user.id,
+        owner: req.ownerId,
         isActive: true,
         $text: { $search: keyword }
       },
@@ -99,7 +99,7 @@ const searchProducts = async (req, res) => {
     // 🔥 FALLBACK (regex + barcode)
     if (!products.length && keyword) {
       products = await Product.find({
-        user: req.user.id,
+         owner: req.ownerId,
         isActive: true,
         $or: [
           { name: { $regex: keyword, $options: "i" } },
@@ -126,7 +126,7 @@ const updateProduct = async (req, res) => {
   try {
     const product = await Product.findOne({
       _id: req.params.id,
-      user: req.user.id
+       owner: req.ownerId,
     });
 
     if (!product) {
@@ -158,7 +158,7 @@ const deleteProduct = async (req, res) => {
   try {
     const product = await Product.findOne({
       _id: req.params.id,
-      user: req.user.id
+     owner: req.ownerId,
     });
 
     if (!product) {
