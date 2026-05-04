@@ -13,7 +13,7 @@ const {
   "../services/creditCheckService"
 );
 
-
+ 
 // FIND OR CREATE CUSTOMER
  
 const findOrCreateCustomer =
@@ -25,16 +25,12 @@ async (req, res) => {
       fingerprintId
     } = req.body;
 
-    if (
-      !phone &&
-      !fingerprintId
-    ) {
-      return res.status(400).json({
-        message:
-          "Phone or fingerprint required"
-      });
-    }
-
+    // 🔥 REQUIRE NAME ONLY
+if (!fullName || fullName.trim() === "") {
+  return res.status(400).json({
+    message: "Customer name required"
+  });
+}
     let customer = null;
 
     if (
@@ -57,17 +53,12 @@ async (req, res) => {
     }
 
     if (!customer) {
-      customer =
-        await CustomerIdentity.create({
-          fullName:
-            fullName ||
-            "Unknown",
-          phone:
-            phone ||
-            fingerprintId,
-          fingerprintId:
-            fingerprintId || ""
-        });
+      
+    customer = await CustomerIdentity.create({
+  fullName: fullName.trim(),
+  phone: phone?.trim() || null,
+  fingerprintId: fingerprintId?.trim() || null
+});
     } else {
       if (
         fingerprintId &&
@@ -119,8 +110,9 @@ async (req, res) => {
 
 
 // CREATE LOAN
-const createDebtLoan =
-async (req, res) => {
+ 
+    // CREATE LOAN
+const createDebtLoan = async (req, res) => {
   try {
     const {
       customerId,
@@ -131,67 +123,69 @@ async (req, res) => {
       businessCategory
     } = req.body;
 
-    const check =
-      await checkCreditEligibility({
-        customerId,
-        businessCategory
-      });
-
-    if (
-      !check.approved
-    ) {
+    // 🔥 VALIDATION (MUHIMU SANA)
+    if (!customerId) {
       return res.status(400).json({
-        message:
-          check.reason
+        message: "Customer required"
       });
     }
 
-    const loan =
-      await DebtLoan.create({
-        customer:
-          customerId,
-        user:
-          req.user.id,
-        branch:
-          req.user.branch ||
-          null,
-        businessCategory,
-        loanNumber:
-          "LN" +
-          Date.now(),
-        principalAmount:
-          Number(amount),
-        balanceAmount:
-          Number(amount),
-        paidAmount: 0,
-        dueDate,
-        items:
-          items || [],
-        note:
-          note || "",
-        approvedBy:
-          req.user.id
+    const cleanAmount = Number(amount);
+
+    if (!cleanAmount || cleanAmount <= 0) {
+      return res.status(400).json({
+        message: "Valid loan amount required"
       });
+    }
 
-    await CustomerIdentity.findByIdAndUpdate(
+    if (!dueDate) {
+      return res.status(400).json({
+        message: "Due date required"
+      });
+    }
+
+    // 🔥 CREDIT CHECK
+    const check = await checkCreditEligibility({
       customerId,
-      {
-        $inc: {
-          totalLoans: 1,
-          activeLoans: 1,
-          totalBorrowed:
-            Number(amount)
-        }
-      }
-    );
+      businessCategory
+    });
 
-    res.status(201).json(
-      loan
-    );
+    if (!check.approved) {
+      return res.status(400).json({
+        message: check.reason
+      });
+    }
+
+    // 🔥 CREATE LOAN
+    const loan = await DebtLoan.create({
+      customer: customerId,
+      user: req.user.id,
+      branch: req.user.branch || null,
+      businessCategory,
+      loanNumber: "LN" + Date.now(),
+      principalAmount: cleanAmount,
+      balanceAmount: cleanAmount,
+      paidAmount: 0,
+      dueDate,
+      items: items || [],
+      note: note || "",
+      approvedBy: req.user.id
+    });
+
+    // 🔥 UPDATE CUSTOMER STATS
+    await CustomerIdentity.findByIdAndUpdate(customerId, {
+      $inc: {
+        totalLoans: 1,
+        activeLoans: 1,
+        totalBorrowed: cleanAmount
+      }
+    });
+
+    res.status(201).json(loan);
+
   } catch (error) {
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
