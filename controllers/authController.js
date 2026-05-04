@@ -158,22 +158,26 @@ res.status(200).json({
 
 const addStaff = async (req, res) => {
   try {
-    const {
-      name,
-      phone,
-      password
-    } = req.body;
+    // 🔥 CHECK OWNER (IMPORTANT)
+    if (!req.ownerId) {
+      return res.status(401).json({
+        message: "Invalid owner session"
+      });
+    }
 
-    
+    const { name, phone, password } = req.body;
+
+    // 🔥 VALIDATION
     if (!name || !phone || !password) {
       return res.status(400).json({
         message: "All fields are required"
       });
     }
 
+    // 🔥 NORMALIZE PHONE
     const normalizedPhone = normalizePhone(phone);
 
-    // 🔥 check duplicate
+    // 🔥 CHECK DUPLICATE
     const exists = await User.findOne({
       phone: normalizedPhone
     });
@@ -184,18 +188,19 @@ const addStaff = async (req, res) => {
       });
     }
 
+    // 🔥 HASH PASSWORD
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 🔥 CREATE STAFF
     const staff = await User.create({
-      name,
+      name: name.trim(),
       phone: normalizedPhone,
       password: hashedPassword,
 
       role: "staff",
 
-      // 🔥 LINK TO OWNER
-      owner: req.user._id,
+      // 🔥 LINK TO OWNER (FIXED)
+      owner: req.ownerId,
 
       // 🔥 COPY BUSINESS DATA
       businessName: req.user.businessName,
@@ -205,7 +210,8 @@ const addStaff = async (req, res) => {
       mtaa: req.user.mtaa
     });
 
-    res.status(201).json({
+    // 🔥 RESPONSE
+    return res.status(201).json({
       message: "Staff created successfully",
       staff: {
         id: staff._id,
@@ -216,8 +222,10 @@ const addStaff = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({
-      message: error.message
+    console.log("ADD STAFF ERROR:", error.message);
+
+    return res.status(500).json({
+      message: "Failed to create staff"
     });
   }
 };
