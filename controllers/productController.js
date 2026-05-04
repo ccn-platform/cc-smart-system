@@ -24,7 +24,7 @@ const createProduct = async (req, res) => {
     }
 
     const product = await Product.create({
-      user: req.user.id,
+      owner: req.ownerId, // 🔥 FIX
       name,
       barcode,
       category,
@@ -46,7 +46,7 @@ const createProduct = async (req, res) => {
 };
 
 
-// GET PRODUCTS (🔥 PAGINATION ADDED)
+// GET PRODUCTS
 const getProducts = async (req, res) => {
   try {
     const page = Number(req.query.page) || 0;
@@ -54,7 +54,7 @@ const getProducts = async (req, res) => {
     const skip = page * limit;
 
     const products = await Product.find({
-      user: req.user.id,
+      owner: req.ownerId, // 🔥 FIX
       isActive: true
     })
       .sort({ createdAt: -1 })
@@ -71,7 +71,7 @@ const getProducts = async (req, res) => {
 };
 
 
-// SEARCH PRODUCTS (🔥 FAST SEARCH)
+// SEARCH PRODUCTS
 const searchProducts = async (req, res) => {
   try {
     const keyword = req.query.keyword || "";
@@ -80,10 +80,9 @@ const searchProducts = async (req, res) => {
     const limit = 20;
     const skip = page * limit;
 
-    // 🔥 TEXT SEARCH (fast)
     let products = await Product.find(
       {
-        user: req.user.id,
+        owner: req.ownerId, // 🔥 FIX
         isActive: true,
         $text: { $search: keyword }
       },
@@ -96,10 +95,10 @@ const searchProducts = async (req, res) => {
       .skip(skip)
       .select("name sellPrice stockQty barcode");
 
-    // 🔥 FALLBACK (regex + barcode)
+    // fallback
     if (!products.length && keyword) {
       products = await Product.find({
-        user: req.user.id,
+        owner: req.ownerId, // 🔥 FIX
         isActive: true,
         $or: [
           { name: { $regex: keyword, $options: "i" } },
@@ -121,12 +120,12 @@ const searchProducts = async (req, res) => {
 };
 
 
-// UPDATE PRODUCT (🔥 SAFE UPDATE)
+// UPDATE PRODUCT
 const updateProduct = async (req, res) => {
   try {
     const product = await Product.findOne({
       _id: req.params.id,
-      user: req.user.id
+      owner: req.ownerId // 🔥 FIX
     });
 
     if (!product) {
@@ -140,7 +139,7 @@ const updateProduct = async (req, res) => {
       req.body,
       {
         new: true,
-        runValidators: true // 🔥 important
+        runValidators: true
       }
     );
 
@@ -153,12 +152,12 @@ const updateProduct = async (req, res) => {
 };
 
 
-// DELETE PRODUCT (SOFT DELETE)
+// DELETE PRODUCT
 const deleteProduct = async (req, res) => {
   try {
     const product = await Product.findOne({
       _id: req.params.id,
-      user: req.user.id
+      owner: req.ownerId // 🔥 FIX
     });
 
     if (!product) {
