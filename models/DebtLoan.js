@@ -1,4 +1,4 @@
- const mongoose =
+const mongoose =
 require("mongoose");
 
 const debtLoanSchema =
@@ -12,14 +12,18 @@ new mongoose.Schema(
       required: true,
       index: true
     },
+  owner: {
+    type: mongoose.Schema.Types.ObjectId,
+     ref: "User",
+     required: true,
+     index: true
+   },
 
-    user: {
-      type:
-        mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true
-    },
-
+   createdBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  default: null
+},
     branch: {
       type:
         mongoose.Schema.Types.ObjectId,
@@ -118,7 +122,7 @@ approvalMethod: {
     timestamps: true
   }
 );
-
+debtLoanSchema.index({ owner: 1, status: 1 });
 debtLoanSchema.index({
   customer: 1,
   status: 1
@@ -133,4 +137,4 @@ module.exports =
 mongoose.model(
   "DebtLoan",
   debtLoanSchema
-);
+); 
