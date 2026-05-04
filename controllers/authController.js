@@ -133,6 +133,15 @@ const loginUser = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "30d" }
     );
+// 🔥 GET SUBSCRIPTION CORRECTLY
+let subscription = user.subscription;
+
+// 🔥 kama ni staff → chukua ya owner
+if (user.role === "staff" && user.owner) {
+  const owner = await User.findById(user.owner);
+  subscription = owner?.subscription;
+}
+   
 res.status(200).json({
   token,
   user: {
