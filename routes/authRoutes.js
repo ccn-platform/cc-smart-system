@@ -18,6 +18,6 @@ router.post("/register", registerUser);
 router.post("/login", loginUser);
 
 // 🔥 OWNER ONLY
- router.post("/add-staff", addStaff);
+  router.post("/add-staff", protect, onlyOwner, addStaff);
 
 module.exports = router;
