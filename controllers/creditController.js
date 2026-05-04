@@ -1,124 +1,92 @@
- const CustomerIdentity =
-require("../models/CustomerIdentity");
+ const CustomerIdentity = require("../models/CustomerIdentity");
+const DebtLoan = require("../models/DebtLoan");
+const DebtPayment = require("../models/DebtPayment");
 
-const DebtLoan =
-require("../models/DebtLoan");
+const { checkCreditEligibility } = require("../services/creditCheckService");
 
-const DebtPayment =
-require("../models/DebtPayment");
 
-const {
-  checkCreditEligibility
-} = require(
-  "../services/creditCheckService"
-);
-
- 
-// FIND OR CREATE CUSTOMER
- 
-const findOrCreateCustomer =
-async (req, res) => {
+// 🔥 FIND OR CREATE CUSTOMER
+const findOrCreateCustomer = async (req, res) => {
   try {
-    const {
-      fullName,
-      phone,
-      fingerprintId
-    } = req.body;
+    const { fullName, phone, fingerprintId } = req.body;
 
-    // 🔥 REQUIRE NAME ONLY
- 
-    // 🔥 REQUIRE NAME ONLY
-if (!fullName || fullName.trim() === "") {
-  return res.status(400).json({
-    message: "Customer name required"
-  });
-}
+    if (!fullName || fullName.trim() === "") {
+      return res.status(400).json({
+        message: "Customer name required"
+      });
+    }
 
-let customer = null;
+    let customer = null;
 
-// 🔍 FIND BY FINGERPRINT
-if (fingerprintId && fingerprintId.trim() !== "") {
-  customer = await CustomerIdentity.findOne({
-    fingerprintId: fingerprintId.trim()
-  });
-}
+    if (fingerprintId && fingerprintId.trim() !== "") {
+      customer = await CustomerIdentity.findOne({
+        fingerprintId: fingerprintId.trim()
+      });
+    }
 
-// 🔍 FIND BY PHONE
-if (!customer && phone && phone.trim() !== "") {
-  customer = await CustomerIdentity.findOne({
-    phone: phone.trim()
-  });
-}
+    if (!customer && phone && phone.trim() !== "") {
+      customer = await CustomerIdentity.findOne({
+        phone: phone.trim()
+      });
+    }
 
-// 🔥 CREATE CUSTOMER
-if (!customer) {
-  const data = {
-    fullName: fullName.trim()
-  };
+    if (!customer) {
+      const data = {
+        fullName: fullName.trim()
+      };
 
-  // ✅ ADD ONLY IF EXISTS
-  if (phone && phone.trim() !== "") {
-    data.phone = phone.trim();
-  }
+      if (phone && phone.trim() !== "") {
+        data.phone = phone.trim();
+      }
 
-  if (fingerprintId && fingerprintId.trim() !== "") {
-    data.fingerprintId = fingerprintId.trim();
-  }
+      if (fingerprintId && fingerprintId.trim() !== "") {
+        data.fingerprintId = fingerprintId.trim();
+      }
 
-  customer = await CustomerIdentity.create(data);
+      customer = await CustomerIdentity.create(data);
 
-} else {
+    } else {
+      if (
+        fingerprintId &&
+        fingerprintId.trim() !== "" &&
+        !customer.fingerprintId
+      ) {
+        customer.fingerprintId = fingerprintId.trim();
+        await customer.save();
+      }
+    }
 
-  // 🔥 UPDATE FINGERPRINT IF MISSING
-  if (
-    fingerprintId &&
-    fingerprintId.trim() !== "" &&
-    !customer.fingerprintId
-  ) {
-    customer.fingerprintId = fingerprintId.trim();
-    await customer.save();
-  }
-}
+    res.status(200).json(customer);
 
-res.status(200).json(customer);
   } catch (error) {
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
 
-// CHECK CREDIT
-const checkCredit =
-async (req, res) => {
+
+// 🔥 CHECK CREDIT
+const checkCredit = async (req, res) => {
   try {
-    const {
+    const { customerId, businessCategory } = req.body;
+
+    const result = await checkCreditEligibility({
       customerId,
       businessCategory
-    } = req.body;
+    });
 
-    const result =
-      await checkCreditEligibility({
-        customerId,
-        businessCategory
-      });
+    res.status(200).json(result);
 
-    res.status(200).json(
-      result
-    );
   } catch (error) {
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
 
 
-// CREATE LOAN
- 
-    // CREATE LOAN
+// 🔥 CREATE LOAN
 const createDebtLoan = async (req, res) => {
   try {
     const {
@@ -130,7 +98,10 @@ const createDebtLoan = async (req, res) => {
       businessCategory
     } = req.body;
 
-    // 🔥 VALIDATION (MUHIMU SANA)
+    if (!req.ownerId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     if (!customerId) {
       return res.status(400).json({
         message: "Customer required"
@@ -151,7 +122,6 @@ const createDebtLoan = async (req, res) => {
       });
     }
 
-    // 🔥 CREDIT CHECK
     const check = await checkCreditEligibility({
       customerId,
       businessCategory
@@ -163,10 +133,10 @@ const createDebtLoan = async (req, res) => {
       });
     }
 
-    // 🔥 CREATE LOAN
     const loan = await DebtLoan.create({
+      owner: req.ownerId,
+      createdBy: req.user.id,
       customer: customerId,
-      user: req.user.id,
       branch: req.user.branch || null,
       businessCategory,
       loanNumber: "LN" + Date.now(),
@@ -179,7 +149,6 @@ const createDebtLoan = async (req, res) => {
       approvedBy: req.user.id
     });
 
-    // 🔥 UPDATE CUSTOMER STATS
     await CustomerIdentity.findByIdAndUpdate(customerId, {
       $inc: {
         totalLoans: 1,
@@ -198,35 +167,74 @@ const createDebtLoan = async (req, res) => {
 };
 
 
-// GET HISTORY
-const getLoanHistory =
-async (req, res) => {
+// 🔥 GET LOAN HISTORY
+const getLoanHistory = async (req, res) => {
   try {
-    const loans =
-      await DebtLoan.find({
-        user:
-          req.user.id
-      })
-      .populate(
-        "customer",
-        "fullName phone"
-      )
-      .sort({
-        createdAt: -1
-      });
+    if (!req.ownerId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    res.status(200).json(
-      loans
-    );
+    const loans = await DebtLoan.find({
+      owner: req.ownerId
+    })
+      .populate("customer", "fullName phone")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json(loans);
+
   } catch (error) {
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
 
 
+// 🔥 GET SINGLE LOAN
+const getLoanById = async (req, res) => {
+  try {
+    const loan = await DebtLoan.findOne({
+      _id: req.params.id,
+      owner: req.ownerId
+    }).populate("customer", "fullName phone");
+
+    if (!loan) {
+      return res.status(404).json({
+        message: "Loan not found"
+      });
+    }
+
+    res.status(200).json(loan);
+
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
+};
+
+
+// 🔥 GET OVERDUE LOANS
+const getOverdueLoans = async (req, res) => {
+  try {
+    const loans = await DebtLoan.find({
+      owner: req.ownerId,
+      status: "overdue"
+    })
+      .populate("customer", "fullName phone")
+      .sort({ dueDate: 1 });
+
+    res.status(200).json(loans);
+
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
+};
+
+
+// 🔥 SCAN FINGERPRINT
 const scanFingerprint = async (req, res) => {
   try {
     const { fingerprintId } = req.body;
@@ -237,10 +245,9 @@ const scanFingerprint = async (req, res) => {
       });
     }
 
-    const customer =
-      await CustomerIdentity.findOne({
-        fingerprintId
-      });
+    const customer = await CustomerIdentity.findOne({
+      fingerprintId
+    });
 
     if (!customer) {
       return res.status(200).json({
@@ -249,22 +256,18 @@ const scanFingerprint = async (req, res) => {
       });
     }
 
-    const activeLoans =
-      await DebtLoan.find({
-        customer: customer._id,
-        status: {
-          $in: [
-            "active",
-            "overdue"
-          ]
-        }
-      });
+    const activeLoans = await DebtLoan.find({
+      owner: req.ownerId,
+      customer: customer._id,
+      status: { $in: ["active", "overdue"] }
+    });
 
     res.status(200).json({
       found: true,
       customer,
       loans: activeLoans
     });
+
   } catch (error) {
     res.status(500).json({
       message: error.message
@@ -273,157 +276,63 @@ const scanFingerprint = async (req, res) => {
 };
 
 
-// GET SINGLE LOAN
-const getLoanById =
-async (req, res) => {
+// 🔥 RECEIVE PAYMENT
+const receivePayment = async (req, res) => {
   try {
-    const loan =
-      await DebtLoan.findOne({
-        _id:
-          req.params.id,
-        user:
-          req.user.id
-      }).populate(
-        "customer",
-        "fullName phone"
-      );
+    const { loanId, amount, paymentMethod, reference } = req.body;
+
+    const loan = await DebtLoan.findOne({
+      _id: loanId,
+      owner: req.ownerId
+    });
 
     if (!loan) {
       return res.status(404).json({
-        message:
-          "Loan not found"
+        message: "Loan not found"
       });
     }
 
-    res.status(200).json(
-      loan
-    );
-  } catch (error) {
-    res.status(500).json({
-      message:
-        error.message
-    });
-  }
-};
-
-const getOverdueLoans =
-async (req, res) => {
-  try {
-    const loans =
-      await DebtLoan.find({
-        user:
-          req.user.id,
-        status:
-          "overdue"
-      })
-      .populate(
-        "customer",
-        "fullName phone"
-      )
-      .sort({
-        dueDate: 1
-      });
-
-    res.status(200).json(
-      loans
-    );
-  } catch (error) {
-    res.status(500).json({
-      message:
-        error.message
-    });
-  }
-};
-
-// RECEIVE PAYMENT
-const receivePayment =
-async (req, res) => {
-  try {
-    const {
-      loanId,
-      amount,
-      paymentMethod,
-      reference
-    } = req.body;
-
-    const loan =
-      await DebtLoan.findById(
-        loanId
-      );
-
-    if (!loan) {
-      return res.status(404).json({
-        message:
-          "Loan not found"
-      });
-    }
-
-    const payAmount =
-      Number(amount);
+    const payAmount = Number(amount);
 
     await DebtPayment.create({
-      loan:
-        loan._id,
-      customer:
-        loan.customer,
-      user:
-        req.user.id,
-      branch:
-        loan.branch,
-      amount:
-        payAmount,
-      paymentMethod:
-        paymentMethod ||
-        "cash",
-      reference:
-        reference || "",
-      receivedBy:
-        req.user.id
+      owner: req.ownerId,
+      loan: loan._id,
+      customer: loan.customer,
+      branch: loan.branch,
+      amount: payAmount,
+      paymentMethod: paymentMethod || "cash",
+      reference: reference || "",
+      receivedBy: req.user.id
     });
 
-    loan.paidAmount +=
-      payAmount;
+    loan.paidAmount += payAmount;
+    loan.balanceAmount -= payAmount;
 
-    loan.balanceAmount -=
-      payAmount;
-
-    if (
-      loan.balanceAmount <= 0
-    ) {
+    if (loan.balanceAmount <= 0) {
       loan.balanceAmount = 0;
-      loan.status =
-        "paid";
+      loan.status = "paid";
 
-      await CustomerIdentity.findByIdAndUpdate(
-        loan.customer,
-        {
-          $inc: {
-            activeLoans: -1,
-            paidLoans: 1
-          }
+      await CustomerIdentity.findByIdAndUpdate(loan.customer, {
+        $inc: {
+          activeLoans: -1,
+          paidLoans: 1
         }
-      );
+      });
     }
 
-    await CustomerIdentity.findByIdAndUpdate(
-      loan.customer,
-      {
-        $inc: {
-          totalPaid:
-            payAmount
-        }
+    await CustomerIdentity.findByIdAndUpdate(loan.customer, {
+      $inc: {
+        totalPaid: payAmount
       }
-    );
+    });
 
     await loan.save();
 
-    res.status(200).json(
-      loan
-    );
+    res.status(200).json(loan);
+
   } catch (error) {
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
