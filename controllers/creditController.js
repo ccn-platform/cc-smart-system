@@ -216,8 +216,14 @@ const getLoanById = async (req, res) => {
 
 
 // 🔥 GET OVERDUE LOANS
-const getOverdueLoans = async (req, res) => {
+ const getOverdueLoans = async (req, res) => {
   try {
+    if (!req.ownerId) {
+      return res.status(401).json({
+        message: "Unauthorized"
+      });
+    }
+
     const loans = await DebtLoan.find({
       owner: req.ownerId,
       status: "overdue"
@@ -228,12 +234,12 @@ const getOverdueLoans = async (req, res) => {
     res.status(200).json(loans);
 
   } catch (error) {
+    console.log("OVERDUE ERROR:", error); // 🔥 ongeza hii
     res.status(500).json({
       message: error.message
     });
   }
 };
-
 
 // 🔥 SCAN FINGERPRINT
 const scanFingerprint = async (req, res) => {
