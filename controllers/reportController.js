@@ -1,4 +1,4 @@
-   const mongoose = require("mongoose");
+  const mongoose = require("mongoose");
   const Sale =
 require("../models/Sale");
 
@@ -18,16 +18,24 @@ require("../models/DebtPayment");
 const Product =
 require("../models/Product");
  
-
-const getInventoryReport = async (req, res) => {
+ const getInventoryReport = async (req, res) => {
   try {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    // 🔐 SECURITY
+    if (!req.ownerId) {
+      return res.status(401).json({
+        message: "Unauthorized"
+      });
+    }
 
-    // 🔥 SUMMARY (NO DATE FILTER)
+    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
+
+    // =====================
+    // SUMMARY (NO DATE FILTER)
+    // =====================
     const summaryAgg = await Product.aggregate([
       {
         $match: {
-          user: userId
+          owner: ownerId
         }
       },
       {
@@ -59,32 +67,46 @@ const getInventoryReport = async (req, res) => {
     const expectedProfit =
       summary.stockSaleValue - summary.stockCostValue;
 
-    // 🔥 LOW STOCK (FIXED)
+    // =====================
+    // LOW STOCK
+    // =====================
     const lowStock = await Product.find({
-      user: userId,
+      owner: ownerId,
       isActive: true,
       stockQty: { $gt: 0 },
       $expr: {
         $lte: ["$stockQty", "$lowStockAlert"]
       }
-    }).select("name stockQty lowStockAlert");
+    })
+      .select("name stockQty lowStockAlert")
+      .lean();
 
-    // 🔥 OUT OF STOCK
+    // =====================
+    // OUT OF STOCK
+    // =====================
     const outOfStock = await Product.find({
-      user: userId,
+      owner: ownerId,
       isActive: true,
       stockQty: { $lte: 0 }
-    }).select("name stockQty");
+    })
+      .select("name stockQty")
+      .lean();
 
-    // 🔥 TOP VALUE PRODUCTS
+    // =====================
+    // TOP VALUE PRODUCTS
+    // =====================
     const topValue = await Product.find({
-      user: userId,
+      owner: ownerId,
       isActive: true
     })
       .select("name stockQty sellPrice")
       .sort({ stockQty: -1, sellPrice: -1 })
-      .limit(10);
+      .limit(10)
+      .lean();
 
+    // =====================
+    // RESPONSE
+    // =====================
     res.status(200).json({
       summary: {
         totalProducts: summary.totalProducts,
@@ -109,9 +131,15 @@ const getInventoryReport = async (req, res) => {
     });
   }
 };
-
-const getDailyReport = async (req, res) => {
+ const getDailyReport = async (req, res) => {
   try {
+    // 🔐 SECURITY
+    if (!req.ownerId) {
+      return res.status(401).json({
+        message: "Unauthorized"
+      });
+    }
+
     // 🔥 USE UTC (important for consistency)
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
@@ -119,7 +147,7 @@ const getDailyReport = async (req, res) => {
     const tomorrow = new Date(today);
     tomorrow.setUTCDate(today.getUTCDate() + 1);
 
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
 
     // =====================
     // SALES
@@ -127,7 +155,7 @@ const getDailyReport = async (req, res) => {
     const salesAgg = await Sale.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           createdAt: { $gte: today, $lt: tomorrow }
         }
       },
@@ -151,7 +179,7 @@ const getDailyReport = async (req, res) => {
     const ordersAgg = await Order.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           createdAt: { $gte: today, $lt: tomorrow }
         }
       },
@@ -177,7 +205,7 @@ const getDailyReport = async (req, res) => {
     const cashAgg = await CashEntry.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           status: "active",
           createdAt: { $gte: today, $lt: tomorrow }
         }
@@ -204,7 +232,7 @@ const getDailyReport = async (req, res) => {
     const loanAgg = await DebtLoan.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           createdAt: { $gte: today, $lt: tomorrow }
         }
       },
@@ -219,13 +247,13 @@ const getDailyReport = async (req, res) => {
     const loansIssued = loanAgg[0]?.totalIssued || 0;
 
     // =====================
-    // PAYMENTS (IMPORTANT FIX)
+    // PAYMENTS
     // =====================
     const paymentAgg = await DebtPayment.aggregate([
       {
         $match: {
-          user: userId,
-          createdAt: { $gte: today, $lt: tomorrow } // 🔥 muhimu (ulikuwa umeikosa)
+          owner: ownerId,
+          createdAt: { $gte: today, $lt: tomorrow }
         }
       },
       {
@@ -239,10 +267,10 @@ const getDailyReport = async (req, res) => {
     const debtCollected = paymentAgg[0]?.totalCollected || 0;
 
     // =====================
-    // OVERDUE (ALL TIME - OK)
+    // OVERDUE (ALL TIME)
     // =====================
     const overdueCount = await DebtLoan.countDocuments({
-      user: userId,
+      owner: ownerId,
       status: "overdue"
     });
 
@@ -321,15 +349,22 @@ const getDailyReport = async (req, res) => {
   }
 };
 
-const getMonthlyReport = async (req, res) => {
+ const getMonthlyReport = async (req, res) => {
   try {
+    // 🔐 SECURITY
+    if (!req.ownerId) {
+      return res.status(401).json({
+        message: "Unauthorized"
+      });
+    }
+
     const now = new Date();
 
     // 🔥 USE UTC (important)
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
 
     // =====================
     // SALES
@@ -337,7 +372,7 @@ const getMonthlyReport = async (req, res) => {
     const salesAgg = await Sale.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           createdAt: { $gte: start, $lt: end }
         }
       },
@@ -361,7 +396,7 @@ const getMonthlyReport = async (req, res) => {
     const ordersAgg = await Order.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           createdAt: { $gte: start, $lt: end }
         }
       },
@@ -387,7 +422,7 @@ const getMonthlyReport = async (req, res) => {
     const cashAgg = await CashEntry.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           status: "active",
           createdAt: { $gte: start, $lt: end }
         }
@@ -414,7 +449,7 @@ const getMonthlyReport = async (req, res) => {
     const loanAgg = await DebtLoan.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           createdAt: { $gte: start, $lt: end }
         }
       },
@@ -434,7 +469,7 @@ const getMonthlyReport = async (req, res) => {
     const paymentAgg = await DebtPayment.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           createdAt: { $gte: start, $lt: end }
         }
       },
@@ -452,7 +487,7 @@ const getMonthlyReport = async (req, res) => {
     // OVERDUE (ALL TIME)
     // =====================
     const overdueCount = await DebtLoan.countDocuments({
-      user: userId,
+      owner: ownerId,
       status: "overdue"
     });
 
@@ -532,9 +567,15 @@ const getMonthlyReport = async (req, res) => {
   }
 };
 
- 
-const getWeeklyReport = async (req, res) => {
+ const getWeeklyReport = async (req, res) => {
   try {
+    // 🔐 SECURITY
+    if (!req.ownerId) {
+      return res.status(401).json({
+        message: "Unauthorized"
+      });
+    }
+
     const now = new Date();
 
     // 🔥 GET CURRENT WEEK (MONDAY → SUNDAY) IN UTC
@@ -548,7 +589,7 @@ const getWeeklyReport = async (req, res) => {
     const end = new Date(start);
     end.setUTCDate(start.getUTCDate() + 7);
 
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
 
     // =====================
     // SALES
@@ -556,7 +597,7 @@ const getWeeklyReport = async (req, res) => {
     const salesAgg = await Sale.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           createdAt: { $gte: start, $lt: end }
         }
       },
@@ -580,7 +621,7 @@ const getWeeklyReport = async (req, res) => {
     const ordersAgg = await Order.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           createdAt: { $gte: start, $lt: end }
         }
       },
@@ -606,7 +647,7 @@ const getWeeklyReport = async (req, res) => {
     const cashAgg = await CashEntry.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           status: "active",
           createdAt: { $gte: start, $lt: end }
         }
@@ -633,7 +674,7 @@ const getWeeklyReport = async (req, res) => {
     const loanAgg = await DebtLoan.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           createdAt: { $gte: start, $lt: end }
         }
       },
@@ -653,7 +694,7 @@ const getWeeklyReport = async (req, res) => {
     const paymentAgg = await DebtPayment.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           createdAt: { $gte: start, $lt: end }
         }
       },
@@ -671,7 +712,7 @@ const getWeeklyReport = async (req, res) => {
     // OVERDUE (ALL TIME)
     // =====================
     const overdueCount = await DebtLoan.countDocuments({
-      user: userId,
+      owner: ownerId,
       status: "overdue"
     });
 
@@ -751,11 +792,19 @@ const getWeeklyReport = async (req, res) => {
   }
 };
 
-const getTopProductsReport = async (req, res) => {
+ 
+ const getTopProductsReport = async (req, res) => {
   try {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    // 🔐 SECURITY
+    if (!req.ownerId) {
+      return res.status(401).json({
+        message: "Unauthorized"
+      });
+    }
 
-    // 🔥 DEFAULT RANGE = THIS MONTH (UNAWEZA BADILI BAADAE)
+    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
+
+    // 🔥 DEFAULT RANGE = THIS MONTH
     const now = new Date();
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
@@ -763,8 +812,8 @@ const getTopProductsReport = async (req, res) => {
     const result = await Sale.aggregate([
       {
         $match: {
-          user: userId,
-          createdAt: { $gte: start, $lt: end } // 🔥 muhimu (ondoa kama unataka ALL TIME)
+          owner: ownerId,
+          createdAt: { $gte: start, $lt: end }
         }
       },
 
@@ -829,14 +878,18 @@ const getTopProductsReport = async (req, res) => {
   }
 };
 
-
- 
-
-const getCreditReport = async (req, res) => {
+ const getCreditReport = async (req, res) => {
   try {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    // 🔐 SECURITY
+    if (!req.ownerId) {
+      return res.status(401).json({
+        message: "Unauthorized"
+      });
+    }
 
-    // 🔥 DEFAULT RANGE = THIS MONTH (unaweza badili)
+    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
+
+    // 🔥 DEFAULT RANGE = THIS MONTH
     const now = new Date();
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
@@ -847,8 +900,8 @@ const getCreditReport = async (req, res) => {
     const loanAgg = await DebtLoan.aggregate([
       {
         $match: {
-          user: userId,
-          createdAt: { $gte: start, $lt: end } // 🔥 muhimu
+          owner: ownerId,
+          createdAt: { $gte: start, $lt: end }
         }
       },
       {
@@ -867,8 +920,8 @@ const getCreditReport = async (req, res) => {
     const paymentAgg = await DebtPayment.aggregate([
       {
         $match: {
-          user: userId,
-          createdAt: { $gte: start, $lt: end } // 🔥 muhimu
+          owner: ownerId,
+          createdAt: { $gte: start, $lt: end }
         }
       },
       {
@@ -903,10 +956,10 @@ const getCreditReport = async (req, res) => {
     const totalCollected = paymentAgg[0]?.totalCollected || 0;
 
     // =====================
-    // OPTIONAL: RISKY CUSTOMERS
+    // RISKY CUSTOMERS
     // =====================
     const riskyCustomers = await DebtLoan.find({
-      user: userId,
+      owner: ownerId,
       status: "overdue"
     })
       .sort({ balanceAmount: -1 })
@@ -936,12 +989,18 @@ const getCreditReport = async (req, res) => {
     });
   }
 };
-
 const getExpenseReport = async (req, res) => {
   try {
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+    // 🔐 SECURITY
+    if (!req.ownerId) {
+      return res.status(401).json({
+        message: "Unauthorized"
+      });
+    }
 
-    // 🔥 DEFAULT RANGE = THIS MONTH (consistent na reports zako)
+    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
+
+    // 🔥 DEFAULT RANGE = THIS MONTH
     const now = new Date();
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
@@ -952,10 +1011,10 @@ const getExpenseReport = async (req, res) => {
     const expenseAgg = await CashEntry.aggregate([
       {
         $match: {
-          user: userId,
+          owner: ownerId,
           status: "active",
           type: "expense",
-          createdAt: { $gte: start, $lt: end } // 🔥 muhimu
+          createdAt: { $gte: start, $lt: end }
         }
       },
       {
@@ -985,17 +1044,18 @@ const getExpenseReport = async (req, res) => {
     const top3 = expenseAgg.slice(0, 3);
 
     // =====================
-    // RECENT EXPENSES (NEW)
+    // RECENT EXPENSES
     // =====================
     const recent = await CashEntry.find({
-      user: userId,
+      owner: ownerId,
       status: "active",
       type: "expense",
       createdAt: { $gte: start, $lt: end }
     })
       .sort({ createdAt: -1 })
       .limit(10)
-      .select("category amount createdAt");
+      .select("category amount createdAt")
+      .lean();
 
     // =====================
     // RESPONSE
@@ -1017,6 +1077,7 @@ const getExpenseReport = async (req, res) => {
     });
   }
 };
+ 
  module.exports = {
   getDailyReport,
   getWeeklyReport,
