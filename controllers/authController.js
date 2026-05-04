@@ -1,4 +1,4 @@
- const User = require("../models/User");
+   const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const normalizePhone = require("../utils/normalizePhone");
@@ -93,20 +93,21 @@ const registerUser = async (req, res) => {
 };
 
 
-
 const loginUser = async (req, res) => {
   try {
     let { phone, password } = req.body;
 
+    // 🔥 NORMALIZE PHONE
     phone = normalizePhone(phone);
 
+    // 🔥 VALIDATION
     if (!phone || !password) {
       return res.status(400).json({
         message: "Phone and password required"
       });
     }
 
-    // check user
+    // 🔥 FIND USER
     const user = await User.findOne({ phone });
 
     if (!user) {
@@ -115,11 +116,8 @@ const loginUser = async (req, res) => {
       });
     }
 
-    // compare password
-    const match = await bcrypt.compare(
-      password,
-      user.password
-    );
+    // 🔥 CHECK PASSWORD
+    const match = await bcrypt.compare(password, user.password);
 
     if (!match) {
       return res.status(400).json({
@@ -127,43 +125,46 @@ const loginUser = async (req, res) => {
       });
     }
 
-    // token
+    // 🔥 GENERATE TOKEN
     const token = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: "30d" }
     );
-// 🔥 GET SUBSCRIPTION CORRECTLY
-let subscription = user.subscription;
 
-// 🔥 kama ni staff → chukua ya owner
-if (user.role === "staff" && user.owner) {
-  const owner = await User.findById(user.owner);
-  subscription = owner?.subscription;
-}
-   
-res.status(200).json({
-  token,
-  user: {
-    id: user._id,
-    name: user.name,
-    businessName: user.businessName,
-    phone: user.phone,
+    // 🔥 FIX: HANDLE SUBSCRIPTION FOR STAFF
+    let subscription = user.subscription;
 
-    role: user.role,
+    if (user.role === "staff" && user.owner) {
+      const owner = await User.findById(user.owner);
+      subscription = owner?.subscription;
+    }
 
-    owner: user.owner, // ✅ ONGEZA HII
+    // 🔥 RESPONSE
+    return res.status(200).json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        businessName: user.businessName,
+        phone: user.phone,
 
-    subscription: user.subscription
-  }
-});
-     
+        role: user.role,
+        owner: user.owner,
+
+        subscription // 🔥 FIXED HAPA
+      }
+    });
+
   } catch (error) {
-    res.status(500).json({
+    console.log("LOGIN ERROR:", error.message);
+
+    return res.status(500).json({
       message: error.message
     });
   }
 };
+ 
  
 const addStaff = async (req, res) => {
   try {
