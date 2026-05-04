@@ -1,15 +1,14 @@
-  const mongoose = require("mongoose");
+   const mongoose = require("mongoose");
 
 const productSchema =
   new mongoose.Schema(
     {
-      user: {
-        type:
-          mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
-        index: true
-      },
+     owner: {
+      type: mongoose.Schema.Types.ObjectId,
+       ref: "User",
+       required: true,
+       index: true
+     },
 
       branch: {
         type:
@@ -97,9 +96,9 @@ const productSchema =
   );
 
 // 🔥 IMPORTANT INDEXES (HAZIBADILISHI LOGIC)
-productSchema.index({ user: 1, name: 1 });
-productSchema.index({ user: 1, barcode: 1 });
-productSchema.index({ user: 1, createdAt: -1 });
+ productSchema.index({ owner: 1, name: 1 });
+productSchema.index({ owner: 1, barcode: 1 });
+productSchema.index({ owner: 1, createdAt: -1 });
 // 🔥 TEXT SEARCH (fast search)
 productSchema.index({
   name: "text",
