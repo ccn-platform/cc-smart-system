@@ -102,16 +102,14 @@ const userSchema = new mongoose.Schema(
 );
 
 // 🔥 VALIDATION
-userSchema.pre("save", function (next) {
+ userSchema.pre("save", async function () {
   if (this.role === "staff" && !this.owner) {
-    return next(new Error("Staff must have owner"));
+    throw new Error("Staff must have owner");
   }
 
   if (this.role === "owner" && this.owner) {
-    return next(new Error("Owner cannot have owner"));
+    throw new Error("Owner cannot have owner");
   }
-
-  next();
 });
 
 module.exports = mongoose.model("User", userSchema);
