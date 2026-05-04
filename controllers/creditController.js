@@ -1,4 +1,4 @@
-  const CustomerIdentity =
+ const CustomerIdentity =
 require("../models/CustomerIdentity");
 
 const DebtLoan =
@@ -26,54 +26,61 @@ async (req, res) => {
     } = req.body;
 
     // 🔥 REQUIRE NAME ONLY
+ 
+    // 🔥 REQUIRE NAME ONLY
 if (!fullName || fullName.trim() === "") {
   return res.status(400).json({
     message: "Customer name required"
   });
 }
-    let customer = null;
 
-    if (
-      fingerprintId
-    ) {
-      customer =
-        await CustomerIdentity.findOne({
-          fingerprintId
-        });
-    }
+let customer = null;
 
-    if (
-      !customer &&
-      phone
-    ) {
-      customer =
-        await CustomerIdentity.findOne({
-          phone
-        });
-    }
+// 🔍 FIND BY FINGERPRINT
+if (fingerprintId && fingerprintId.trim() !== "") {
+  customer = await CustomerIdentity.findOne({
+    fingerprintId: fingerprintId.trim()
+  });
+}
 
-    if (!customer) {
-      
-    customer = await CustomerIdentity.create({
-  fullName: fullName.trim(),
-  phone: phone?.trim() || null,
-  fingerprintId: fingerprintId?.trim() || null
-});
-    } else {
-      if (
-        fingerprintId &&
-        !customer.fingerprintId
-      ) {
-        customer.fingerprintId =
-          fingerprintId;
+// 🔍 FIND BY PHONE
+if (!customer && phone && phone.trim() !== "") {
+  customer = await CustomerIdentity.findOne({
+    phone: phone.trim()
+  });
+}
 
-        await customer.save();
-      }
-    }
+// 🔥 CREATE CUSTOMER
+if (!customer) {
+  const data = {
+    fullName: fullName.trim()
+  };
 
-    res.status(200).json(
-      customer
-    );
+  // ✅ ADD ONLY IF EXISTS
+  if (phone && phone.trim() !== "") {
+    data.phone = phone.trim();
+  }
+
+  if (fingerprintId && fingerprintId.trim() !== "") {
+    data.fingerprintId = fingerprintId.trim();
+  }
+
+  customer = await CustomerIdentity.create(data);
+
+} else {
+
+  // 🔥 UPDATE FINGERPRINT IF MISSING
+  if (
+    fingerprintId &&
+    fingerprintId.trim() !== "" &&
+    !customer.fingerprintId
+  ) {
+    customer.fingerprintId = fingerprintId.trim();
+    await customer.save();
+  }
+}
+
+res.status(200).json(customer);
   } catch (error) {
     res.status(500).json({
       message:
