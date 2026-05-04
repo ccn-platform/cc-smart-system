@@ -1,4 +1,4 @@
- const User = require("../models/User");
+  const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const normalizePhone = require("../utils/normalizePhone");
@@ -79,6 +79,9 @@ const registerUser = async (req, res) => {
         businessName: user.businessName,
         phone: user.phone,
         role: user.role,
+
+        owner: user.owner || null, // ✅ ONGEZA HII
+        
         subscription: user.subscription
       }
     });
@@ -130,19 +133,22 @@ const loginUser = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "30d" }
     );
+res.status(200).json({
+  token,
+  user: {
+    id: user._id,
+    name: user.name,
+    businessName: user.businessName,
+    phone: user.phone,
 
-    res.status(200).json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        businessName: user.businessName,
-        phone: user.phone,
+    role: user.role,
 
-        role: user.role,
-        subscription: user.subscription
-      }
-    });
+    owner: user.owner, // ✅ ONGEZA HII
+
+    subscription: user.subscription
+  }
+});
+     
   } catch (error) {
     res.status(500).json({
       message: error.message
@@ -150,7 +156,73 @@ const loginUser = async (req, res) => {
   }
 };
 
+const addStaff = async (req, res) => {
+  try {
+    const {
+      name,
+      phone,
+      password
+    } = req.body;
+
+    
+    if (!name || !phone || !password) {
+      return res.status(400).json({
+        message: "All fields are required"
+      });
+    }
+
+    const normalizedPhone = normalizePhone(phone);
+
+    // 🔥 check duplicate
+    const exists = await User.findOne({
+      phone: normalizedPhone
+    });
+
+    if (exists) {
+      return res.status(400).json({
+        message: "Phone already registered"
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 🔥 CREATE STAFF
+    const staff = await User.create({
+      name,
+      phone: normalizedPhone,
+      password: hashedPassword,
+
+      role: "staff",
+
+      // 🔥 LINK TO OWNER
+      owner: req.user._id,
+
+      // 🔥 COPY BUSINESS DATA
+      businessName: req.user.businessName,
+      businessCategory: req.user.businessCategory,
+      mkoa: req.user.mkoa,
+      wilaya: req.user.wilaya,
+      mtaa: req.user.mtaa
+    });
+
+    res.status(201).json({
+      message: "Staff created successfully",
+      staff: {
+        id: staff._id,
+        name: staff.name,
+        phone: staff.phone,
+        role: staff.role
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
+};
 module.exports = {
   registerUser,
-  loginUser
+  loginUser,
+   addStaff // 🔥 ongeza hii
 }; 
