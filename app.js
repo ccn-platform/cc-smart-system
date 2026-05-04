@@ -1,5 +1,6 @@
  const express =
 require("express");
+
 const cors = require("cors");
 const {
   markOverdueLoans
@@ -22,6 +23,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.use((req, res, next) => {
+  console.log("➡️ REQUEST:", req.method, req.url);
+  next();
+});
 app.get("/", (req, res) => {
   res.send("CCN Backend Running");
 });
