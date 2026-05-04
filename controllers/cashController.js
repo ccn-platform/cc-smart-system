@@ -1,4 +1,4 @@
-const CashEntry =
+ const CashEntry =
 require("../models/CashEntry");
 
 
@@ -34,8 +34,7 @@ async (req, res) => {
 
     const entry =
       await CashEntry.create({
-        user:
-          req.user.id,
+        owner: req.ownerId,
         branch:
           branch || null,
         type,
@@ -73,8 +72,7 @@ async (req, res) => {
   try {
     const entries =
       await CashEntry.find({
-        user:
-          req.user.id,
+         owner: req.ownerId,
         status:
           "active"
       })
@@ -102,8 +100,7 @@ async (req, res) => {
       await CashEntry.findOne({
         _id:
           req.params.id,
-        user:
-          req.user.id
+        owner: req.ownerId
       });
 
     if (!entry) {
@@ -134,8 +131,7 @@ async (req, res) => {
         {
           _id:
             req.params.id,
-          user:
-            req.user.id
+           owner: req.ownerId
         },
         {
           status:
