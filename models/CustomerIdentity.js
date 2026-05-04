@@ -10,6 +10,10 @@ const customerIdentitySchema = new mongoose.Schema(
       index: true
     },
 
+   owner: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true
+  },
     fullName: {
       type: String,
       required: true,
