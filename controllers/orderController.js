@@ -7,7 +7,7 @@ const { readImageText } = require("../services/ocrService");
 
 
 // 🔥 HELPER (avoid duplicate logic)
-const processOrder = async (userId, text) => {
+ const processOrder = async (ownerId, text) => {
   const cleanText = cleanOCRText(text);
   const items = parseOrderText(cleanText);
 
@@ -15,10 +15,10 @@ const processOrder = async (userId, text) => {
     throw new Error("No items detected");
   }
 
-  const result = await analyzeProfit(userId, items);
+   const result = await analyzeProfit(ownerId, items);
 
   const order = await Order.create({
-    user: userId,
+      owner: ownerId,
     rawText: cleanText,
     items: result.items,
     buyTotal: result.buyTotal,
@@ -42,7 +42,7 @@ const scanOrder = async (req, res) => {
     }
 
     const { order, cleanText, result } =
-      await processOrder(req.user.id, text);
+       await processOrder(req.ownerId, text);
 
     res.status(200).json({
       orderId: order._id,
@@ -70,7 +70,7 @@ const scanImage = async (req, res) => {
     const text = await readImageText(req.file);
 
     const { order, cleanText, result } =
-      await processOrder(req.user.id, text);
+       await processOrder(req.ownerId, text);
 
     res.status(200).json({
       orderId: order._id,
@@ -94,7 +94,7 @@ const getOrderHistory = async (req, res) => {
     const skip = page * limit;
 
     const orders = await Order.find({
-      user: req.user.id
+        owner: req.ownerId
     })
       .sort({ createdAt: -1 })
       .limit(limit)
@@ -117,7 +117,7 @@ const getOrderById = async (req, res) => {
   try {
     const order = await Order.findOne({
       _id: req.params.id,
-      user: req.user.id
+        owner: req.ownerId
     }).lean(); // 🔥 faster read
 
     if (!order) {
@@ -139,7 +139,7 @@ const getOrderById = async (req, res) => {
  
 const getOrderProfitSummary = async (req, res) => {
   try {
-    const userId = req.user._id;
+     const ownerId = req.ownerId;
 
     // 🔥 TODAY RANGE
     const today = new Date();
@@ -150,9 +150,7 @@ const getOrderProfitSummary = async (req, res) => {
 
     const result = await Order.aggregate([
       {
-        $match: {
-          user: userId
-        }
+         $match: { owner: ownerId }
       },
       {
         $group: {
@@ -168,8 +166,8 @@ const getOrderProfitSummary = async (req, res) => {
     // 🔥 TODAY ONLY
     const todayAgg = await Order.aggregate([
       {
-        $match: {
-          user: userId,
+         $match: {
+          owner: ownerId,
           createdAt: { $gte: today, $lt: tomorrow }
         }
       },
