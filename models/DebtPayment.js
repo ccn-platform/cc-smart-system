@@ -21,12 +21,12 @@ new mongoose.Schema(
   index: true
 },
 
-    user: {
-      type:
-        mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true
-    },
+     owner: {
+      type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      index: true
+   },
 
     branch: {
       type:
@@ -111,7 +111,7 @@ debtPaymentSchema.index({
   loan: 1,
   createdAt: -1
 });
-
+debtPaymentSchema.index({ owner: 1, createdAt: -1 });
 debtPaymentSchema.index({
   customer: 1,
   createdAt: -1
