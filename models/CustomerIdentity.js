@@ -2,6 +2,14 @@
 
 const customerIdentitySchema = new mongoose.Schema(
   {
+    // 🔥 ADD THIS
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true
+    },
+
     fullName: {
       type: String,
       required: true,
@@ -13,8 +21,7 @@ const customerIdentitySchema = new mongoose.Schema(
       type: String,
       trim: true,
       index: true,
-      sparse: true,
-      unique: true
+      sparse: true
     },
 
     nationalId: {
@@ -71,8 +78,7 @@ const customerIdentitySchema = new mongoose.Schema(
       type: String,
       trim: true,
       index: true,
-      sparse: true,
-      unique: true
+      sparse: true
     },
 
     status: {
@@ -111,6 +117,10 @@ const customerIdentitySchema = new mongoose.Schema(
     timestamps: true
   }
 );
+
+// 🔥 IMPORTANT INDEX
+customerIdentitySchema.index({ owner: 1, phone: 1 });
+customerIdentitySchema.index({ owner: 1, fingerprintId: 1 });
 
 module.exports = mongoose.model(
   "CustomerIdentity",
