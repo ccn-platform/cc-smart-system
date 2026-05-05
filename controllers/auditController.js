@@ -1,32 +1,39 @@
-const Audit =
-require("../models/Audit");
-
-const Product =
-require("../models/Product");
+  const Audit = require("../models/Audit");
+const Product = require("../models/Product");
 
 
+// =====================
 // CREATE MANUAL AUDIT
-const createManualAudit =
-async (req, res) => {
+// =====================
+const createManualAudit = async (req, res) => {
   try {
-    const {
-      items,
-      branch,
-      note
-    } = req.body;
-
-    if (
-      !items ||
-      !Array.isArray(
-        items
-      ) ||
-      items.length === 0
-    ) {
-      return res.status(400).json({
-        message:
-          "Items required"
+    // 🔐 SECURITY
+    if (!req.ownerId) {
+      return res.status(401).json({
+        message: "Unauthorized"
       });
     }
+
+    const { items, branch, note } = req.body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        message: "Items required"
+      });
+    }
+
+    // 🔥 FETCH PRODUCTS ONCE (FAST)
+    const productIds = items.map(i => i.product);
+
+    const products = await Product.find({
+      _id: { $in: productIds },
+      owner: req.ownerId
+    });
+
+    const productMap = {};
+    products.forEach(p => {
+      productMap[p._id.toString()] = p;
+    });
 
     const results = [];
 
@@ -36,174 +43,123 @@ async (req, res) => {
     let totalLossValue = 0;
     let totalGainValue = 0;
 
-    for (
-      let i = 0;
-      i < items.length;
-      i++
-    ) {
-      const row =
-        items[i];
+    for (const row of items) {
+      const product = productMap[row.product];
 
-      const product =
-        await Product.findOne({
-          _id:
-            row.product,
-          user:
-            req.user.id
-        });
+      if (!product) continue;
 
-      if (!product)
-        continue;
+      const systemQty = product.stockQty;
+      const countedQty = Number(row.countedQty) || 0;
 
-      const systemQty =
-        product.stockQty;
-
-      const countedQty =
-        Number(
-          row.countedQty
-        ) || 0;
-
-      const difference =
-        countedQty -
-        systemQty;
+      const difference = countedQty - systemQty;
 
       let lossValue = 0;
       let gainValue = 0;
 
-      if (
-        difference < 0
-      ) {
+      if (difference < 0) {
         shortageCount++;
 
         lossValue =
-          Math.abs(
-            difference
-          ) *
+          Math.abs(difference) *
           product.buyPrice;
 
-        totalLossValue +=
-          lossValue;
+        totalLossValue += lossValue;
       }
 
-      if (
-        difference > 0
-      ) {
+      if (difference > 0) {
         excessCount++;
 
         gainValue =
           difference *
           product.buyPrice;
 
-        totalGainValue +=
-          gainValue;
+        totalGainValue += gainValue;
       }
 
       results.push({
-        product:
-          product._id,
-        name:
-          product.name,
+        product: product._id,
+        name: product.name,
         systemQty,
         countedQty,
         difference,
-        buyPrice:
-          product.buyPrice,
-        sellPrice:
-          product.sellPrice,
+        buyPrice: product.buyPrice,
+        sellPrice: product.sellPrice,
         lossValue,
         gainValue
       });
     }
 
-    const audit =
-      await Audit.create({
-        user:
-          req.user.id,
-        branch:
-          branch ||
-          null,
-        method:
-          "manual",
-        status:
-          "completed",
-        items:
-          results,
-        totalItems:
-          results.length,
-        shortageCount,
-        excessCount,
-        totalLossValue,
-        totalGainValue,
-        note:
-          note || ""
-      });
+    const audit = await Audit.create({
+      owner: req.ownerId,       // 🔥 muhimu
+      createdBy: req.user.id,   // 🔥 nani kafanya audit
+      branch: branch || null,
+      method: "manual",
+      status: "completed",
+      items: results,
+      totalItems: results.length,
+      shortageCount,
+      excessCount,
+      totalLossValue,
+      totalGainValue,
+      note: note || ""
+    });
 
-    res.status(201).json(
-      audit
-    );
+    res.status(201).json(audit);
+
   } catch (error) {
+    console.log("AUDIT ERROR:", error);
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
 
 
+// =====================
 // GET HISTORY
-const getAuditHistory =
-async (req, res) => {
+// =====================
+const getAuditHistory = async (req, res) => {
   try {
-    const audits =
-      await Audit.find({
-        user:
-          req.user.id
-      })
-      .sort({
-        createdAt: -1
-      })
+    const audits = await Audit.find({
+      owner: req.ownerId
+    })
+      .sort({ createdAt: -1 })
       .select(
         "_id method totalItems shortageCount excessCount totalLossValue totalGainValue createdAt"
-      );
+      )
+      .lean(); // 🔥 faster
 
-    res.status(200).json(
-      audits
-    );
+    res.status(200).json(audits);
+
   } catch (error) {
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
 
 
+// =====================
 // GET SINGLE AUDIT
-const getAuditById =
-async (req, res) => {
+// =====================
+const getAuditById = async (req, res) => {
   try {
-    const audit =
-      await Audit.findOne({
-        _id:
-          req.params.id,
-        user:
-          req.user.id
-      });
+    const audit = await Audit.findOne({
+      _id: req.params.id,
+      owner: req.ownerId
+    }).lean();
 
     if (!audit) {
       return res.status(404).json({
-        message:
-          "Audit not found"
+        message: "Audit not found"
       });
     }
 
-    res.status(200).json(
-      audit
-    );
+    res.status(200).json(audit);
+
   } catch (error) {
     res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
