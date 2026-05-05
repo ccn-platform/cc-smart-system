@@ -1,4 +1,4 @@
-  const Product = require("../models/Product");
+    const Product = require("../models/Product");
 const normalizeProductName = require("../utils/normalizeProductName");
 
 const analyzeProfit = async (
@@ -43,21 +43,34 @@ const analyzeProfit = async (
 
   let matchedCount = 0;
   let unmatchedCount = 0;
-
-  const isSimilar = (a, b) => {
+const isSimilar = (a, b) => {
   if (!a || !b) return false;
 
   a = a.trim();
   b = b.trim();
 
-  return (
-    a === b ||
-    a.includes(b) ||
-    b.includes(a) ||
-    a.startsWith(b.slice(0, 4)) ||
-    b.startsWith(a.slice(0, 4))
-  );
+  // 🔥 split words
+  const aWords = a.split(" ");
+  const bWords = b.split(" ");
+
+  // 🔥 check kama angalau neno moja linafanana
+  let matchCount = 0;
+
+  for (const aw of aWords) {
+    for (const bw of bWords) {
+      if (
+        aw === bw ||
+        aw.includes(bw) ||
+        bw.includes(aw)
+      ) {
+        matchCount++;
+      }
+    }
+  }
+
+  return matchCount >= 1; // unaweza kuongeza hadi 2 kwa strict
 };
+ 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
 
