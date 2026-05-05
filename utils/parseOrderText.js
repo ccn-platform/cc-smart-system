@@ -1,61 +1,42 @@
-   const parseOrderText = (text) => {
-  const parts = String(text)
-    .split(/\s+/)
+ const parseOrderText = (text) => {
+  const lines = String(text)
+    .split("\n")
     .map(x => x.trim())
     .filter(Boolean);
 
   const items = [];
-  let words = [];
 
-  for (let i = 0; i < parts.length; i++) {
-    const token = parts[i];
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
 
-    const isNum =
-      /^\d+$/.test(token);
+    // 🔥 normalize line
+    line = line
+      .replace(/,/g, "") // remove commas
+      .replace(/tsh|tzs/gi, "") // remove currency
+      .trim();
 
-    if (!isNum) {
-      words.push(token);
-      continue;
-    }
+    const match = line.match(
+      /^(.+?)\s+(\d+)\s+(\d+)$/
+    );
 
-    const qty =
-      Number(token);
+    if (!match) continue;
 
-    const next =
-      parts[i + 1];
+    const name = match[1];
+    const qty = Number(match[2]);
+    const total = Number(match[3]);
 
-    if (
-      next &&
-      /^\d+$/.test(next)
-    ) {
-      const total =
-        Number(next);
+    if (!name || qty <= 0 || total <= 0) continue;
 
-      if (
-        words.length > 0 &&
-        qty > 0 &&
-        total > qty
-      ) {
-        items.push({
-          no:
-            items.length + 1,
-          name:
-            words.join(" "),
-          qty,
-          buyPrice:
-            Math.round(
-              total / qty
-            ),
-        });
-
-        words = [];
-        i++; // skip total
-      }
-    }
+    items.push({
+      no: items.length + 1,
+      name,
+      qty,
+      buyPrice: Math.round(total / qty),
+      total
+    });
   }
 
   return items;
 };
 
-module.exports =
-  parseOrderText;
+module.exports = parseOrderText;
