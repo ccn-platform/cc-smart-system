@@ -120,17 +120,15 @@ const searchProducts = async (req, res) => {
   }
 };
 
-
  const updateProduct = async (req, res) => {
   try {
-    // 🔐 SECURITY: lazima awe owner
-    if (!req.user || req.user.role !== "owner") {
-      return res.status(403).json({
-        message: "Only owner can update product"
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized"
       });
     }
 
-    // 🔍 hakikisha product ipo na ni ya owner huyu
+    // 🔍 hakikisha product ipo
     const product = await Product.findOne({
       _id: req.params.id,
       owner: req.ownerId,
@@ -143,15 +141,42 @@ const searchProducts = async (req, res) => {
       });
     }
 
-    // 🔥 update data (salama)
+    let updateData = {};
+
+    // 🔥 OWNER → anaweza kubadilisha kila kitu
+    if (req.user.role === "owner") {
+      updateData = {
+        ...req.body
+      };
+    }
+
+    // 🔥 STAFF → anaruhusiwa sellPrice tu
+    if (req.user.role === "staff") {
+      if (req.body.sellPrice !== undefined) {
+        updateData.sellPrice = req.body.sellPrice;
+      } else {
+        return res.status(403).json({
+          message: "Staff can only update price"
+        });
+      }
+    }
+
+    // 🔥 hakuna kitu cha ku-update
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        message: "No valid fields to update"
+      });
+    }
+
+    // 🔥 UPDATE
     const updated = await Product.findOneAndUpdate(
       {
         _id: req.params.id,
         owner: req.ownerId
       },
       {
-        ...req.body,
-        updatedBy: req.user.id // 🧠 audit trail
+        ...updateData,
+        updatedBy: req.user.id
       },
       {
         new: true,
