@@ -47,19 +47,25 @@ Rules:
  
 
 // 🔥 core OCR processor
-const processOCR = async (file) => {
-console.log("📂 FILE CHECK:", {
-  hasFile: !!file,
-  hasBuffer: !!file?.buffer,
-  hasPath: !!file?.path,
-  mimetype: file?.mimetype,
-  size: file?.size,
-});
+ const fs = require("fs/promises");
 
+const processOCR = async (file) => {
+  if (process.env.NODE_ENV !== "production") {
+    console.log("📂 FILE CHECK:", {
+      hasFile: !!file,
+      hasBuffer: !!file?.buffer,
+      hasPath: !!file?.path,
+      mimetype: file?.mimetype,
+      size: file?.size,
+    });
+  }
   if (!file) {
   throw new Error("No file provided");
 }
 
+if (file.size && file.size > 5 * 1024 * 1024) {
+  throw new Error("Image too large (max 5MB)");
+}
 let imageBase64;
 
 // ✅ kama buffer ipo
