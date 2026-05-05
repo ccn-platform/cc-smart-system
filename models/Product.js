@@ -87,7 +87,30 @@ const productSchema =
         type: Boolean,
         default: true,
         index: true // 🔥 filtering fast
-      }
+      },
+
+createdBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  default: null
+},
+
+updatedBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  default: null
+},
+
+deletedBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  default: null
+},
+
+deletedAt: {
+  type: Date,
+  default: null
+}
     },
     {
       timestamps: true,
@@ -97,7 +120,10 @@ const productSchema =
 
 // 🔥 IMPORTANT INDEXES (HAZIBADILISHI LOGIC)
  productSchema.index({ owner: 1, name: 1 });
-productSchema.index({ owner: 1, barcode: 1 });
+ productSchema.index(
+  { owner: 1, barcode: 1 },
+  { unique: true, sparse: true }
+);
 productSchema.index({ owner: 1, createdAt: -1 });
 // 🔥 TEXT SEARCH (fast search)
 productSchema.index({
