@@ -2,37 +2,32 @@
   const lines = String(text)
     .replace(/\r/g, "")
     .replace(/\t/g, " ")
-    .replace(/[|=:]/g, " ")
+    .replace(/[|]/g, " ")
     .replace(/ +/g, " ")
     .split("\n")
     .map(x => x.trim())
     .filter(Boolean);
 
-  const rows = [];
-  let current = "";
+  const cleaned = [];
 
-  for (const line of lines) {
-    // new row starts with number
-    if (/^\d+\s+/.test(line)) {
-      if (current)
-        rows.push(current);
+  for (let line of lines) {
+    // 🔥 chukua mistari yenye numbers 2 mwisho
+    const match = line.match(
+      /^(.+?)\s+(\d+)\s+(\d+)$/
+    );
 
-      current = line;
-    } else {
-      // append only if no new row
-      current += " " + line;
+    if (match) {
+      const name = match[1];
+      const qty = match[2];
+      const total = match[3];
+
+      cleaned.push(
+        `${name} ${qty} ${total}`
+      );
     }
   }
 
-  if (current)
-    rows.push(current);
-
-  return rows
-    .map(x =>
-      x.replace(/\s+/g, " ").trim()
-    )
-    .join("\n");
+  return cleaned.join("\n");
 };
 
-module.exports =
-  cleanOCRText;
+module.exports = cleanOCRText;
