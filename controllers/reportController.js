@@ -1,4 +1,4 @@
-  const mongoose = require("mongoose");
+   const mongoose = require("mongoose");
   const Sale =
 require("../models/Sale");
 
@@ -877,7 +877,6 @@ require("../models/Product");
     });
   }
 };
-
  const getCreditReport = async (req, res) => {
   try {
     // 🔐 SECURITY
@@ -889,13 +888,20 @@ require("../models/Product");
 
     const ownerId = new mongoose.Types.ObjectId(req.ownerId);
 
-    // 🔥 DEFAULT RANGE = THIS MONTH
+    // 🔥 CURRENT MONTH RANGE (HAIJABADILIKA)
     const now = new Date();
     const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
+    // 🔥 TODAY RANGE (NEW)
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setUTCDate(today.getUTCDate() + 1);
+
     // =====================
-    // LOANS
+    // LOANS (MONTH)
     // =====================
     const loanAgg = await DebtLoan.aggregate([
       {
@@ -915,7 +921,7 @@ require("../models/Product");
     ]);
 
     // =====================
-    // PAYMENTS
+    // PAYMENTS (MONTH)
     // =====================
     const paymentAgg = await DebtPayment.aggregate([
       {
@@ -933,7 +939,73 @@ require("../models/Product");
     ]);
 
     // =====================
-    // PROCESS RESULTS
+    // TODAY DATA (NEW 🔥)
+    // =====================
+    const todayLoans = await DebtLoan.aggregate([
+      {
+        $match: {
+          owner: ownerId,
+          createdAt: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          issued: { $sum: "$principalAmount" }
+        }
+      }
+    ]);
+
+    const todayPayments = await DebtPayment.aggregate([
+      {
+        $match: {
+          owner: ownerId,
+          createdAt: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          collected: { $sum: "$amount" }
+        }
+      }
+    ]);
+
+    // =====================
+    // OLD DATA (BEFORE TODAY 🔥)
+    // =====================
+    const oldLoans = await DebtLoan.aggregate([
+      {
+        $match: {
+          owner: ownerId,
+          createdAt: { $lt: today }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          issued: { $sum: "$principalAmount" }
+        }
+      }
+    ]);
+
+    const oldPayments = await DebtPayment.aggregate([
+      {
+        $match: {
+          owner: ownerId,
+          createdAt: { $lt: today }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          collected: { $sum: "$amount" }
+        }
+      }
+    ]);
+
+    // =====================
+    // PROCESS ORIGINAL SUMMARY (HAIJAGUSWA)
     // =====================
     let overdueCount = 0;
     let activeCount = 0;
@@ -956,7 +1028,7 @@ require("../models/Product");
     const totalCollected = paymentAgg[0]?.totalCollected || 0;
 
     // =====================
-    // RISKY CUSTOMERS
+    // RISKY CUSTOMERS (HAIJAGUSWA)
     // =====================
     const riskyCustomers = await DebtLoan.find({
       owner: ownerId,
@@ -967,7 +1039,7 @@ require("../models/Product");
       .populate("customer", "fullName phone riskScore");
 
     // =====================
-    // RESPONSE
+    // FINAL RESPONSE (UPGRADE ONLY)
     // =====================
     res.status(200).json({
       summary: {
@@ -979,6 +1051,18 @@ require("../models/Product");
         activeCount,
         paidCount
       },
+
+      // 🔥 NEW CARDS DATA
+      today: {
+        issued: todayLoans[0]?.issued || 0,
+        collected: todayPayments[0]?.collected || 0
+      },
+
+      old: {
+        issued: oldLoans[0]?.issued || 0,
+        collected: oldPayments[0]?.collected || 0
+      },
+
       riskyCustomers
     });
 
@@ -989,6 +1073,7 @@ require("../models/Product");
     });
   }
 };
+
 const getExpenseReport = async (req, res) => {
   try {
     // 🔐 SECURITY
