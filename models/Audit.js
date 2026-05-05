@@ -1,12 +1,12 @@
-const mongoose =
-require("mongoose");
+  const mongoose = require("mongoose");
 
-const auditItemSchema =
-new mongoose.Schema(
+// =====================
+// AUDIT ITEM
+// =====================
+const auditItemSchema = new mongoose.Schema(
   {
     product: {
-      type:
-        mongoose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
       default: null
     },
@@ -60,47 +60,45 @@ new mongoose.Schema(
   { _id: false }
 );
 
-const auditSchema =
-new mongoose.Schema(
+// =====================
+// AUDIT MAIN SCHEMA
+// =====================
+const auditSchema = new mongoose.Schema(
   {
-    user: {
-      type:
-        mongoose.Schema.Types.ObjectId,
+    // 🔥 OWNER (CORE SYSTEM)
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
       index: true
     },
 
+    // 🔥 WHO DID THE AUDIT (STAFF / OWNER)
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
+    },
+
     branch: {
-      type:
-        mongoose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "Branch",
       default: null
     },
 
     method: {
       type: String,
-      enum: [
-        "manual",
-        "camera"
-      ],
-      default:
-        "manual"
+      enum: ["manual", "camera"],
+      default: "manual"
     },
 
     status: {
       type: String,
-      enum: [
-        "draft",
-        "completed"
-      ],
-      default:
-        "completed"
+      enum: ["draft", "completed"],
+      default: "completed"
     },
 
-    items: [
-      auditItemSchema
-    ],
+    items: [auditItemSchema],
 
     totalItems: {
       type: Number,
@@ -133,12 +131,16 @@ new mongoose.Schema(
     }
   },
   {
-    timestamps: true
+    timestamps: true,
+    minimize: true
   }
 );
 
-module.exports =
-mongoose.model(
-  "Audit",
-  auditSchema
-);
+// =====================
+// INDEXES (PERFORMANCE)
+// =====================
+auditSchema.index({ owner: 1, createdAt: -1 });
+auditSchema.index({ owner: 1, branch: 1 });
+auditSchema.index({ owner: 1, status: 1 });
+
+module.exports = mongoose.model("Audit", auditSchema);
