@@ -1,7 +1,7 @@
  const axios = require("axios");
 const http = require("http");
 const https = require("https");
-const pLimit = require("p-limit");
+ const pLimit = require("p-limit").default;
 
 // 🔥 limit concurrency (VERY IMPORTANT kwa scale)
 const limit = pLimit(5);
