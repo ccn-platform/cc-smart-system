@@ -1,8 +1,8 @@
- const axios = require("axios");
+   const axios = require("axios");
 const http = require("http");
 const https = require("https");
  const pLimit = require("p-limit").default;
-
+const fs = require("fs");
 // 🔥 limit concurrency (VERY IMPORTANT kwa scale)
 const limit = pLimit(5);
 
@@ -44,15 +44,39 @@ Rules:
 - No currency symbols
 - Do not skip any item
 `;
+ 
 
 // 🔥 core OCR processor
 const processOCR = async (file) => {
-  if (!file || !file.buffer) {
-    throw new Error("Invalid file");
-  }
+console.log("📂 FILE CHECK:", {
+  hasFile: !!file,
+  hasBuffer: !!file?.buffer,
+  hasPath: !!file?.path,
+  mimetype: file?.mimetype,
+  size: file?.size,
+});
 
-  const imageBase64 =
-    file.buffer.toString("base64");
+  if (!file) {
+  throw new Error("No file provided");
+}
+
+let imageBase64;
+
+// ✅ kama buffer ipo
+if (file.buffer) {
+  imageBase64 = file.buffer.toString("base64");
+}
+
+// ✅ fallback kama buffer haipo
+ else if (file.path) {
+  const fileData = fs.readFileSync(file.path);
+  imageBase64 = fileData.toString("base64");
+}
+// ❌ hakuna valid file
+else {
+  console.log("⚠️ File object:", file);
+  throw new Error("Invalid file (no buffer/path)");
+}
 
   // 🔥 loop models
   for (let m = 0; m < MODELS.length; m++) {
