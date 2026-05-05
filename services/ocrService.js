@@ -2,7 +2,6 @@
 const http = require("http");
 const https = require("https");
  const pLimit = require("p-limit").default;
-const fs = require("fs");
 // 🔥 limit concurrency (VERY IMPORTANT kwa scale)
 const limit = pLimit(5);
 
