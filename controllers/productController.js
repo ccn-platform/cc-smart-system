@@ -121,12 +121,20 @@ const searchProducts = async (req, res) => {
 };
 
 
-// UPDATE PRODUCT (🔥 SAFE UPDATE)
-const updateProduct = async (req, res) => {
+ const updateProduct = async (req, res) => {
   try {
+    // 🔐 SECURITY: lazima awe owner
+    if (!req.user || req.user.role !== "owner") {
+      return res.status(403).json({
+        message: "Only owner can update product"
+      });
+    }
+
+    // 🔍 hakikisha product ipo na ni ya owner huyu
     const product = await Product.findOne({
       _id: req.params.id,
-       owner: req.ownerId,
+      owner: req.ownerId,
+      isActive: true
     });
 
     if (!product) {
@@ -135,30 +143,48 @@ const updateProduct = async (req, res) => {
       });
     }
 
-    const updated = await Product.findByIdAndUpdate(
-      req.params.id,
-      req.body,
+    // 🔥 update data (salama)
+    const updated = await Product.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        owner: req.ownerId
+      },
+      {
+        ...req.body,
+        updatedBy: req.user.id // 🧠 audit trail
+      },
       {
         new: true,
-        runValidators: true // 🔥 important
+        runValidators: true
       }
     );
 
     res.status(200).json(updated);
+
   } catch (error) {
+    console.log("UPDATE PRODUCT ERROR:", error);
     res.status(500).json({
       message: error.message
     });
   }
 };
 
-
 // DELETE PRODUCT (SOFT DELETE)
+ 
 const deleteProduct = async (req, res) => {
   try {
+    // 🔐 SECURITY: owner tu
+    if (!req.user || req.user.role !== "owner") {
+      return res.status(403).json({
+        message: "Only owner can delete product"
+      });
+    }
+
+    // 🔍 hakikisha product ipo na ni ya owner huyu
     const product = await Product.findOne({
       _id: req.params.id,
-     owner: req.ownerId,
+      owner: req.ownerId,
+      isActive: true
     });
 
     if (!product) {
@@ -167,20 +193,23 @@ const deleteProduct = async (req, res) => {
       });
     }
 
+    // 🔥 SOFT DELETE + AUDIT
     product.isActive = false;
+    product.deletedBy = req.user.id;
 
     await product.save();
 
     res.status(200).json({
       message: "Product deleted"
     });
+
   } catch (error) {
+    console.log("DELETE PRODUCT ERROR:", error);
     res.status(500).json({
       message: error.message
     });
   }
 };
-
 
 module.exports = {
   createProduct,
