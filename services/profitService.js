@@ -17,7 +17,7 @@ const analyzeProfit = async (
 
   const products = await Product.find(query);
 
-  // 🔥 BUILD MAP (ARRAY PER KEY)
+  // 🔥 MAP: fast exact lookup
   const productMap = new Map();
 
   products.forEach((p) => {
@@ -30,6 +30,12 @@ const analyzeProfit = async (
     productMap.get(key).push(p);
   });
 
+  // 🔥 pre-process for partial match
+  const productList = products.map((p) => ({
+    raw: p,
+    name: normalizeProductName(p.name),
+  }));
+
   let results = [];
   let buyTotal = 0;
   let sellTotal = 0;
@@ -38,67 +44,52 @@ const analyzeProfit = async (
   let matchedCount = 0;
   let unmatchedCount = 0;
 
+  const isSimilar = (a, b) => {
+    return (
+      a === b ||
+      a.includes(b) ||
+      b.includes(a) ||
+      a.startsWith(b.slice(0, 4)) ||
+      b.startsWith(a.slice(0, 4))
+    );
+  };
+
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
 
+    const qty = Math.max(Number(item.qty) || 0, 0);
+    const buyPrice = Math.max(Number(item.buyPrice) || 0, 0);
+
     const clean = normalizeProductName(item.name);
+    if (!clean || clean.length < 3) continue;
 
     let matched = null;
 
-    // 🔥 STEP 1: EXACT MATCH GROUP
+    // ✅ STEP 1: EXACT
     const candidates = productMap.get(clean);
-
     if (candidates && candidates.length) {
-      // 🔥 CHOOSE BEST MATCH BASED ON PRICE
-      matched = candidates.reduce((best, p) => {
-        if (!best) return p;
-
-        return Math.abs(p.sellPrice - item.buyPrice) <
-          Math.abs(best.sellPrice - item.buyPrice)
-          ? p
-          : best;
-      }, null);
+      matched = candidates[0];
     }
 
-    // 🔥 STEP 2: FALLBACK PARTIAL MATCH (SMART)
+    // ✅ STEP 2: PARTIAL
     if (!matched) {
-      matched = products.reduce((best, p) => {
-        const pname = normalizeProductName(p.name);
-
-        const isMatch =
-          pname.includes(clean) ||
-          clean.includes(pname) ||
-          pname.startsWith(clean) ||
-          clean.startsWith(pname);
-
-        if (!isMatch) return best;
-
-        if (!best) return p;
-
-        return Math.abs(p.sellPrice - item.buyPrice) <
-          Math.abs(best.sellPrice - item.buyPrice)
-          ? p
-          : best;
-      }, null);
+      for (const p of productList) {
+        if (isSimilar(p.name, clean)) {
+          matched = p.raw;
+          break;
+        }
+      }
     }
-
-    const qty = Number(item.qty) || 0;
-    const buyPrice = Number(item.buyPrice) || 0;
 
     const itemBuyTotal = qty * buyPrice;
     buyTotal += itemBuyTotal;
 
     if (matched) {
-      const sellPrice =
-        Number(matched.sellPrice) || 0;
+      const sellPrice = Number(matched.sellPrice) || 0;
 
       const itemSellTotal = qty * sellPrice;
-
-      const profitEach =
-        sellPrice - buyPrice;
-
-      const profitTotal =
-        profitEach * qty;
+      const profitEach = sellPrice - buyPrice;
+      const profitTotal = profitEach * qty;
 
       sellTotal += itemSellTotal;
       totalProfit += profitTotal;
@@ -135,6 +126,7 @@ const analyzeProfit = async (
     }
   }
 
+  // ✅ VERY IMPORTANT
   return {
     items: results,
     buyTotal: Math.round(buyTotal),
