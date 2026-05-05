@@ -102,9 +102,9 @@ else {
                     { text: PROMPT },
                     {
                       inline_data: {
-                        mime_type:
-                          file.mimetype ||
-                          "image/jpeg",
+                        mime_type: file.mimetype?.startsWith("image/")
+                           ? file.mimetype
+                        : "image/jpeg",
                         data: imageBase64,
                       },
                     },
