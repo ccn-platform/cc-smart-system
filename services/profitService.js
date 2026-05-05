@@ -1,11 +1,7 @@
-   const Product =
-require("../models/Product");
+  const Product = require("../models/Product");
+const normalizeProductName = require("../utils/normalizeProductName");
 
-const normalizeProductName =
-require("../utils/normalizeProductName");
-
-const analyzeProfit =
-async (
+const analyzeProfit = async (
   userId,
   items,
   branchId = null
@@ -19,8 +15,15 @@ async (
     query.branch = branchId;
   }
 
-  const products =
-    await Product.find(query);
+  const products = await Product.find(query);
+
+  // 🔥 BUILD FAST LOOKUP MAP
+  const productMap = new Map();
+
+  products.forEach((p) => {
+    const key = normalizeProductName(p.name);
+    productMap.set(key, p);
+  });
 
   let results = [];
   let buyTotal = 0;
@@ -33,59 +36,45 @@ async (
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
 
-    const clean =
-      normalizeProductName(
-        item.name
-      );
+    const clean = normalizeProductName(item.name);
 
-   const matched =
-  products.find((p) => {
-    const pname =
-      normalizeProductName(
-        p.name
-      );
+    // 🔥 FAST MATCH FIRST
+    let matched = productMap.get(clean);
 
-    return (
-      pname.includes(clean) ||
-      clean.includes(pname) ||
-      pname.startsWith(clean) ||
-      clean.startsWith(pname)
-    );
-  });
+    // 🔥 FALLBACK (partial match kama ya zamani)
+    if (!matched) {
+      matched = products.find((p) => {
+        const pname = normalizeProductName(p.name);
 
-    const qty =
-      Number(item.qty) || 0;
+        return (
+          pname.includes(clean) ||
+          clean.includes(pname) ||
+          pname.startsWith(clean) ||
+          clean.startsWith(pname)
+        );
+      });
+    }
 
-    const buyPrice =
-      Number(item.buyPrice) || 0;
+    const qty = Number(item.qty) || 0;
+    const buyPrice = Number(item.buyPrice) || 0;
 
-    const itemBuyTotal =
-      qty * buyPrice;
-
+    const itemBuyTotal = qty * buyPrice;
     buyTotal += itemBuyTotal;
 
     if (matched) {
       const sellPrice =
-        Number(
-          matched.sellPrice
-        ) || 0;
+        Number(matched.sellPrice) || 0;
 
-      const itemSellTotal =
-        qty * sellPrice;
+      const itemSellTotal = qty * sellPrice;
 
       const profitEach =
-        sellPrice -
-        buyPrice;
+        sellPrice - buyPrice;
 
       const profitTotal =
-        profitEach *
-        qty;
+        profitEach * qty;
 
-      sellTotal +=
-        itemSellTotal;
-
-      totalProfit +=
-        profitTotal;
+      sellTotal += itemSellTotal;
+      totalProfit += profitTotal;
 
       matchedCount++;
 
@@ -94,11 +83,9 @@ async (
         name: item.name,
         qty,
         buyPrice,
-        buyTotal:
-          itemBuyTotal,
+        buyTotal: itemBuyTotal,
         sellPrice,
-        sellTotal:
-          itemSellTotal,
+        sellTotal: itemSellTotal,
         profitEach,
         profitTotal,
         matched: true,
@@ -111,8 +98,7 @@ async (
         name: item.name,
         qty,
         buyPrice,
-        buyTotal:
-          itemBuyTotal,
+        buyTotal: itemBuyTotal,
         sellPrice: 0,
         sellTotal: 0,
         profitEach: 0,
@@ -124,18 +110,9 @@ async (
 
   return {
     items: results,
-    buyTotal:
-      Math.round(
-        buyTotal
-      ),
-    sellTotal:
-      Math.round(
-        sellTotal
-      ),
-    totalProfit:
-      Math.round(
-        totalProfit
-      ),
+    buyTotal: Math.round(buyTotal),
+    sellTotal: Math.round(sellTotal),
+    totalProfit: Math.round(totalProfit),
     matchedCount,
     unmatchedCount,
   };
