@@ -17,12 +17,17 @@ const analyzeProfit = async (
 
   const products = await Product.find(query);
 
-  // 🔥 BUILD FAST LOOKUP MAP
+  // 🔥 BUILD MAP (ARRAY PER KEY)
   const productMap = new Map();
 
   products.forEach((p) => {
     const key = normalizeProductName(p.name);
-    productMap.set(key, p);
+
+    if (!productMap.has(key)) {
+      productMap.set(key, []);
+    }
+
+    productMap.get(key).push(p);
   });
 
   let results = [];
@@ -38,21 +43,43 @@ const analyzeProfit = async (
 
     const clean = normalizeProductName(item.name);
 
-    // 🔥 FAST MATCH FIRST
-    let matched = productMap.get(clean);
+    let matched = null;
 
-    // 🔥 FALLBACK (partial match kama ya zamani)
+    // 🔥 STEP 1: EXACT MATCH GROUP
+    const candidates = productMap.get(clean);
+
+    if (candidates && candidates.length) {
+      // 🔥 CHOOSE BEST MATCH BASED ON PRICE
+      matched = candidates.reduce((best, p) => {
+        if (!best) return p;
+
+        return Math.abs(p.sellPrice - item.buyPrice) <
+          Math.abs(best.sellPrice - item.buyPrice)
+          ? p
+          : best;
+      }, null);
+    }
+
+    // 🔥 STEP 2: FALLBACK PARTIAL MATCH (SMART)
     if (!matched) {
-      matched = products.find((p) => {
+      matched = products.reduce((best, p) => {
         const pname = normalizeProductName(p.name);
 
-        return (
+        const isMatch =
           pname.includes(clean) ||
           clean.includes(pname) ||
           pname.startsWith(clean) ||
-          clean.startsWith(pname)
-        );
-      });
+          clean.startsWith(pname);
+
+        if (!isMatch) return best;
+
+        if (!best) return p;
+
+        return Math.abs(p.sellPrice - item.buyPrice) <
+          Math.abs(best.sellPrice - item.buyPrice)
+          ? p
+          : best;
+      }, null);
     }
 
     const qty = Number(item.qty) || 0;
