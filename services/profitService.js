@@ -134,13 +134,23 @@ const analyzeProfit = async (userId, items, branchId = null) => {
     }
 
     
-    
-   // ✅ GLOBAL MATCH (STRICT 88%)
+    // ✅ SMART MATCH (ONLY RELEVANT PRODUCTS)
 if (!matched) {
   let best = null;
   let bestScore = 0;
 
-  for (const p of productList) {
+  const words = clean.split(" ");
+
+  // 🔥 CHUJA DB (IMPORTANT)
+ const candidates = productList.filter(p => {
+  return words.some(w => {
+    return p.name.includes(w) || similarity(p.name, w) > 0.7;
+  });
+});
+  // 🔥 kama hakuna candidate, tumia zote (fallback)
+  const searchList = candidates.length ? candidates : productList;
+
+  for (const p of searchList) {
     const score = similarity(p.name, clean);
 
     if (score > bestScore) {
@@ -149,22 +159,22 @@ if (!matched) {
     }
   }
 
-  // 🔥 HAPA NDIO RULE YAKO HALISI
+  // 🔥 RULE YAKO YA 88%
   if (best && bestScore >= MATCH_THRESHOLD) {
     matched = best;
     learnedMap.set(clean, best);
   }
 
-  // 🔥 DEBUG (MUHIMU)
-  console.log("SIMILARITY RESULT:", {
+  console.log("MATCH ENGINE:", {
     input: item.name,
     normalized: clean,
-    bestMatch: best?.name,
+    candidates: candidates.length,
+    best: best?.name,
     score: bestScore,
     accepted: bestScore >= MATCH_THRESHOLD
   });
 }
-
+ 
     const itemBuyTotal = qty * buyPrice;
     buyTotal += itemBuyTotal;
 
