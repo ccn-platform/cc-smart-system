@@ -1,40 +1,84 @@
   const Product = require("../models/Product");
 const normalizeProductName = require("../utils/normalizeProductName");
 
-const analyzeProfit = async (
-  userId,
-  items,
-  branchId = null
-) => {
-  const query = {
-    user: userId,
-    isActive: true,
-  };
+// 🔥 CONFIG
+const MATCH_THRESHOLD = 0.88;
+const BRAND_THRESHOLD = 0.75;
+const DEBUG = false; // 🔥 badilisha true ukitaka logs
 
-  if (branchId) {
-    query.branch = branchId;
+const learnedMap = new Map();
+
+// 🔥 SAFE BRAND
+ const extractBrand = (name = "") => {
+  const words = name.split(" ");
+
+  return (
+    words.find(w => w.length >= 2 && w.length <= 6) ||
+    words[0] ||
+    ""
+  );
+};
+
+// 🔥 LEVENSHTEIN
+const levenshtein = (a, b) => {
+  const matrix = [];
+
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      matrix[i][j] =
+        b[i - 1] === a[j - 1]
+          ? matrix[i - 1][j - 1]
+          : Math.min(
+              matrix[i - 1][j - 1] + 1,
+              matrix[i][j - 1] + 1,
+              matrix[i - 1][j] + 1
+            );
+    }
   }
+
+  return matrix[b.length][a.length];
+};
+
+// 🔥 SIMILARITY
+const similarity = (a, b) => {
+  if (!a || !b) return 0;
+
+  const longer = a.length > b.length ? a : b;
+  const shorter = a.length > b.length ? b : a;
+
+  if (!longer.length) return 1;
+
+  return (
+    (longer.length - levenshtein(longer, shorter)) /
+    longer.length
+  );
+};
+
+const analyzeProfit = async (userId, items, branchId = null) => {
+  const query = { user: userId, isActive: true };
+  if (branchId) query.branch = branchId;
 
   const products = await Product.find(query);
 
-  // 🔥 FAST EXACT MATCH MAP
   const productMap = new Map();
+  const brandMap = new Map();
 
-  products.forEach((p) => {
-    const key = normalizeProductName(p.name);
+  // 🔥 PREPROCESS
+  const productList = products.map((p) => {
+    const name = normalizeProductName(p.name || "");
+    const brand = extractBrand(name);
 
-    if (!productMap.has(key)) {
-      productMap.set(key, []);
-    }
+    if (!productMap.has(name)) productMap.set(name, []);
+    productMap.get(name).push(p);
 
-    productMap.get(key).push(p);
+    if (!brandMap.has(brand)) brandMap.set(brand, []);
+    brandMap.get(brand).push({ raw: p, name });
+
+    return { raw: p, name, brand };
   });
-
-  // 🔥 PREPROCESS FOR PARTIAL MATCH
-  const productList = products.map((p) => ({
-    raw: p,
-    name: normalizeProductName(p.name),
-  }));
 
   let results = [];
   let buyTotal = 0;
@@ -44,81 +88,86 @@ const analyzeProfit = async (
   let matchedCount = 0;
   let unmatchedCount = 0;
 
-  // 🔥 SMART NAME MATCH
-  const isSimilar = (a, b) => {
-    if (!a || !b) return false;
-
-    a = a.trim();
-    b = b.trim();
-
-    return (
-      a === b ||
-      a.includes(b) ||
-      b.includes(a) ||
-      a.startsWith(b.slice(0, 4)) ||
-      b.startsWith(a.slice(0, 4))
-    );
-  };
-
-  // 🔥 MAIN LOOP
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
 
     const qty = Math.max(Number(item.qty) || 0, 0);
     const buyPrice = Math.max(Number(item.buyPrice) || 0, 0);
 
-    const clean = normalizeProductName(item.name);
-
-    if (!clean || clean.length < 3) {
-      console.log("SKIPPED:", item.name);
-      continue;
-    }
+    const clean = normalizeProductName(item.name || "");
+    if (!clean || clean.length < 3) continue;
 
     let matched = null;
 
-    // ✅ STEP 1: EXACT MATCH (BEST)
-    const candidates = productMap.get(clean);
-
-    if (candidates && candidates.length) {
-      matched = candidates[0];
+    // ✅ 1. CACHE (FASTEST)
+    if (learnedMap.has(clean)) {
+      matched = learnedMap.get(clean);
     }
 
-    // ✅ STEP 2: PARTIAL MATCH (SMART)
+    // ✅ 2. EXACT
+    if (!matched) {
+      const candidates = productMap.get(clean);
+      if (candidates?.length) matched = candidates[0];
+    }
+
+    // ✅ 3. BRAND FILTER
+    if (!matched) {
+      const brand = extractBrand(clean);
+      const brandProducts = brandMap.get(brand) || [];
+
+      let best = null;
+      let bestScore = 0;
+
+      for (const p of brandProducts) {
+        const score = similarity(p.name, clean);
+
+        if (score > bestScore) {
+          bestScore = score;
+          best = p.raw;
+        }
+      }
+
+      if (best && bestScore >= BRAND_THRESHOLD) {
+        matched = best;
+        learnedMap.set(clean, best);
+      }
+    }
+
+    // ✅ 4. GLOBAL (FILTERED - FAST)
     if (!matched) {
       let best = null;
+      let bestScore = 0;
 
       for (const p of productList) {
-        if (!isSimilar(p.name, clean)) continue;
+         if (Math.abs(p.name.length - clean.length) > 5) continue;
+        // 🔥 SPEED FILTER
+   if (
+     (!p.name[0] || !clean[0] || p.name[0] !== clean[0]) &&
+     (!p.name[1] || !clean[1] || p.name[1] !== clean[1])
+    ) continue;
+        const score = similarity(p.name, clean);
 
-        if (!best) {
-          best = p.raw;
-          continue;
-        }
-
-        // 🔥 chagua jina refu zaidi (more specific)
-        if (
-          p.name.length >
-          normalizeProductName(best.name).length
-        ) {
+        if (score > bestScore) {
+          bestScore = score;
           best = p.raw;
         }
       }
 
-      if (best) {
+      if (best && bestScore >= MATCH_THRESHOLD) {
         matched = best;
+        learnedMap.set(clean, best);
       }
     }
 
-    // 🔥 DEBUG (MUHIMU SANA)
-    console.log("DEBUG:", {
-      input: item.name,
-      normalized: clean,
-      matched: matched?.name || "NOT FOUND",
-      buyPrice,
-      sellPrice: matched?.sellPrice || 0,
-    });
+    // 🔥 DEBUG
+   if (DEBUG) {
+  console.log("MATCH:", {
+    input: item.name,
+    normalized: clean,
+    matched: matched?.name || "NOT FOUND",
+  });
+}
 
-    // 🔥 CALCULATIONS
     const itemBuyTotal = qty * buyPrice;
     buyTotal += itemBuyTotal;
 
@@ -155,16 +204,11 @@ const analyzeProfit = async (
         qty,
         buyPrice,
         buyTotal: itemBuyTotal,
-        sellPrice: 0,
-        sellTotal: 0,
-        profitEach: 0,
-        profitTotal: 0,
         matched: false,
       });
     }
   }
 
-  // ✅ FINAL RETURN
   return {
     items: results,
     buyTotal: Math.round(buyTotal),
@@ -175,6 +219,4 @@ const analyzeProfit = async (
   };
 };
 
-module.exports = {
-  analyzeProfit,
-};
+module.exports = { analyzeProfit };
