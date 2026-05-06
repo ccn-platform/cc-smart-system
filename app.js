@@ -42,7 +42,7 @@ app.use("/api/orders",orderRoutes);
 app.use("/api/cash",cashRoutes);
 app.use("/api/credit",creditRoutes);
 app.use("/api/subscription", subscriptionRoutes);
-setInterval(() => {
-  markOverdueLoans();
-}, 60000);
+ // setInterval(() => {
+//   markOverdueLoans();
+// }, 60000);
 module.exports = app;
