@@ -133,38 +133,35 @@ const analyzeProfit = async (userId, items, branchId = null) => {
       }
     }
 
-    // ✅ 4. GLOBAL (FILTERED - FAST)
-    if (!matched) {
-      let best = null;
-      let bestScore = 0;
+    
+    
+   // ✅ GLOBAL MATCH (STRICT 88%)
+if (!matched) {
+  let best = null;
+  let bestScore = 0;
 
-      for (const p of productList) {
-         if (Math.abs(p.name.length - clean.length) > 5) continue;
-        // 🔥 SPEED FILTER
-   if (
-     (!p.name[0] || !clean[0] || p.name[0] !== clean[0]) &&
-     (!p.name[1] || !clean[1] || p.name[1] !== clean[1])
-    ) continue;
-        const score = similarity(p.name, clean);
+  for (const p of productList) {
+    const score = similarity(p.name, clean);
 
-        if (score > bestScore) {
-          bestScore = score;
-          best = p.raw;
-        }
-      }
-
-      if (best && bestScore >= MATCH_THRESHOLD) {
-        matched = best;
-        learnedMap.set(clean, best);
-      }
+    if (score > bestScore) {
+      bestScore = score;
+      best = p.raw;
     }
+  }
 
-    // 🔥 DEBUG
-   if (DEBUG) {
-  console.log("MATCH:", {
+  // 🔥 HAPA NDIO RULE YAKO HALISI
+  if (best && bestScore >= MATCH_THRESHOLD) {
+    matched = best;
+    learnedMap.set(clean, best);
+  }
+
+  // 🔥 DEBUG (MUHIMU)
+  console.log("SIMILARITY RESULT:", {
     input: item.name,
     normalized: clean,
-    matched: matched?.name || "NOT FOUND",
+    bestMatch: best?.name,
+    score: bestScore,
+    accepted: bestScore >= MATCH_THRESHOLD
   });
 }
 
