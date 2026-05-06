@@ -1,4 +1,4 @@
-  const Product = require("../models/Product");
+ const Product = require("../models/Product");
 const normalizeProductName = require("../utils/normalizeProductName");
 
 // 🔥 CONFIG
@@ -197,15 +197,20 @@ const analyzeProfit = async (userId, items, branchId = null) => {
       });
     } else {
       unmatchedCount++;
-
-      results.push({
-        no: i + 1,
-        name: item.name,
-        qty,
-        buyPrice,
-        buyTotal: itemBuyTotal,
-        matched: false,
-      });
+results.push({
+  no: i + 1,
+  name: item.name,
+  qty,
+  buyPrice,
+  buyTotal: itemBuyTotal,
+  sellPrice: 0,
+  sellTotal: 0,
+  profitEach: 0,
+  profitTotal: 0,
+  matched: false,
+});
+      
+       
     }
   }
 
