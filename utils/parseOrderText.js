@@ -16,7 +16,7 @@ console.log("LINES:", lines);
       .replace(/,/g, "")
       .replace(/tsh|tzs/gi, "")
       .replace(/@/g, " ")
-      .replace(/x/g, " ")
+         .replace(/\bx\b/g, " ")
       .replace(/[^a-z0-9 ]/g, " ")
       .replace(/ +/g, " ")
       .trim();
