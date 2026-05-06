@@ -1,43 +1,30 @@
-  const normalizeProductName = (name = "") => {
+ const normalizeProductName = (name = "") => {
   let text = String(name)
     .toLowerCase()
 
-    // 🔥 remove symbols
+    // 🔥 remove symbols (lakini acha numbers ndani ya words)
     .replace(/[^a-z0-9 ]/g, " ")
 
-    // 🔥 normalize common words
-    .replace(/\bsukr\b/g, "sukari")
-    .replace(/\bsukal\b/g, "sukari")
-    .replace(/\bsugar\b/g, "sukari")
-
-    .replace(/\bmcel\b/g, "mchele")
-    .replace(/\bmchle\b/g, "mchele")
-
-    .replace(/\bmaha\b/g, "maharage")
-    .replace(/\bharage\b/g, "maharage")
-
-    .replace(/\bsbn\b/g, "sabuni")
-    .replace(/\bsabn\b/g, "sabuni")
-
-    .replace(/\bungaa\b/g, "unga")
-
-    // 🔥 remove units
+    // 🔥 remove standalone units only
     .replace(/\b(kg|kilo|gm|g|ltr|ml|pkt|pack|pc|pcs|box)\b/g, "")
 
-    // 🔥 remove numbers
+    // 🔥 remove standalone numbers
     .replace(/\b\d+\b/g, "")
 
     // 🔥 clean spaces
     .replace(/\s+/g, " ")
     .trim();
 
-  // 🔥 split words
+  // 🔥 split
   let words = text.split(" ");
+
+  // 🔥 remove very short noise (important)
+  words = words.filter(w => w.length > 1);
 
   // 🔥 remove duplicates
   words = [...new Set(words)];
 
-  // 🔥 sort words (VERY IMPORTANT)
+  // 🔥 sort (KEY FOR MATCHING)
   words.sort();
 
   return words.join(" ");
