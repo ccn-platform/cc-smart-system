@@ -1,4 +1,4 @@
- const Product = require("../models/Product");
+  const Product = require("../models/Product");
 const normalizeProductName = require("../utils/normalizeProductName");
 
 // 🔥 CONFIG
@@ -208,6 +208,7 @@ results.push({
   profitEach: 0,
   profitTotal: 0,
   matched: false,
+  reason: "not_matched", // 🔥 HAPA NDIPO UNAONGEZA
 });
       
        
