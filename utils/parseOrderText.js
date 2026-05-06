@@ -1,31 +1,46 @@
- const parseOrderText = (text) => {
+  const parseOrderText = (text) => {
   const lines = String(text)
     .split("\n")
     .map(x => x.trim())
     .filter(Boolean);
-
+console.log("LINES:", lines);
+ 
   const items = [];
 
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
 
-    // 🔥 normalize line
+    // 🔥 clean line
     line = line
-      .replace(/,/g, "") // remove commas
-      .replace(/tsh|tzs/gi, "") // remove currency
+      .toLowerCase()
+      .replace(/,/g, "")
+      .replace(/tsh|tzs/gi, "")
+      .replace(/@/g, " ")
+      .replace(/x/g, " ")
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/ +/g, " ")
       .trim();
 
-    const match = line.match(
-      /^(.+?)\s+(\d+)\s+(\d+)$/
-    );
+    const parts = line.split(" ");
 
-    if (!match) continue;
+    if (parts.length < 3) continue;
 
-    const name = match[1];
-    const qty = Number(match[2]);
-    const total = Number(match[3]);
+    // 🔥 chukua numbers mwisho
+    const numbers = parts.filter(p => !isNaN(p));
 
-    if (!name || qty <= 0 || total <= 0) continue;
+    if (numbers.length < 2) continue;
+
+    const qty = Number(numbers[numbers.length - 2]);
+    const total = Number(numbers[numbers.length - 1]);
+
+    if (qty <= 0 || total <= 0) continue;
+
+    // 🔥 jina = sehemu isiyo number
+    const nameParts = parts.filter(p => isNaN(p));
+
+    const name = nameParts.join(" ");
+
+    if (!name) continue;
 
     items.push({
       no: items.length + 1,
@@ -35,7 +50,7 @@
       total
     });
   }
-
+ console.log("PARSED:", items);
   return items;
 };
 
