@@ -17,14 +17,26 @@ const { readImageText } = require("../services/ocrService");
 
    const result = await analyzeProfit(ownerId, items);
 
-  const order = await Order.create({
-      owner: ownerId,
+  let order = null;
+
+try {
+
+  order = await Order.create({
+    owner: ownerId,
     rawText: cleanText,
     items: result.items,
     buyTotal: result.buyTotal,
     sellTotal: result.sellTotal,
     totalProfit: result.totalProfit
   });
+
+} catch (dbError) {
+
+  console.log(
+    "ORDER SAVE ERROR:",
+    dbError
+  );
+}
 
   return { order, cleanText, result };
 };
@@ -45,16 +57,24 @@ const scanOrder = async (req, res) => {
        await processOrder(req.ownerId, text);
 
     res.status(200).json({
-      orderId: order._id,
+       orderId: order?._id || null,
       rawText: cleanText,
       ...result
     });
 
   } catch (error) {
-    res.status(400).json({
-      message: error.message
-    });
-  }
+
+  console.log(
+    "SCAN ORDER ERROR:",
+    error
+  );
+
+  res.status(400).json({
+    message:
+      error.message ||
+      "Scan failed"
+  });
+}
 };
 
 
@@ -73,16 +93,24 @@ const scanImage = async (req, res) => {
        await processOrder(req.ownerId, text);
 
     res.status(200).json({
-      orderId: order._id,
+     orderId: order?._id || null,
       rawText: cleanText,
       ...result
     });
+} catch (error) {
 
-  } catch (error) {
-    res.status(400).json({
-      message: error.message
-    });
-  }
+  console.log(
+    "SCAN IMAGE ERROR:",
+    error
+  );
+
+  res.status(400).json({
+    message:
+      error.message ||
+      "Scan failed"
+  });
+}
+  
 };
 
 
