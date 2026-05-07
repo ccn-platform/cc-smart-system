@@ -1,4 +1,4 @@
- const normalizeProductName = (name = "") => {
+  const normalizeProductName = (name = "") => {
   let text = String(name)
     .toLowerCase()
 
@@ -34,14 +34,10 @@
     .replace(/\bkubwaa\b/g, "kubwa")
     .replace(/\bchwnga\b/g, "chungwa")
 
-    // 🔥 remove units
-    .replace(
-      /\b(kg|kgs|kilo|gram|grams|gm|g|ltr|lt|liter|litre|ml|pkt|pack|pc|pcs|box|dozen)\b/g,
-      ""
-    )
-
-    // 🔥 remove standalone numbers
-    .replace(/\b\d+\b/g, "")
+ .replace(
+ /\b(kg|kgs|kilo|ltr|lt|liter|litre|pkt|pack|pc|pcs|box|dozen)\b/g,
+ ""
+)
 
     // 🔥 clean spaces
     .replace(/\s+/g, " ")
