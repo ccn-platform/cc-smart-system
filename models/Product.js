@@ -36,11 +36,11 @@ normalizedName: {
       ],
 
       barcode: {
-        type: String,
-        default: "",
+       type: String,
+        default: null,
         trim: true,
-        index: true
-      },
+       index: true
+     },
 
       category: {
         type: String,
