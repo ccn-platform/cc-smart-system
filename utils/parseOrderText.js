@@ -1,56 +1,39 @@
   const parseOrderText = (text) => {
   const lines = String(text)
     .split("\n")
-    .map(x => x.trim())
+    .map((x) => x.trim())
     .filter(Boolean);
-console.log("LINES:", lines);
- 
+
   const items = [];
 
-  for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
-
-    // 🔥 clean line
-    line = line
-      .toLowerCase()
-      .replace(/,/g, "")
-      .replace(/tsh|tzs/gi, "")
-      .replace(/@/g, " ")
-         .replace(/\bx\b/g, " ")
-      .replace(/[^a-z0-9 ]/g, " ")
-      .replace(/ +/g, " ")
-      .trim();
-
-    const parts = line.split(" ");
+  for (const line of lines) {
+    const parts = line.split("|");
 
     if (parts.length < 3) continue;
 
-    // 🔥 chukua numbers mwisho
-    const numbers = parts.filter(p => !isNaN(p));
+    const name = parts[0]?.trim();
 
-    if (numbers.length < 2) continue;
+    const qty = Number(
+      parts[1]?.replace(/[^\d]/g, "")
+    );
 
-    const qty = Number(numbers[numbers.length - 2]);
-    const total = Number(numbers[numbers.length - 1]);
+    const total = Number(
+      parts[2]?.replace(/[^\d]/g, "")
+    );
 
-    if (qty <= 0 || total <= 0) continue;
-
-    // 🔥 jina = sehemu isiyo number
-    const nameParts = parts.filter(p => isNaN(p));
-
-    const name = nameParts.join(" ");
-
-    if (!name) continue;
+    if (!name || !qty || !total) continue;
 
     items.push({
       no: items.length + 1,
       name,
       qty,
       buyPrice: Math.round(total / qty),
-      total
+      total,
     });
   }
- console.log("PARSED:", items);
+
+  console.log("PARSED:", items);
+
   return items;
 };
 
