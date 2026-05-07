@@ -1,4 +1,4 @@
-  const Product = require("../models/Product");
+ const Product = require("../models/Product");
 
 const normalizeProductName =
   require("../utils/normalizeProductName");
@@ -32,39 +32,109 @@ const analyzeProfit = async (
     // 🔥 NORMALIZE OCR NAME
     const clean =
       normalizeProductName(item.name || "");
+ 
+      if (!clean || clean.length < 2) {
 
-    if (!clean || clean.length < 2) {
-      continue;
-    }
+  unmatchedCount++;
 
+  results.push({
+    no: i + 1,
+
+    name: item.name || "",
+
+    normalizedName: clean,
+
+    qty,
+
+    buyPrice,
+
+    buyTotal:
+      qty * buyPrice,
+
+    sellPrice: 0,
+
+    sellTotal: 0,
+
+    profitEach: 0,
+
+    profitTotal: 0,
+
+    matched: false,
+
+    reason: "invalid_name",
+  });
+
+  continue;
+}
     let matched = null;
 
     // ✅ CACHE MATCH
-    if (learnedMap.has(clean)) {
-      matched = learnedMap.get(clean);
-    }
+   const cacheKey =
+  `${userId}_${clean}`;
 
+if (learnedMap.has(cacheKey)) {
+  matched =
+    learnedMap.get(cacheKey);
+}
     // ✅ INDEXED DATABASE MATCH
-    if (!matched) {
-      const query = {
-        owner: userId,
-        normalizedName: clean,
-        isActive: true,
-      };
+ if (!matched) {
 
-      // 🔥 OPTIONAL BRANCH FILTER
-      if (branchId) {
-        query.branch = branchId;
-      }
+  // ✅ EXACT INDEXED MATCH
+  const query = {
+    owner: userId,
+    normalizedName: clean,
+    isActive: true,
+  };
 
-      matched =
-        await Product.findOne(query).lean();
+  if (branchId) {
+    query.branch = branchId;
+  }
 
-      // 🔥 SAVE CACHE
-      if (matched) {
-        learnedMap.set(clean, matched);
-      }
-    }
+  matched =
+    await Product.findOne(query).lean();
+
+  // ✅ FALLBACK LOOSE SEARCH
+  if (!matched) {
+
+    const words = clean
+      .split(" ")
+       .filter((w) => w.length > 2)
+.slice(0, 3);
+
+    if (words.length > 0) {
+
+      const regex =
+        words.join("|");
+ const fallbackQuery = {
+  owner: userId,
+  isActive: true,
+  normalizedName: {
+    $regex: regex,
+    $options: "i",
+  },
+};
+
+if (branchId) {
+  fallbackQuery.branch =
+    branchId;
+}
+
+matched =
+  await Product.findOne(
+    fallbackQuery
+  ).lean();
+}
+    
+}
+
+  // ✅ CACHE
+  if (matched) {
+    learnedMap.set(
+  cacheKey,
+  matched
+);
+  }
+}
 
     const itemBuyTotal =
       qty * buyPrice;
@@ -167,4 +237,4 @@ const analyzeProfit = async (
 
 module.exports = {
   analyzeProfit,
-};
+}; 
