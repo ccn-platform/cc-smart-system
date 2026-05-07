@@ -1,6 +1,7 @@
    const Product = require("../models/Product");
 
-
+ const normalizeProductName =
+ require("../utils/normalizeProductName");
 // CREATE PRODUCT
 const createProduct = async (req, res) => {
   try {
@@ -148,9 +149,13 @@ const searchProducts = async (req, res) => {
       updateData = {
         ...req.body
       };
-    }
 
-    // 🔥 STAFF → anaruhusiwa sellPrice tu
+    
+if (req.body.name) {
+  updateData.normalizedName =
+    normalizeProductName(req.body.name);
+}
+   }   // 🔥 STAFF → anaruhusiwa sellPrice tu
     if (req.user.role === "staff") {
       if (req.body.sellPrice !== undefined) {
         updateData.sellPrice = req.body.sellPrice;
@@ -222,7 +227,7 @@ const deleteProduct = async (req, res) => {
     product.isActive = false;
     product.deletedBy = req.user.id;
 
-    await product.save();
+     await product.save({ validateBeforeSave: false });
 
     res.status(200).json({
       message: "Product deleted"
