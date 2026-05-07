@@ -1,4 +1,4 @@
-   const axios = require("axios");
+    const axios = require("axios");
 const http = require("http");
 const https = require("https");
  const pLimit = require("p-limit").default;
@@ -30,20 +30,36 @@ const httpClient = axios.create({
   maxBodyLength: 10 * 1024 * 1024,
 });
 
-// 🔥 strict prompt (token efficient + clean output)
+ // 🔥 SMART OCR PROMPT
 const PROMPT = `
-Extract ALL product rows from this receipt.
+You are an OCR engine for Tanzanian shop invoices and handwritten order sheets.
 
-Return ONLY:
-Name Qty Total
+Read ALL visible product rows from the image.
 
-Rules:
-- One item per line
-- No explanation
-- No currency symbols
-- Do not skip any item
+Return ONLY valid product rows.
+
+FORMAT:
+PRODUCT_NAME | QTY | TOTAL
+
+RULES:
+- Keep original product names
+- Quantity must be number only
+- Total must be number only
+- Ignore headers
+- Ignore summaries
+- Ignore grand totals
+- Ignore profit rows
+- Ignore dates
+- Ignore row numbers
+- One product per line
+- Do not explain anything
+- If uncertain, still return best guess
+
+EXAMPLE:
+MAHARAGE NJANO | 20 | 46000
+DAGAA | 3 | 27000
+MCHELE | 100 | 220000
 `;
- 
 
 // 🔥 core OCR processor
  const fs = require("fs/promises");
@@ -137,7 +153,8 @@ else {
           throw new Error("Empty OCR response");
         }
 
-        console.log("✅ OCR success");
+         console.log("✅ OCR success");
+         console.log("🧾 RAW OCR:\n", text);
 
         return text
           .replace(/\r/g, "")
