@@ -127,13 +127,11 @@ deletedAt: {
  require("../utils/normalizeProductName");
 
 // 🔥 AUTO NORMALIZE
-productSchema.pre("save", function (next) {
+ productSchema.pre("save", function () {
   if (this.name) {
     this.normalizedName =
       normalizeProductName(this.name);
   }
-
-  next();
 });
 // 🔥 IMPORTANT INDEXES (HAZIBADILISHI LOGIC)
  productSchema.index({ owner: 1, name: 1 });
