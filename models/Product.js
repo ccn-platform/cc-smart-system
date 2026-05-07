@@ -1,4 +1,4 @@
-   const mongoose = require("mongoose");
+    const mongoose = require("mongoose");
 
 const productSchema =
   new mongoose.Schema(
@@ -23,6 +23,10 @@ const productSchema =
         trim: true,
         index: true
       },
+normalizedName: {
+  type: String,
+  index: true,
+},
 
       aliases: [
         {
@@ -60,6 +64,7 @@ const productSchema =
         type: String,
         default: ""
       },
+
 
       buyPrice: {
         type: Number,
@@ -118,6 +123,18 @@ deletedAt: {
     }
   );
 
+  const normalizeProductName =
+ require("../utils/normalizeProductName");
+
+// 🔥 AUTO NORMALIZE
+productSchema.pre("save", function (next) {
+  if (this.name) {
+    this.normalizedName =
+      normalizeProductName(this.name);
+  }
+
+  next();
+});
 // 🔥 IMPORTANT INDEXES (HAZIBADILISHI LOGIC)
  productSchema.index({ owner: 1, name: 1 });
  productSchema.index(
@@ -125,6 +142,11 @@ deletedAt: {
   { unique: true, sparse: true }
 );
 productSchema.index({ owner: 1, createdAt: -1 });
+productSchema.index({
+  owner: 1,
+  normalizedName: 1,
+  isActive: 1
+});
 // 🔥 TEXT SEARCH (fast search)
 productSchema.index({
   name: "text",
