@@ -1,8 +1,8 @@
-const mongoose = require("mongoose");
+ const mongoose = require("mongoose");
 
 const saleSchema = new mongoose.Schema(
   {
-    user: {
+    owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true
@@ -45,8 +45,4 @@ const saleSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports =
-  mongoose.model(
-    "Sale",
-    saleSchema
-  );
+module.exports = mongoose.model("Sale", saleSchema);
