@@ -1,8 +1,16 @@
-const Sale = require("../models/Sale");
+ const Sale = require("../models/Sale");
 const Product = require("../models/Product");
 
 const calculateProfit = require("../utils/calculateprofit");
 const generateReceipt = require("../utils/generateReceipt");
+
+
+// helper
+const getOwnerId = (user) => {
+  return user.role === "staff"
+    ? user.owner
+    : user._id;
+};
 
 
 // CREATE SALE
@@ -21,10 +29,12 @@ const createSale = async (
       items.length === 0
     ) {
       return res.status(400).json({
-        message:
-          "Cart is empty"
+        message: "Cart is empty"
       });
     }
+
+    const ownerId =
+      getOwnerId(req.user);
 
     let saleItems = [];
     let totalAmount = 0;
@@ -34,7 +44,7 @@ const createSale = async (
       const product =
         await Product.findOne({
           _id: item.productId,
-          user: req.user.id,
+          user: ownerId,
           isActive: true
         });
 
@@ -88,8 +98,7 @@ const createSale = async (
       });
 
       // reduce stock
-      product.stockQty =
-        product.stockQty -
+      product.stockQty -=
         item.qty;
 
       await product.save();
@@ -100,7 +109,7 @@ const createSale = async (
 
     const sale =
       await Sale.create({
-        user: req.user.id,
+        owner: ownerId,
         items: saleItems,
         totalAmount,
         totalProfit,
@@ -126,9 +135,12 @@ const getSales = async (
   res
 ) => {
   try {
+    const ownerId =
+      getOwnerId(req.user);
+
     const sales =
       await Sale.find({
-        user: req.user.id
+        owner: ownerId
       }).sort({
         createdAt: -1
       });
@@ -149,6 +161,9 @@ const getSales = async (
 const getTodaySales =
   async (req, res) => {
     try {
+      const ownerId =
+        getOwnerId(req.user);
+
       const start =
         new Date();
 
@@ -161,7 +176,7 @@ const getTodaySales =
 
       const sales =
         await Sale.find({
-          user: req.user.id,
+          owner: ownerId,
           createdAt: {
             $gte: start
           }
