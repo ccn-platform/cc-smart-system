@@ -1,4 +1,4 @@
- const Sale = require("../models/Sale");
+  const Sale = require("../models/Sale");
 const Product = require("../models/Product");
 
 const calculateProfit = require("../utils/calculateprofit");
@@ -41,13 +41,14 @@ const createSale = async (
     let totalProfit = 0;
 
     for (const item of items) {
-      const product =
-        await Product.findOne({
-          _id: item.productId,
-          user: ownerId,
-          isActive: true
-        });
-
+     
+const product =
+  await Product.findOne({
+    _id: item.productId,
+    owner: ownerId,
+    isActive: true
+  });
+  
       if (!product) {
         return res.status(404).json({
           message:
