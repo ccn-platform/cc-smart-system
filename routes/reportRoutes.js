@@ -1,4 +1,4 @@
-  const express = require("express");
+ const express = require("express");
 const router = express.Router();
 
 const {
@@ -6,69 +6,61 @@ const {
   branchAccess
 } = require("../middleware/authMiddleware");
 
-const {
-  getDailyReport,
-  getWeeklyReport,
-  getMonthlyReport,
-  getTopProductsReport,
-  getCreditReport,
-  getExpenseReport,
-  getInventoryReport
-} = require("../controllers/reportController");
+const reportController =
+  require("../controllers/reportController");
 
+console.log(
+  "REPORT CONTROLLER:",
+  reportController
+);
 
-// TIME REPORTS
 router.get(
   "/daily",
   protect,
   branchAccess,
-  getDailyReport
+  reportController.getDailyReport
 );
 
 router.get(
   "/weekly",
   protect,
   branchAccess,
-  getWeeklyReport
+  reportController.getWeeklyReport
 );
 
 router.get(
   "/monthly",
   protect,
   branchAccess,
-  getMonthlyReport
+  reportController.getMonthlyReport
 );
 
-
-// BUSINESS REPORTS
 router.get(
   "/inventory",
   protect,
   branchAccess,
-  getInventoryReport
+  reportController.getInventoryReport
 );
 
 router.get(
   "/top-products",
   protect,
   branchAccess,
-  getTopProductsReport
+  reportController.getTopProductsReport
 );
 
-
-// FINANCIAL REPORTS
 router.get(
   "/credit",
   protect,
   branchAccess,
-  getCreditReport
+  reportController.getCreditReport
 );
 
 router.get(
   "/expense",
   protect,
   branchAccess,
-  getExpenseReport
+  reportController.getExpenseReport
 );
 
 module.exports = router;
