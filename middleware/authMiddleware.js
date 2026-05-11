@@ -1,4 +1,4 @@
-  const jwt =
+ const jwt =
   require("jsonwebtoken");
 
 const User =
@@ -131,9 +131,17 @@ const branchAccess =
   ) => {
     try {
       const branchId =
-        req.headers[
-          "x-branch-id"
-        ];
+        req.headers["x-branch-id"];
+
+      console.log(
+        "HEADER BRANCH ID:",
+        branchId
+      );
+
+      console.log(
+        "OWNER ID:",
+        req.ownerId
+      );
 
       if (!branchId) {
         return res.status(400).json({
@@ -147,6 +155,11 @@ const branchAccess =
           owner:
             req.ownerId
         });
+
+      console.log(
+        "SHOP FOUND:",
+        shop?._id
+      );
 
       if (!shop) {
         return res.status(404).json({
@@ -164,6 +177,11 @@ const branchAccess =
           isActive:
             true
         });
+
+      console.log(
+        "BRANCH FOUND:",
+        branch
+      );
 
       if (!branch) {
         return res.status(403).json({
@@ -191,9 +209,19 @@ const branchAccess =
       req.branchId =
         branch._id;
 
+      console.log(
+        "REQ BRANCH ID SET:",
+        req.branchId
+      );
+
       next();
 
     } catch (error) {
+      console.log(
+        "BRANCH ACCESS ERROR:",
+        error
+      );
+
       return res.status(500).json({
         message:
           error.message
