@@ -1,378 +1,165 @@
-  const mongoose = require("mongoose");
-const User = require("../models/User");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const Shop = require("../models/Shop");
-const Branch = require("../models/Branch");
-const normalizePhone = require("../utils/normalizePhone");
+  const jwt =
+  require("jsonwebtoken");
 
-const registerUser = async (req, res) => {
-  const session = await mongoose.startSession();
+const User =
+  require("../models/User");
 
-  try {
-    session.startTransaction();
+const Shop =
+  require("../models/Shop");
 
-    let {
-      name,
-      businessName,
-      phone,
-      password,
-      businessCategory,
-      mkoa,
-      wilaya,
-      mtaa
-    } = req.body;
-
-    // NORMALIZE PHONE
-    phone = normalizePhone(phone);
-
-    // VALIDATION
-    if (
-      !name ||
-      !businessName ||
-      !phone ||
-      !password ||
-      !businessCategory ||
-      !mkoa ||
-      !wilaya ||
-      !mtaa
-    ) {
-      await session.abortTransaction();
-      session.endSession();
-
-      return res.status(400).json({
-        message: "All fields are required"
-      });
-    }
-
-    // CHECK DUPLICATE
-    const exists = await User.findOne({
-      phone
-    }).session(session);
-
-    if (exists) {
-      await session.abortTransaction();
-      session.endSession();
-
-      return res.status(400).json({
-        message: "Phone already registered"
-      });
-    }
-
-    // HASH PASSWORD
-    const hashedPassword =
-      await bcrypt.hash(password, 10);
-
-    // CREATE USER
-   const users = await User.create(
-  [{
-    name: name.trim(),
-    businessName: businessName.trim(),
-    phone,
-    password: hashedPassword,
-    businessCategory,
-    mkoa,
-    wilaya,
-    mtaa
-  }],
-  { session }
-);
-    const user = users[0];
-
-    // CREATE SHOP
-    const shops = await Shop.create(
-      [{
-        owner: user._id,
-        businessName:
-          user.businessName,
-        category:
-          user.businessCategory,
-        phone:
-          user.phone,
-        mkoa:
-          user.mkoa,
-        wilaya:
-          user.wilaya,
-        mtaa:
-          user.mtaa
-      }],
-      { session }
-    );
-
-    const shop = shops[0];
-
-    // CREATE MAIN BRANCH
-    await Branch.create(
-  [{
-    shop: shop._id,
-    name: `${user.businessName} Main Branch`,
-    phone: user.phone,
-    manager: user.name,
-    mkoa: user.mkoa,
-    wilaya: user.wilaya,
-    mtaa: user.mtaa,
-    isMain: true,
-    isActive: true,
-
-    subscription: {
-      plan: "trial",
-      startDate: new Date(),
-      expiresAt: new Date(
-        Date.now() +
-        14 * 24 * 60 * 60 * 1000
-      ),
-      isActive: true
-    }
-  }],
-  { session }
-);
-    // COMMIT
-    await session.commitTransaction();
-    session.endSession();
-
-    // TOKEN
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "30d" }
-    );
-
-    // GET MAIN BRANCH
-const mainBranch =
-  await Branch.findOne({
-    shop: shop._id,
-    isMain: true
-  }).select(
-    "name subscription"
-  );
-
-// RESPONSE
-return res.status(201).json({
-  token,
-  user: {
-    id: user._id,
-    name: user.name,
-    businessName:
-      user.businessName,
-    phone: user.phone,
-    role: user.role,
-    owner: null,
-
-    branch: mainBranch
-      ? {
-          id: mainBranch._id,
-          name: mainBranch.name,
-          subscription:
-            mainBranch.subscription
-        }
-      : null,
-
-    subscription:
-      mainBranch?.subscription ||
-      null
-  }
-});
- 
-
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-
-    console.log(
-      "REGISTER ERROR:",
-      error
-    );
-
-    return res.status(500).json({
-      message: error.message
-    });
-  }
-};
+const Branch =
+  require("../models/Branch");
 
 
-const loginUser = async (req, res) => {
-  try {
-    let { phone, password } = req.body;
-
-    // NORMALIZE PHONE
-    phone = normalizePhone(phone);
-
-    // VALIDATION
-    if (!phone || !password) {
-      return res.status(400).json({
-        message:
-          "Phone and password required"
-      });
-    }
-
-    // FIND USER
-    const user = await User.findOne({
-        phone
-         }).populate(
-        "branch",
-         "name"
-       );
-    if (!user) {
-      return res.status(400).json({
-        message:
-          "Invalid credentials"
-      });
-    }
-
-    // CHECK PASSWORD
-    const match =
-      await bcrypt.compare(
-        password,
-        user.password
-      );
-
-    if (!match) {
-      return res.status(400).json({
-        message:
-          "Invalid credentials"
-      });
-    }
-
-    // TOKEN
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "30d" }
-    );
-
-     // BRANCH SUBSCRIPTION
-let subscription = null;
-
-if (user.role === "staff") {
-  if (user.branch?._id) {
-    const branch =
-      await Branch.findById(
-        user.branch._id
-      ).select(
-        "subscription"
-      );
-
-    subscription =
-      branch?.subscription || null;
-  }
-} else {
-  const shop =
-    await Shop.findOne({
-      owner: user._id
-    });
-
-  if (shop) {
-    const mainBranch =
-      await Branch.findOne({
-        shop: shop._id,
-        isMain: true
-      }).select(
-        "subscription"
-      );
-
-    subscription =
-      mainBranch?.subscription || null;
-  }
-}
-   
-   
-  // RESPONSE
- return res.status(200).json({
-  token,
-  user: {
-    id: user._id,
-    name: user.name,
-    businessName:
-      user.businessName,
-    phone: user.phone,
-    role: user.role,
-    owner: user.owner,
-
-    branch:
-      user.role === "staff"
-        ? (
-            user.branch
-              ? {
-                  id: user.branch._id,
-                  name:
-                    user.branch.name,
-                  subscription
-                }
-              : null
-          )
-        : null,
-
-    subscription
-  }
-});
-
-  } catch (error) {
-    console.log(
-      "LOGIN ERROR:",
-      error.message
-    );
-
-    return res.status(500).json({
-      message: error.message
-    });
-  }
-};
-
- 
-const addStaff =
-  async (req, res) => {
+// AUTH
+const protect =
+  async (
+    req,
+    res,
+    next
+  ) => {
     try {
+      let token;
+
       if (
-        !req.user ||
-        !req.ownerId
+        req.headers.authorization &&
+        req.headers.authorization.startsWith(
+          "Bearer"
+        )
       ) {
+        token =
+          req.headers.authorization.split(
+            " "
+          )[1];
+      }
+
+      if (!token) {
         return res.status(401).json({
           message:
-            "Invalid owner session"
+            "Not authorized, no token"
         });
       }
 
-      const {
-        name,
-        phone,
-        password,
-        branchId
-      } = req.body;
+      let decoded;
+
+      try {
+        decoded =
+          jwt.verify(
+            token,
+            process.env.JWT_SECRET
+          );
+      } catch {
+        return res.status(401).json({
+          message:
+            "Invalid or expired token"
+        });
+      }
+
+      const user =
+        await User.findById(
+          decoded.id
+        ).select(
+          "-password"
+        );
+
+      if (!user) {
+        return res.status(401).json({
+          message:
+            "User not found"
+        });
+      }
+
+      if (!user.isActive) {
+        return res.status(403).json({
+          message:
+            "Account disabled"
+        });
+      }
 
       if (
-        !name ||
-        !phone ||
-        !password ||
-        !branchId
+        user.role ===
+          "staff" &&
+        !user.owner
       ) {
-        return res.status(400).json({
+        return res.status(403).json({
           message:
-            "Name, phone, password and branch required"
+            "Invalid staff account"
         });
       }
 
-      const normalizedPhone =
-        normalizePhone(phone);
-
-      const exists =
-        await User.findOne({
-          phone:
-            normalizedPhone
-        });
-
-      if (exists) {
-        return res.status(400).json({
+      if (
+        user.role ===
+          "staff" &&
+        !user.branch
+      ) {
+        return res.status(403).json({
           message:
-            "Phone already registered"
+            "Staff has no branch assigned"
         });
       }
 
-      // OWNER SHOP
+      req.user = user;
+
+      req.ownerId =
+        user.role ===
+        "owner"
+          ? user._id
+          : user.owner;
+
+      next();
+
+    } catch (error) {
+      console.log(
+        "AUTH ERROR:",
+        error.message
+      );
+
+      return res.status(401).json({
+        message:
+          "Authentication failed"
+      });
+    }
+  };
+
+
+// BRANCH ACCESS
+const branchAccess =
+  async (
+    req,
+    res,
+    next
+  ) => {
+    try {
+      const branchId =
+        req.headers["x-branch-id"];
+
+      console.log(
+        "HEADER BRANCH ID:",
+        branchId
+      );
+
+      console.log(
+        "OWNER ID:",
+        req.ownerId
+      );
+
+      if (!branchId) {
+        return res.status(400).json({
+          message:
+            "No branch selected"
+        });
+      }
+
       const shop =
         await Shop.findOne({
           owner:
             req.ownerId
         });
+
+      console.log(
+        "SHOP FOUND:",
+        shop?._id
+      );
 
       if (!shop) {
         return res.status(404).json({
@@ -381,146 +168,129 @@ const addStaff =
         });
       }
 
-      // VALIDATE BRANCH
       const branch =
         await Branch.findOne({
           _id:
             branchId,
           shop:
             shop._id,
-          isActive: true
+          isActive:
+            true
         });
 
+      console.log(
+        "BRANCH FOUND:",
+        branch
+      );
+
       if (!branch) {
-        return res.status(400).json({
+        return res.status(403).json({
           message:
-            "Invalid branch selected"
+            "Invalid branch access"
         });
       }
 
-      const hashedPassword =
-        await bcrypt.hash(
-          password,
-          10
-        );
+// 🔥 SUBSCRIPTION CHECK
+if (
+  !branch.subscription ||
+  !branch.subscription.isActive ||
+  !branch.subscription.expiresAt ||
+  new Date(branch.subscription.expiresAt) <
+    new Date()
+) {
+  return res.status(403).json({
+    message:
+      "Branch subscription expired"
+  });
+}
 
-      const staff =
-        new User({
-          name:
-            name.trim(),
-
-          phone:
-            normalizedPhone,
-
-          password:
-            hashedPassword,
-
-          role:
-            "staff",
-
-          owner:
-            req.ownerId,
-
-          branch:
-            branch._id,
-
-          businessName:
-            req.user.businessName,
-
-          businessCategory:
-            req.user.businessCategory,
-
-          mkoa:
-            req.user.mkoa,
-
-          wilaya:
-            req.user.wilaya,
-
-          mtaa:
-            req.user.mtaa
+      // STAFF RESTRICTION
+      if (
+        req.user.role ===
+          "staff" &&
+        req.user.branch.toString() !==
+          branch._id.toString()
+      ) {
+        return res.status(403).json({
+          message:
+            "Staff cannot access this branch"
         });
+      }
 
-      await staff.save();
+      req.branch =
+        branch;
 
-      return res.status(201).json({
-        message:
-          "Staff created successfully",
+      req.branchId =
+        branch._id;
 
-        staff: {
-          id:
-            staff._id,
+      console.log(
+        "REQ BRANCH ID SET:",
+        req.branchId
+      );
 
-          name:
-            staff.name,
-
-          phone:
-            staff.phone,
-
-          role:
-            staff.role,
-
-          branch:
-            {
-              id:
-                branch._id,
-
-              name:
-                branch.name
-            }
-        }
-      });
+      next();
 
     } catch (error) {
       console.log(
-        "ADD STAFF ERROR:",
+        "BRANCH ACCESS ERROR:",
         error
       );
 
-      return res.status(500).json({
-        message:
-          error.message ||
-          "Failed to create staff"
-      });
-    }
-  };
-
- const getStaff =
-  async (req, res) => {
-    try {
-      const staff =
-        await User.find({
-          owner:
-            req.ownerId,
-          role:
-            "staff",
-          isActive: true
-        })
-          .select(
-            "name phone role branch createdAt"
-          )
-          .populate(
-            "branch",
-            "name"
-          )
-          .sort({
-            createdAt: -1
-          })
-          .lean();
-
-      return res.status(200).json(
-        staff
-      );
-
-    } catch (error) {
       return res.status(500).json({
         message:
           error.message
       });
     }
   };
+
+
+// OWNER ONLY
+const onlyOwner =
+  (
+    req,
+    res,
+    next
+  ) => {
+    if (
+      req.user.role !==
+      "owner"
+    ) {
+      return res.status(403).json({
+        message:
+          "Owner only action"
+      });
+    }
+
+    next();
+  };
+
+
+// ROLE CHECK
+const allowRoles =
+  (...roles) => {
+    return (
+      req,
+      res,
+      next
+    ) => {
+      if (
+        !roles.includes(
+          req.user.role
+        )
+      ) {
+        return res.status(403).json({
+          message:
+            "Access denied"
+        });
+      }
+
+      next();
+    };
+  };
+
 module.exports = {
-  registerUser,
-  loginUser,
-  getStaff,
-  addStaff
+  protect,
+  branchAccess,
+  onlyOwner,
+  allowRoles
 };
