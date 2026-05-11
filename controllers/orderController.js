@@ -1,4 +1,4 @@
- const mongoose = require("mongoose");
+    const mongoose = require("mongoose");
  const Order = require("../models/Order");
 const cleanOCRText = require("../utils/cleanOCRText");
 const parseOrderText = require("../utils/parseOrderText");
@@ -7,7 +7,11 @@ const { readImageText } = require("../services/ocrService");
 
 
 // 🔥 HELPER (avoid duplicate logic)
- const processOrder = async (ownerId, text) => {
+ const processOrder = async (
+  ownerId,
+  branchId,
+  text
+) => {
   const cleanText = cleanOCRText(text);
   const items = parseOrderText(cleanText);
 
@@ -15,15 +19,20 @@ const { readImageText } = require("../services/ocrService");
     throw new Error("No items detected");
   }
 
-   const result = await analyzeProfit(ownerId, items);
+   const result = await analyzeProfit(
+  ownerId,
+  branchId,
+  items
+);
 
   let order = null;
 
 try {
 
   order = await Order.create({
-    owner: ownerId,
-    rawText: cleanText,
+  owner: ownerId,
+  branch: branchId,
+  rawText: cleanText,
     items: result.items,
     buyTotal: result.buyTotal,
     sellTotal: result.sellTotal,
@@ -54,7 +63,11 @@ const scanOrder = async (req, res) => {
     }
 
     const { order, cleanText, result } =
-       await processOrder(req.ownerId, text);
+      await processOrder(
+        req.ownerId,
+        req.branchId,
+        text
+       );
 
     res.status(200).json({
        orderId: order?._id || null,
@@ -90,7 +103,11 @@ const scanImage = async (req, res) => {
     const text = await readImageText(req.file);
 
     const { order, cleanText, result } =
-       await processOrder(req.ownerId, text);
+        await processOrder(
+           req.ownerId,
+           req.branchId,
+          text
+         );
 
     res.status(200).json({
      orderId: order?._id || null,
@@ -122,8 +139,9 @@ const getOrderHistory = async (req, res) => {
     const skip = page * limit;
 
     const orders = await Order.find({
-        owner: req.ownerId
-    })
+        owner: req.ownerId,
+        branch: req.branchId
+      })
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(skip)
@@ -145,7 +163,8 @@ const getOrderById = async (req, res) => {
   try {
     const order = await Order.findOne({
       _id: req.params.id,
-        owner: req.ownerId
+        owner: req.ownerId,
+         branch: req.branchId
     }).lean(); // 🔥 faster read
 
     if (!order) {
@@ -165,71 +184,116 @@ const getOrderById = async (req, res) => {
 
 // 🔥 ORDER PROFIT SUMMARY
  
-const getOrderProfitSummary = async (req, res) => {
+ const getOrderProfitSummary = async (req, res) => {
   try {
-     const ownerId = req.ownerId;
+    const ownerId =
+      new mongoose.Types.ObjectId(
+        req.ownerId
+      );
 
-    // 🔥 TODAY RANGE
+    const branchId =
+      new mongoose.Types.ObjectId(
+        req.branchId
+      );
+
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setHours(
+      0,
+      0,
+      0,
+      0
+    );
 
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrow =
+      new Date(today);
 
-    const result = await Order.aggregate([
-      {
-         $match: { owner: ownerId }
-      },
-      {
-        $group: {
-          _id: null,
-          totalOrderProfit: { $sum: "$totalProfit" },
-          totalBuy: { $sum: "$buyTotal" },
-          totalSell: { $sum: "$sellTotal" },
-          count: { $sum: 1 }
+    tomorrow.setDate(
+      tomorrow.getDate() + 1
+    );
+
+    const result =
+      await Order.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalOrderProfit: {
+              $sum:
+                "$totalProfit"
+            },
+            totalBuy: {
+              $sum:
+                "$buyTotal"
+            },
+            totalSell: {
+              $sum:
+                "$sellTotal"
+            },
+            count: {
+              $sum: 1
+            }
+          }
         }
-      }
-    ]);
+      ]);
 
-    // 🔥 TODAY ONLY
-    const todayAgg = await Order.aggregate([
-      {
-         $match: {
-          owner: ownerId,
-          createdAt: { $gte: today, $lt: tomorrow }
+    const todayAgg =
+      await Order.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: today,
+              $lt:
+                tomorrow
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            todayOrderProfit:
+              {
+                $sum:
+                  "$totalProfit"
+              }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          todayOrderProfit: { $sum: "$totalProfit" }
-        }
-      }
-    ]);
+      ]);
 
-    const data = result[0] || {
-      totalOrderProfit: 0,
-      totalBuy: 0,
-      totalSell: 0,
-      count: 0
-    };
+    const data =
+      result[0] || {
+        totalOrderProfit:
+          0,
+        totalBuy: 0,
+        totalSell: 0,
+        count: 0
+      };
 
-    const todayData = todayAgg[0] || {
-      todayOrderProfit: 0
-    };
+    const todayData =
+      todayAgg[0] || {
+        todayOrderProfit:
+          0
+      };
 
     res.status(200).json({
       ...data,
-      todayOrderProfit: todayData.todayOrderProfit
+      todayOrderProfit:
+        todayData.todayOrderProfit
     });
 
   } catch (error) {
     res.status(500).json({
-      message: error.message
+      message:
+        error.message
     });
   }
 };
- 
 module.exports = {
   scanOrder,
   scanImage,
