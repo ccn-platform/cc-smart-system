@@ -1,11 +1,12 @@
-  const express =
-require("express");
+ const express =
+  require("express");
 
 const router =
-express.Router();
+  express.Router();
 
 const {
-  protect
+  protect,
+  branchAccess
 } = require(
   "../middleware/authMiddleware"
 );
@@ -22,31 +23,78 @@ const {
 } = require(
   "../controllers/creditController"
 );
-router.post("/scan-fingerprint",protect,scanFingerprint);
+
+
+// SCAN FINGERPRINT
+router.post(
+  "/scan-fingerprint",
+  protect,
+  branchAccess,
+  scanFingerprint
+);
+
 
 // FIND OR CREATE CUSTOMER
-router.post("/customer",protect,findOrCreateCustomer);
+router.post(
+  "/customer",
+  protect,
+  branchAccess,
+  findOrCreateCustomer
+);
 
 
 // CHECK CREDIT
-router.post("/check",protect,checkCredit);
+router.post(
+  "/check",
+  protect,
+  branchAccess,
+  checkCredit
+);
 
 
 // CREATE LOAN
-router.post("/loan",protect,createDebtLoan);
+router.post(
+  "/loan",
+  protect,
+  branchAccess,
+  createDebtLoan
+);
 
 
 // RECEIVE PAYMENT
-router.post("/payment",protect,receivePayment);
+router.post(
+  "/payment",
+  protect,
+  branchAccess,
+  receivePayment
+);
 
 
 // LOAN HISTORY
-router.get("/history",protect,getLoanHistory);
+router.get(
+  "/history",
+  protect,
+  branchAccess,
+  getLoanHistory
+);
+
+
+// OVERDUE
+router.get(
+  "/overdue",
+  protect,
+  branchAccess,
+  getOverdueLoans
+);
 
 
 // SINGLE LOAN
- router.get("/overdue", protect, getOverdueLoans); // 🔥 iwe juu
+router.get(
+  "/:id",
+  protect,
+  branchAccess,
+  getLoanById
+);
 
-router.get("/:id", protect, getLoanById);         // 🔥 iwe chini
 module.exports =
-router;
+  router;
