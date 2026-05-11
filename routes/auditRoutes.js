@@ -1,11 +1,12 @@
-const express =
-require("express");
+  const express =
+  require("express");
 
 const router =
-express.Router();
+  express.Router();
 
 const {
-  protect
+  protect,
+  branchAccess
 } = require(
   "../middleware/authMiddleware"
 );
@@ -23,6 +24,7 @@ const {
 router.post(
   "/manual",
   protect,
+  branchAccess,
   createManualAudit
 );
 
@@ -31,6 +33,7 @@ router.post(
 router.get(
   "/history",
   protect,
+  branchAccess,
   getAuditHistory
 );
 
@@ -39,8 +42,9 @@ router.get(
 router.get(
   "/:id",
   protect,
+  branchAccess,
   getAuditById
 );
 
 module.exports =
-router;
+  router;
