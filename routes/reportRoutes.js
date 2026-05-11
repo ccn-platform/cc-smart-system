@@ -1,100 +1,66 @@
-const express = require("express");
+ const express = require("express");
 const router = express.Router();
 
-const {
-  protect,
-  branchAccess
-} = require("../middleware/authMiddleware");
+const middleware =
+  require("../middleware/authMiddleware");
 
 const reportController =
   require("../controllers/reportController");
 
-// SAFE CHECK
-const safe =
-  (fn, name) => {
-    if (typeof fn !== "function") {
-      console.error(
-        `${name} is not a function`
-      );
-
-      return (req, res) =>
-        res.status(500).json({
-          message:
-            `${name} missing`
-        });
-    }
-
-    return fn;
-  };
+console.log("MIDDLEWARE:", {
+  protect:
+    typeof middleware.protect,
+  branchAccess:
+    typeof middleware.branchAccess
+});
 
 router.get(
   "/daily",
-  protect,
-  branchAccess,
-  safe(
-    reportController.getDailyReport,
-    "getDailyReport"
-  )
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getDailyReport
 );
 
 router.get(
   "/weekly",
-  protect,
-  branchAccess,
-  safe(
-    reportController.getWeeklyReport,
-    "getWeeklyReport"
-  )
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getWeeklyReport
 );
 
 router.get(
   "/monthly",
-  protect,
-  branchAccess,
-  safe(
-    reportController.getMonthlyReport,
-    "getMonthlyReport"
-  )
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getMonthlyReport
 );
 
 router.get(
   "/inventory",
-  protect,
-  branchAccess,
-  safe(
-    reportController.getInventoryReport,
-    "getInventoryReport"
-  )
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getInventoryReport
 );
 
 router.get(
   "/top-products",
-  protect,
-  branchAccess,
-  safe(
-    reportController.getTopProductsReport,
-    "getTopProductsReport"
-  )
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getTopProductsReport
 );
 
 router.get(
   "/credit",
-  protect,
-  branchAccess,
-  safe(
-    reportController.getCreditReport,
-    "getCreditReport"
-  )
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getCreditReport
 );
 
 router.get(
   "/expense",
-  protect,
-  branchAccess,
-  safe(
-    reportController.getExpenseReport,
-    "getExpenseReport"
-  )
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getExpenseReport
 );
 
 module.exports = router;
