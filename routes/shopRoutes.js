@@ -6,20 +6,11 @@ const {
 } = require("../middleware/authMiddleware");
 
 const {
-  createShop,
   getMyShop,
   updateShop,
   addBranch,
   getBranches
 } = require("../controllers/shopController");
-
-
-// CREATE SHOP
-router.post(
-  "/create",
-  protect,
-  createShop
-);
 
 
 // GET MY SHOP
