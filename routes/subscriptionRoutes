@@ -1,10 +1,21 @@
-const express = require("express");
+  const express = require("express");
 const router = express.Router();
 
-const { protect } = require("../middleware/authMiddleware");
-const User = require("../models/User");
-const clickpesa = require("../services/clickpesaService");
-const { activatePlan } = require("../services/subscriptionService");
+const {
+  protect,
+  branchAccess
+} = require("../middleware/authMiddleware");
+
+const Branch =
+  require("../models/Branch");
+
+const clickpesa =
+  require("../services/clickpesaService");
+
+const {
+  activatePlan
+} = require("../services/subscriptionService");
+
 
 // 🔥 PLAN PRICES
 const plans = {
@@ -14,157 +25,216 @@ const plans = {
   yearly: 60000
 };
 
-// 🔥 1. INITIATE PAYMENT
-router.post("/pay", protect, async (req, res) => {
-  try {
-    const { plan } = req.body;
 
-    if (!plan || !plans[plan]) {
-      return res.status(400).json({
-        message: "Invalid plan"
+// 🔥 INITIATE PAYMENT
+router.post(
+  "/pay",
+  protect,
+  branchAccess,
+  async (req, res) => {
+    try {
+      const { plan } = req.body;
+
+      if (!plan || !plans[plan]) {
+        return res.status(400).json({
+          message: "Invalid plan"
+        });
+      }
+
+      const branch =
+        await Branch.findById(
+          req.branchId
+        );
+
+      if (!branch) {
+        return res.status(404).json({
+          message: "Branch not found"
+        });
+      }
+
+      if (
+        branch.pendingPlan &&
+        branch.pendingExpiresAt &&
+        branch.pendingExpiresAt >
+          new Date()
+      ) {
+        return res.status(400).json({
+          message:
+            "You have a pending payment"
+        });
+      }
+
+      if (
+        branch.pendingExpiresAt &&
+        branch.pendingExpiresAt <=
+          new Date()
+      ) {
+        branch.pendingPlan = null;
+        branch.paymentReference =
+          null;
+        branch.pendingExpiresAt =
+          null;
+      }
+
+      const amount =
+        plans[plan];
+
+      const reference =
+        `CCN${Date.now()}${Math.floor(
+          Math.random() * 1000
+        )}`;
+
+      branch.pendingPlan =
+        plan;
+
+      branch.paymentReference =
+        reference;
+
+      branch.pendingExpiresAt =
+        new Date(
+          Date.now() +
+            5 *
+              60 *
+              1000
+        );
+
+      await branch.save();
+
+      await clickpesa.mobilePush(
+        branch.phone ||
+          req.user.phone,
+        amount,
+        reference
+      );
+
+      res.json({
+        message:
+          "Payment initiated",
+        reference
+      });
+
+    } catch (e) {
+      console.error(e);
+
+      res.status(400).json({
+        message: e.message
       });
     }
+  }
+);
 
-    const user = await User.findById(req.user.id);
 
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found"
+// 🔥 CALLBACK
+router.post(
+  "/callback",
+  async (req, res) => {
+    try {
+      const {
+        reference,
+        status
+      } = req.body;
+
+      console.log(
+        "CALLBACK:",
+        req.body
+      );
+
+      if (status !== "SUCCESS") {
+        return res.sendStatus(200);
+      }
+
+      const branch =
+        await Branch.findOne({
+          paymentReference:
+            reference
+        });
+
+      if (!branch) {
+        return res.sendStatus(404);
+      }
+
+      if (
+        branch.pendingExpiresAt &&
+        branch.pendingExpiresAt <=
+          new Date()
+      ) {
+        console.log(
+          "Payment expired"
+        );
+
+        return res.sendStatus(200);
+      }
+
+      if (!branch.pendingPlan) {
+        return res.sendStatus(200);
+      }
+
+      const subscription =
+        await activatePlan(
+          branch,
+          branch.pendingPlan
+        );
+
+      console.log(
+        "SUBSCRIPTION ACTIVATED:",
+        subscription
+      );
+
+      res.sendStatus(200);
+
+    } catch (e) {
+      console.error(
+        "CALLBACK ERROR:",
+        e
+      );
+
+      res.sendStatus(500);
+    }
+  }
+);
+
+
+// 🔥 TEST
+router.post(
+  "/activate",
+  protect,
+  branchAccess,
+  async (req, res) => {
+    try {
+      const { plan } =
+        req.body;
+
+      const branch =
+        await Branch.findById(
+          req.branchId
+        );
+
+      if (!branch) {
+        return res.status(404).json({
+          message:
+            "Branch not found"
+        });
+      }
+
+      const subscription =
+        await activatePlan(
+          branch,
+          plan
+        );
+
+      res.json({
+        message:
+          "Activated (TEST MODE)",
+        subscription
+      });
+
+    } catch (e) {
+      res.status(400).json({
+        message: e.message
       });
     }
-
-    // 🔥 CHECK PENDING + EXPIRY
-    if (
-      user.pendingPlan &&
-      user.pendingExpiresAt &&
-      user.pendingExpiresAt > new Date()
-    ) {
-      return res.status(400).json({
-        message: "You have a pending payment"
-      });
-    }
-
-    // 🔥 CLEAN EXPIRED
-    if (
-      user.pendingExpiresAt &&
-      user.pendingExpiresAt <= new Date()
-    ) {
-      user.pendingPlan = null;
-      user.paymentReference = null;
-      user.pendingExpiresAt = null;
-    }
-
-    const amount = plans[plan];
-
-    const reference = `CCN${Date.now()}${Math.floor(Math.random() * 1000)}`;
-
-    // 🔥 SAVE BEFORE PAYMENT
-    user.pendingPlan = plan;
-    user.paymentReference = reference;
-
-    // 🔥 EXPIRY (dakika 5)
-    user.pendingExpiresAt = new Date(
-      Date.now() + 5 * 60 * 1000
-    );
-
-    await user.save();
-
-    // 🔥 CALL CLICKPESA
-    await clickpesa.mobilePush(
-      user.phone,
-      amount,
-      reference
-    );
-
-    res.json({
-      message: "Payment initiated",
-      reference
-    });
-
-  } catch (e) {
-    console.error(e);
-    res.status(400).json({
-      message: e.message
-    });
   }
-});
+);
 
-
-// 🔥 2. CALLBACK (CLICKPESA WILL HIT THIS)
-router.post("/callback", async (req, res) => {
-  try {
-    const { reference, status } = req.body;
-
-    console.log("CALLBACK:", req.body);
-
-    if (status !== "SUCCESS") {
-      return res.sendStatus(200);
-    }
-
-    const user = await User.findOne({
-      paymentReference: reference
-    });
-
-    if (!user) {
-      return res.sendStatus(404);
-    }
-
-    // 🔥 CHECK EXPIRY
-    if (
-      user.pendingExpiresAt &&
-      user.pendingExpiresAt <= new Date()
-    ) {
-      console.log("Payment expired, ignoring...");
-      return res.sendStatus(200);
-    }
-
-    if (!user.pendingPlan) {
-      return res.sendStatus(200);
-    }
-
-    // 🔥 ACTIVATE PLAN
-    const subscription = await activatePlan(
-      user,
-      user.pendingPlan
-    );
-
-    // 🔥 CLEANUP
-    user.pendingPlan = null;
-    user.paymentReference = null;
-    user.pendingExpiresAt = null;
-
-    await user.save();
-
-    console.log("SUBSCRIPTION ACTIVATED:", subscription);
-
-    res.sendStatus(200);
-
-  } catch (e) {
-    console.error("CALLBACK ERROR:", e);
-    res.sendStatus(500);
-  }
-});
-
-
-// 🔥 (OPTIONAL) TEST ROUTE
-router.post("/activate", protect, async (req, res) => {
-  try {
-    const { plan } = req.body;
-
-    const user = await User.findById(req.user.id);
-
-    const subscription = await activatePlan(user, plan);
-
-    res.json({
-      message: "Activated (TEST MODE)",
-      subscription
-    });
-
-  } catch (e) {
-    res.status(400).json({
-      message: e.message
-    });
-  }
-});
-
-module.exports = router;
+module.exports =
+  router;
