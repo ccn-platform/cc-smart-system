@@ -1,9 +1,12 @@
-   const express = require("express");
+  const express = require("express");
 const multer = require("multer");
 
 const router = express.Router();
 
-const { protect } = require("../middleware/authMiddleware");
+const {
+  protect,
+  branchAccess
+} = require("../middleware/authMiddleware");
 
 const {
   scanOrder,
@@ -14,21 +17,32 @@ const {
 } = require("../controllers/orderController");
 
 
-// 🔥 Memory storage (same as yours)
+// MEMORY STORAGE
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage:
+    multer.memoryStorage(),
+
   limits: {
-    fileSize: 5 * 1024 * 1024 // 🔥 reduce 10MB → 5MB (safer)
+    fileSize:
+      5 * 1024 * 1024
   },
-  fileFilter: (req, file, cb) => {
-    // 🔥 accept only images
+
+  fileFilter: (
+    req,
+    file,
+    cb
+  ) => {
     if (
-      file.mimetype.startsWith("image/")
+      file.mimetype.startsWith(
+        "image/"
+      )
     ) {
       cb(null, true);
     } else {
       cb(
-        new Error("Only images allowed"),
+        new Error(
+          "Only images allowed"
+        ),
         false
       );
     }
@@ -36,55 +50,73 @@ const upload = multer({
 });
 
 
-// 🔥 TEXT SCAN
+// TEXT SCAN
 router.post(
   "/scan",
   protect,
+  branchAccess,
   scanOrder
 );
 
+
+// IMAGE SCAN
 router.post(
   "/scan-image",
   protect,
-  upload.single("image"), // ✅ hii tu inatosha
-  (req, res, next) => {
-    console.log("📸 Upload request received");
+  branchAccess,
+  upload.single("image"),
+  (
+    req,
+    res,
+    next
+  ) => {
+    console.log(
+      "📸 Upload request received"
+    );
 
     if (!req.file) {
       return res.status(400).json({
-        message: "No image uploaded",
+        message:
+          "No image uploaded"
       });
     }
 
-    console.log("✅ File received:", req.file.size, "bytes");
+    console.log(
+      "✅ File received:",
+      req.file.size,
+      "bytes"
+    );
 
     next();
   },
   scanImage
 );
- 
- 
 
-// 🔥 HISTORY (with pagination ?page=0)
+
+// HISTORY
 router.get(
   "/history",
   protect,
+  branchAccess,
   getOrderHistory
 );
 
-// 🔥 ORDER PROFIT SUMMARY (iwe juu ya :id)
+
+// PROFIT SUMMARY
 router.get(
   "/profit-summary",
   protect,
+  branchAccess,
   getOrderProfitSummary
 );
 
-// 🔥 SINGLE ORDER
+
+// SINGLE ORDER
 router.get(
   "/:id",
   protect,
+  branchAccess,
   getOrderById
 );
 
- 
 module.exports = router;
