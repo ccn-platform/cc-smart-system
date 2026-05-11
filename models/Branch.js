@@ -1,5 +1,48 @@
-  const mongoose =
+ const mongoose =
   require("mongoose");
+
+const subscriptionSchema =
+  new mongoose.Schema(
+    {
+      plan: {
+        type: String,
+        enum: [
+          "trial",
+          "weekly",
+          "monthly",
+          "six_months",
+          "yearly"
+        ],
+        default: "trial"
+      },
+
+      startDate: {
+        type: Date,
+        default: Date.now
+      },
+
+      expiresAt: {
+        type: Date,
+        default: () =>
+          new Date(
+            Date.now() +
+            14 *
+              24 *
+              60 *
+              60 *
+              1000
+          )
+      },
+
+      isActive: {
+        type: Boolean,
+        default: true
+      }
+    },
+    {
+      _id: false
+    }
+  );
 
 const branchSchema =
   new mongoose.Schema(
@@ -40,6 +83,35 @@ const branchSchema =
       isActive: {
         type: Boolean,
         default: true
+      },
+
+      // 🔥 SUBSCRIPTION
+      subscription: {
+        type:
+          subscriptionSchema,
+        default: () => ({})
+      },
+
+      pendingPlan: {
+        type: String,
+        enum: [
+          "weekly",
+          "monthly",
+          "six_months",
+          "yearly"
+        ],
+        default: null
+      },
+
+      paymentReference: {
+        type: String,
+        default: null,
+        index: true
+      },
+
+      pendingExpiresAt: {
+        type: Date,
+        default: null
       }
     },
     {
