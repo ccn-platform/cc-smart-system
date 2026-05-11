@@ -1,8 +1,9 @@
-const express = require("express");
+  const express = require("express");
 const router = express.Router();
 
 const {
-  protect
+  protect,
+  branchAccess
 } = require("../middleware/authMiddleware");
 
 const {
@@ -16,6 +17,7 @@ const {
 router.post(
   "/",
   protect,
+  branchAccess,
   createSale
 );
 
@@ -24,6 +26,7 @@ router.post(
 router.get(
   "/",
   protect,
+  branchAccess,
   getSales
 );
 
@@ -32,6 +35,7 @@ router.get(
 router.get(
   "/today",
   protect,
+  branchAccess,
   getTodaySales
 );
 
