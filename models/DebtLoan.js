@@ -1,140 +1,165 @@
-const mongoose =
-require("mongoose");
+  const mongoose =
+  require("mongoose");
 
 const debtLoanSchema =
-new mongoose.Schema(
-  {
-    customer: {
-      type:
-        mongoose.Schema.Types.ObjectId,
-      ref:
-        "CustomerIdentity",
-      required: true,
-      index: true
-    },
-  owner: {
-    type: mongoose.Schema.Types.ObjectId,
-     ref: "User",
-     required: true,
-     index: true
-   },
+  new mongoose.Schema(
+    {
+      customer: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+        ref:
+          "CustomerIdentity",
+        required: true,
+        index: true
+      },
 
-   createdBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "User",
-  default: null
-},
-    branch: {
-      type:
-        mongoose.Schema.Types.ObjectId,
-      ref: "Branch",
-      default: null
-    },
+      owner: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+        index: true
+      },
 
-    businessCategory: {
-      type: String,
-      default: "",
-      index: true
-    },
+      createdBy: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null
+      },
 
-    loanNumber: {
-  type: String,
-  unique: true,
-  index: true,
-  required: true
-},
-     principalAmount: {
-  type: Number,
-  required: true,
-  min: 1
-},
+      branch: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+        ref: "Branch",
+        required: true,
+        index: true
+      },
 
-     balanceAmount: {
-  type: Number,
-  required: true,
-  min: 0
-},
+      businessCategory: {
+        type: String,
+        default: "",
+        index: true
+      },
 
-     paidAmount: {
-  type: Number,
-  default: 0,
-  min: 0
-},
+      loanNumber: {
+        type: String,
+        required: true
+      },
 
-    dueDate: {
-      type: Date,
-      required: true
-    },
+      principalAmount: {
+        type: Number,
+        required: true,
+        min: 1
+      },
 
-    daysLate: {
-  type: Number,
-  default: 0
-},
+      balanceAmount: {
+        type: Number,
+        required: true,
+        min: 0
+      },
 
-lastPaymentDate: {
-  type: Date,
-  default: null
-},
-    status: {
-      type: String,
-      enum: [
-        "active",
-        "paid",
-        "overdue",
-        "defaulted",
-        "cancelled"
+      paidAmount: {
+        type: Number,
+        default: 0,
+        min: 0
+      },
+
+      dueDate: {
+        type: Date,
+        required: true
+      },
+
+      daysLate: {
+        type: Number,
+        default: 0
+      },
+
+      lastPaymentDate: {
+        type: Date,
+        default: null
+      },
+
+      status: {
+        type: String,
+        enum: [
+          "active",
+          "paid",
+          "overdue",
+          "defaulted",
+          "cancelled"
+        ],
+        default:
+          "active"
+      },
+
+      items: [
+        {
+          name: String,
+          qty: Number,
+          price: Number
+        }
       ],
-      default:
-        "active"
-    },
 
-    items: [
-      {
-        name: String,
-        qty: Number,
-        price: Number
+      note: {
+        type: String,
+        default: ""
+      },
+
+      approvedBy: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null
+      },
+
+      approvalMethod: {
+        type: String,
+        enum: [
+          "auto",
+          "manual"
+        ],
+        default: "auto"
       }
-    ],
-
-    note: {
-      type: String,
-      default: ""
     },
+    {
+      timestamps: true
+    }
+  );
 
-   approvedBy: {
-  type:
-    mongoose.Schema.Types.ObjectId,
-  ref: "User",
-  default: null
-},
 
-approvalMethod: {
-  type: String,
-  enum: [
-    "auto",
-    "manual"
-  ],
-  default: "auto"
-}
+// MULTI BRANCH INDEXES
+debtLoanSchema.index({
+  owner: 1,
+  branch: 1,
+  status: 1
+});
 
+debtLoanSchema.index({
+  owner: 1,
+  branch: 1,
+  customer: 1
+});
+
+debtLoanSchema.index({
+  owner: 1,
+  branch: 1,
+  dueDate: 1
+});
+
+debtLoanSchema.index(
+  {
+    owner: 1,
+    branch: 1,
+    loanNumber: 1
   },
   {
-    timestamps: true
+    unique: true
   }
 );
-debtLoanSchema.index({ owner: 1, status: 1 });
-debtLoanSchema.index({
-  customer: 1,
-  status: 1
-});
-
-debtLoanSchema.index({
-  dueDate: 1,
-  status: 1
-});
 
 module.exports =
-mongoose.model(
-  "DebtLoan",
-  debtLoanSchema
-); 
+  mongoose.model(
+    "DebtLoan",
+    debtLoanSchema
+  );
