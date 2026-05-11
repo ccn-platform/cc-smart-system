@@ -1,4 +1,4 @@
-   const mongoose = require("mongoose");
+     const mongoose = require("mongoose");
   const Sale =
 require("../models/Sale");
 
@@ -18,106 +18,139 @@ require("../models/DebtPayment");
 const Product =
 require("../models/Product");
  
- const getInventoryReport = async (req, res) => {
+  const getInventoryReport = async (req, res) => {
   try {
-    // 🔐 SECURITY
-    if (!req.ownerId) {
+    // SECURITY
+    if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
         message: "Unauthorized"
       });
     }
 
-    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
+    const ownerId =
+      new mongoose.Types.ObjectId(
+        req.ownerId
+      );
 
-    // =====================
-    // SUMMARY (NO DATE FILTER)
-    // =====================
-    const summaryAgg = await Product.aggregate([
-      {
-        $match: {
-          owner: ownerId
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalProducts: { $sum: 1 },
-          stockQty: { $sum: "$stockQty" },
-          stockCostValue: {
-            $sum: {
-              $multiply: ["$stockQty", "$buyPrice"]
-            }
-          },
-          stockSaleValue: {
-            $sum: {
-              $multiply: ["$stockQty", "$sellPrice"]
+    const branchId =
+      new mongoose.Types.ObjectId(
+        req.branchId
+      );
+
+    // SUMMARY
+    const summaryAgg =
+      await Product.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalProducts: {
+              $sum: 1
+            },
+            stockQty: {
+              $sum: "$stockQty"
+            },
+            stockCostValue: {
+              $sum: {
+                $multiply: [
+                  "$stockQty",
+                  "$buyPrice"
+                ]
+              }
+            },
+            stockSaleValue: {
+              $sum: {
+                $multiply: [
+                  "$stockQty",
+                  "$sellPrice"
+                ]
+              }
             }
           }
         }
-      }
-    ]);
+      ]);
 
-    const summary = summaryAgg[0] || {
-      totalProducts: 0,
-      stockQty: 0,
-      stockCostValue: 0,
-      stockSaleValue: 0
-    };
+    const summary =
+      summaryAgg[0] || {
+        totalProducts: 0,
+        stockQty: 0,
+        stockCostValue: 0,
+        stockSaleValue: 0
+      };
 
     const expectedProfit =
-      summary.stockSaleValue - summary.stockCostValue;
+      summary.stockSaleValue -
+      summary.stockCostValue;
 
-    // =====================
     // LOW STOCK
-    // =====================
-    const lowStock = await Product.find({
-      owner: ownerId,
-      isActive: true,
-      stockQty: { $gt: 0 },
-      $expr: {
-        $lte: ["$stockQty", "$lowStockAlert"]
-      }
-    })
-      .select("name stockQty lowStockAlert")
-      .lean();
+    const lowStock =
+      await Product.find({
+        owner: ownerId,
+        branch: branchId,
+        isActive: true,
+        stockQty: { $gt: 0 },
+        $expr: {
+          $lte: [
+            "$stockQty",
+            "$lowStockAlert"
+          ]
+        }
+      })
+        .select(
+          "name stockQty lowStockAlert"
+        )
+        .lean();
 
-    // =====================
     // OUT OF STOCK
-    // =====================
-    const outOfStock = await Product.find({
-      owner: ownerId,
-      isActive: true,
-      stockQty: { $lte: 0 }
-    })
-      .select("name stockQty")
-      .lean();
+    const outOfStock =
+      await Product.find({
+        owner: ownerId,
+        branch: branchId,
+        isActive: true,
+        stockQty: { $lte: 0 }
+      })
+        .select("name stockQty")
+        .lean();
 
-    // =====================
-    // TOP VALUE PRODUCTS
-    // =====================
-    const topValue = await Product.find({
-      owner: ownerId,
-      isActive: true
-    })
-      .select("name stockQty sellPrice")
-      .sort({ stockQty: -1, sellPrice: -1 })
-      .limit(10)
-      .lean();
+    // TOP VALUE
+    const topValue =
+      await Product.find({
+        owner: ownerId,
+        branch: branchId,
+        isActive: true
+      })
+        .select(
+          "name stockQty sellPrice"
+        )
+        .sort({
+          stockQty: -1,
+          sellPrice: -1
+        })
+        .limit(10)
+        .lean();
 
-    // =====================
-    // RESPONSE
-    // =====================
     res.status(200).json({
       summary: {
-        totalProducts: summary.totalProducts,
-        stockQty: summary.stockQty,
-        stockCostValue: summary.stockCostValue,
-        stockSaleValue: summary.stockSaleValue,
+        totalProducts:
+          summary.totalProducts,
+        stockQty:
+          summary.stockQty,
+        stockCostValue:
+          summary.stockCostValue,
+        stockSaleValue:
+          summary.stockSaleValue,
         expectedProfit
       },
       alerts: {
-        lowStockCount: lowStock.length,
-        outOfStockCount: outOfStock.length
+        lowStockCount:
+          lowStock.length,
+        outOfStockCount:
+          outOfStock.length
       },
       lowStock,
       outOfStock,
@@ -125,158 +158,228 @@ require("../models/Product");
     });
 
   } catch (error) {
-    console.log("INVENTORY ERROR:", error);
+    console.log(
+      "INVENTORY ERROR:",
+      error
+    );
+
     res.status(500).json({
-      message: error.message
+      message:
+        error.message
     });
   }
 };
- const getDailyReport = async (req, res) => {
+
+  const getDailyReport = async (req, res) => {
   try {
-    // 🔐 SECURITY
-    if (!req.ownerId) {
+    // SECURITY
+    if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
         message: "Unauthorized"
       });
     }
 
-    // 🔥 USE UTC (important for consistency)
+    // USE UTC
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
     const tomorrow = new Date(today);
-    tomorrow.setUTCDate(today.getUTCDate() + 1);
+    tomorrow.setUTCDate(
+      today.getUTCDate() + 1
+    );
 
-    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
+    const ownerId =
+      new mongoose.Types.ObjectId(
+        req.ownerId
+      );
 
-    // =====================
+    const branchId =
+      new mongoose.Types.ObjectId(
+        req.branchId
+      );
+
     // SALES
-    // =====================
-    const salesAgg = await Sale.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: today, $lt: tomorrow }
+    const salesAgg =
+      await Sale.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: today,
+              $lt: tomorrow
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalSales: {
+              $sum: "$totalAmount"
+            },
+            totalProfit: {
+              $sum: "$totalProfit"
+            },
+            count: {
+              $sum: 1
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          totalSales: { $sum: "$totalAmount" },
-          totalProfit: { $sum: "$totalProfit" },
-          count: { $sum: 1 }
+      ]);
+
+    const totalSales =
+      salesAgg[0]?.totalSales || 0;
+
+    const totalSalesProfit =
+      salesAgg[0]?.totalProfit || 0;
+
+    const salesCount =
+      salesAgg[0]?.count || 0;
+
+    // PURCHASES
+    const ordersAgg =
+      await Order.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: today,
+              $lt: tomorrow
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalBuy: {
+              $sum: "$buyTotal"
+            },
+            totalSellValue: {
+              $sum: "$sellTotal"
+            },
+            totalOrderProfit: {
+              $sum: "$totalProfit"
+            },
+            count: {
+              $sum: 1
+            }
+          }
         }
-      }
-    ]);
+      ]);
 
-    const totalSales = salesAgg[0]?.totalSales || 0;
-    const totalSalesProfit = salesAgg[0]?.totalProfit || 0;
-    const salesCount = salesAgg[0]?.count || 0;
+    const totalBuy =
+      ordersAgg[0]?.totalBuy || 0;
 
-    // =====================
-    // PURCHASES (ORDERS)
-    // =====================
-    const ordersAgg = await Order.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: today, $lt: tomorrow }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalBuy: { $sum: "$buyTotal" },
-          totalSellValue: { $sum: "$sellTotal" },
-          totalOrderProfit: { $sum: "$totalProfit" },
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+    const totalSellValue =
+      ordersAgg[0]?.totalSellValue || 0;
 
-    const totalBuy = ordersAgg[0]?.totalBuy || 0;
-    const totalSellValue = ordersAgg[0]?.totalSellValue || 0;
-    const totalOrderProfit = ordersAgg[0]?.totalOrderProfit || 0;
-    const orderCount = ordersAgg[0]?.count || 0;
+    const totalOrderProfit =
+      ordersAgg[0]?.totalOrderProfit || 0;
 
-    // =====================
+    const orderCount =
+      ordersAgg[0]?.count || 0;
+
     // CASH
-    // =====================
-    const cashAgg = await CashEntry.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          status: "active",
-          createdAt: { $gte: today, $lt: tomorrow }
+    const cashAgg =
+      await CashEntry.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            status: "active",
+            createdAt: {
+              $gte: today,
+              $lt: tomorrow
+            }
+          }
+        },
+        {
+          $group: {
+            _id: "$type",
+            total: {
+              $sum: "$amount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: "$type",
-          total: { $sum: "$amount" }
-        }
-      }
-    ]);
+      ]);
 
     let cashIncome = 0;
     let totalExpense = 0;
 
-    cashAgg.forEach(c => {
-      if (c._id === "income") cashIncome = c.total;
-      if (c._id === "expense") totalExpense = c.total;
+    cashAgg.forEach((c) => {
+      if (c._id === "income") {
+        cashIncome = c.total;
+      }
+
+      if (c._id === "expense") {
+        totalExpense = c.total;
+      }
     });
 
-    // =====================
-    // CREDIT (LOANS)
-    // =====================
-    const loanAgg = await DebtLoan.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: today, $lt: tomorrow }
+    // LOANS
+    const loanAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: today,
+              $lt: tomorrow
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalIssued: {
+              $sum:
+                "$principalAmount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          totalIssued: { $sum: "$principalAmount" }
-        }
-      }
-    ]);
+      ]);
 
-    const loansIssued = loanAgg[0]?.totalIssued || 0;
+    const loansIssued =
+      loanAgg[0]?.totalIssued || 0;
 
-    // =====================
     // PAYMENTS
-    // =====================
-    const paymentAgg = await DebtPayment.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: today, $lt: tomorrow }
+    const paymentAgg =
+      await DebtPayment.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: today,
+              $lt: tomorrow
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalCollected: {
+              $sum: "$amount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          totalCollected: { $sum: "$amount" }
-        }
-      }
-    ]);
+      ]);
 
-    const debtCollected = paymentAgg[0]?.totalCollected || 0;
+    const debtCollected =
+      paymentAgg[0]
+        ?.totalCollected || 0;
 
-    // =====================
-    // OVERDUE (ALL TIME)
-    // =====================
-    const overdueCount = await DebtLoan.countDocuments({
-      owner: ownerId,
-      status: "overdue"
-    });
+    // OVERDUE
+    const overdueCount =
+      await DebtLoan.countDocuments({
+        owner: ownerId,
+        branch: branchId,
+        status: "overdue"
+      });
 
-    // =====================
     // CALCULATIONS
-    // =====================
     const netPosition =
       totalSales +
       cashIncome +
@@ -294,7 +397,9 @@ require("../models/Product");
 
     const profitMargin =
       totalBusinessProfit > 0
-        ? (netProfit / totalBusinessProfit) * 100
+        ? (netProfit /
+            totalBusinessProfit) *
+          100
         : 0;
 
     const profitStatus =
@@ -302,9 +407,7 @@ require("../models/Product");
         ? "BIASHARA INA FAIDA"
         : "BIASHARA INA HASARA";
 
-    // =====================
     // RESPONSE
-    // =====================
     res.status(200).json({
       date: today,
 
@@ -342,17 +445,23 @@ require("../models/Product");
     });
 
   } catch (error) {
-    console.log("DAILY REPORT ERROR:", error);
+    console.log(
+      "DAILY REPORT ERROR:",
+      error
+    );
+
     res.status(500).json({
-      message: error.message
+      message:
+        error.message
     });
   }
 };
 
- const getMonthlyReport = async (req, res) => {
+ 
+const getMonthlyReport = async (req, res) => {
   try {
-    // 🔐 SECURITY
-    if (!req.ownerId) {
+    // SECURITY
+    if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
         message: "Unauthorized"
       });
@@ -360,140 +469,217 @@ require("../models/Product");
 
     const now = new Date();
 
-    // 🔥 USE UTC (important)
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    // USE UTC
+    const start = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        1
+      )
+    );
 
-    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
+    const end = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth() + 1,
+        1
+      )
+    );
 
-    // =====================
+    const ownerId =
+      new mongoose.Types.ObjectId(
+        req.ownerId
+      );
+
+    const branchId =
+      new mongoose.Types.ObjectId(
+        req.branchId
+      );
+
     // SALES
-    // =====================
-    const salesAgg = await Sale.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: start, $lt: end }
+    const salesAgg =
+      await Sale.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalSales: {
+              $sum: "$totalAmount"
+            },
+            totalProfit: {
+              $sum: "$totalProfit"
+            },
+            count: {
+              $sum: 1
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          totalSales: { $sum: "$totalAmount" },
-          totalProfit: { $sum: "$totalProfit" },
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+      ]);
 
-    const totalSales = salesAgg[0]?.totalSales || 0;
-    const totalProfit = salesAgg[0]?.totalProfit || 0;
-    const salesCount = salesAgg[0]?.count || 0;
+    const totalSales =
+      salesAgg[0]?.totalSales || 0;
 
-    // =====================
+    const totalProfit =
+      salesAgg[0]?.totalProfit || 0;
+
+    const salesCount =
+      salesAgg[0]?.count || 0;
+
     // PURCHASES
-    // =====================
-    const ordersAgg = await Order.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: start, $lt: end }
+    const ordersAgg =
+      await Order.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalBuy: {
+              $sum: "$buyTotal"
+            },
+            totalSellValue: {
+              $sum: "$sellTotal"
+            },
+            totalOrderProfit: {
+              $sum: "$totalProfit"
+            },
+            count: {
+              $sum: 1
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          totalBuy: { $sum: "$buyTotal" },
-          totalSellValue: { $sum: "$sellTotal" },
-          totalOrderProfit: { $sum: "$totalProfit" },
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+      ]);
 
-    const totalBuy = ordersAgg[0]?.totalBuy || 0;
-    const totalSellValue = ordersAgg[0]?.totalSellValue || 0;
-    const totalOrderProfit = ordersAgg[0]?.totalOrderProfit || 0;
-    const orderCount = ordersAgg[0]?.count || 0;
+    const totalBuy =
+      ordersAgg[0]?.totalBuy || 0;
 
-    // =====================
+    const totalSellValue =
+      ordersAgg[0]
+        ?.totalSellValue || 0;
+
+    const totalOrderProfit =
+      ordersAgg[0]
+        ?.totalOrderProfit || 0;
+
+    const orderCount =
+      ordersAgg[0]?.count || 0;
+
     // CASH
-    // =====================
-    const cashAgg = await CashEntry.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          status: "active",
-          createdAt: { $gte: start, $lt: end }
+    const cashAgg =
+      await CashEntry.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            status: "active",
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: "$type",
+            total: {
+              $sum: "$amount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: "$type",
-          total: { $sum: "$amount" }
-        }
-      }
-    ]);
+      ]);
 
     let income = 0;
     let totalExpense = 0;
 
-    cashAgg.forEach(c => {
-      if (c._id === "income") income = c.total;
-      if (c._id === "expense") totalExpense = c.total;
+    cashAgg.forEach((c) => {
+      if (c._id === "income") {
+        income = c.total;
+      }
+
+      if (c._id === "expense") {
+        totalExpense = c.total;
+      }
     });
 
-    // =====================
-    // CREDIT (LOANS)
-    // =====================
-    const loanAgg = await DebtLoan.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: start, $lt: end }
+    // LOANS
+    const loanAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalIssued: {
+              $sum:
+                "$principalAmount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          totalIssued: { $sum: "$principalAmount" }
-        }
-      }
-    ]);
+      ]);
 
-    const loansIssued = loanAgg[0]?.totalIssued || 0;
+    const loansIssued =
+      loanAgg[0]?.totalIssued || 0;
 
-    // =====================
     // PAYMENTS
-    // =====================
-    const paymentAgg = await DebtPayment.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: start, $lt: end }
+    const paymentAgg =
+      await DebtPayment.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalCollected: {
+              $sum: "$amount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          totalCollected: { $sum: "$amount" }
-        }
-      }
-    ]);
+      ]);
 
-    const collected = paymentAgg[0]?.totalCollected || 0;
+    const collected =
+      paymentAgg[0]
+        ?.totalCollected || 0;
 
-    // =====================
-    // OVERDUE (ALL TIME)
-    // =====================
-    const overdueCount = await DebtLoan.countDocuments({
-      owner: ownerId,
-      status: "overdue"
-    });
+    // OVERDUE
+    const overdueCount =
+      await DebtLoan.countDocuments({
+        owner: ownerId,
+        branch: branchId,
+        status: "overdue"
+      });
 
-    // =====================
     // CALCULATIONS
-    // =====================
     const netPosition =
       totalSales +
       income +
@@ -511,7 +697,9 @@ require("../models/Product");
 
     const profitMargin =
       totalBusinessProfit > 0
-        ? (netProfit / totalBusinessProfit) * 100
+        ? (netProfit /
+            totalBusinessProfit) *
+          100
         : 0;
 
     const profitStatus =
@@ -519,12 +707,13 @@ require("../models/Product");
         ? "BIASHARA INA FAIDA"
         : "BIASHARA INA HASARA";
 
-    // =====================
     // RESPONSE
-    // =====================
     res.status(200).json({
-      month: now.getUTCMonth() + 1,
-      year: now.getUTCFullYear(),
+      month:
+        now.getUTCMonth() + 1,
+
+      year:
+        now.getUTCFullYear(),
 
       sales: {
         totalSales,
@@ -551,7 +740,8 @@ require("../models/Product");
       },
 
       summary: {
-        netCashFlow: netPosition,
+        netCashFlow:
+          netPosition,
         totalBusinessProfit,
         netProfit,
         profitMargin,
@@ -560,17 +750,22 @@ require("../models/Product");
     });
 
   } catch (error) {
-    console.log("MONTHLY REPORT ERROR:", error);
+    console.log(
+      "MONTHLY REPORT ERROR:",
+      error
+    );
+
     res.status(500).json({
-      message: error.message
+      message:
+        error.message
     });
   }
 };
-
- const getWeeklyReport = async (req, res) => {
+  
+const getWeeklyReport = async (req, res) => {
   try {
-    // 🔐 SECURITY
-    if (!req.ownerId) {
+    // SECURITY
+    if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
         message: "Unauthorized"
       });
@@ -578,147 +773,223 @@ require("../models/Product");
 
     const now = new Date();
 
-    // 🔥 GET CURRENT WEEK (MONDAY → SUNDAY) IN UTC
+    // CURRENT WEEK UTC
     const day = now.getUTCDay();
-    const diff = day === 0 ? 6 : day - 1;
+    const diff =
+      day === 0 ? 6 : day - 1;
 
     const start = new Date(now);
-    start.setUTCDate(now.getUTCDate() - diff);
-    start.setUTCHours(0, 0, 0, 0);
+    start.setUTCDate(
+      now.getUTCDate() - diff
+    );
+    start.setUTCHours(
+      0,
+      0,
+      0,
+      0
+    );
 
-    const end = new Date(start);
-    end.setUTCDate(start.getUTCDate() + 7);
+    const end =
+      new Date(start);
 
-    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
+    end.setUTCDate(
+      start.getUTCDate() + 7
+    );
 
-    // =====================
+    const ownerId =
+      new mongoose.Types.ObjectId(
+        req.ownerId
+      );
+
+    const branchId =
+      new mongoose.Types.ObjectId(
+        req.branchId
+      );
+
     // SALES
-    // =====================
-    const salesAgg = await Sale.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: start, $lt: end }
+    const salesAgg =
+      await Sale.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalSales: {
+              $sum: "$totalAmount"
+            },
+            totalProfit: {
+              $sum: "$totalProfit"
+            },
+            count: {
+              $sum: 1
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          totalSales: { $sum: "$totalAmount" },
-          totalProfit: { $sum: "$totalProfit" },
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+      ]);
 
-    const totalSales = salesAgg[0]?.totalSales || 0;
-    const totalProfit = salesAgg[0]?.totalProfit || 0;
-    const salesCount = salesAgg[0]?.count || 0;
+    const totalSales =
+      salesAgg[0]?.totalSales || 0;
 
-    // =====================
+    const totalProfit =
+      salesAgg[0]?.totalProfit || 0;
+
+    const salesCount =
+      salesAgg[0]?.count || 0;
+
     // PURCHASES
-    // =====================
-    const ordersAgg = await Order.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: start, $lt: end }
+    const ordersAgg =
+      await Order.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalBuy: {
+              $sum: "$buyTotal"
+            },
+            totalSellValue: {
+              $sum: "$sellTotal"
+            },
+            totalOrderProfit: {
+              $sum: "$totalProfit"
+            },
+            count: {
+              $sum: 1
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          totalBuy: { $sum: "$buyTotal" },
-          totalSellValue: { $sum: "$sellTotal" },
-          totalOrderProfit: { $sum: "$totalProfit" },
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+      ]);
 
-    const totalBuy = ordersAgg[0]?.totalBuy || 0;
-    const totalSellValue = ordersAgg[0]?.totalSellValue || 0;
-    const totalOrderProfit = ordersAgg[0]?.totalOrderProfit || 0;
-    const orderCount = ordersAgg[0]?.count || 0;
+    const totalBuy =
+      ordersAgg[0]?.totalBuy || 0;
 
-    // =====================
+    const totalSellValue =
+      ordersAgg[0]
+        ?.totalSellValue || 0;
+
+    const totalOrderProfit =
+      ordersAgg[0]
+        ?.totalOrderProfit || 0;
+
+    const orderCount =
+      ordersAgg[0]?.count || 0;
+
     // CASH
-    // =====================
-    const cashAgg = await CashEntry.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          status: "active",
-          createdAt: { $gte: start, $lt: end }
+    const cashAgg =
+      await CashEntry.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            status: "active",
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: "$type",
+            total: {
+              $sum: "$amount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: "$type",
-          total: { $sum: "$amount" }
-        }
-      }
-    ]);
+      ]);
 
     let income = 0;
     let totalExpense = 0;
 
-    cashAgg.forEach(c => {
-      if (c._id === "income") income = c.total;
-      if (c._id === "expense") totalExpense = c.total;
+    cashAgg.forEach((c) => {
+      if (c._id === "income") {
+        income = c.total;
+      }
+
+      if (c._id === "expense") {
+        totalExpense = c.total;
+      }
     });
 
-    // =====================
-    // CREDIT (LOANS)
-    // =====================
-    const loanAgg = await DebtLoan.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: start, $lt: end }
+    // LOANS
+    const loanAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalIssued: {
+              $sum:
+                "$principalAmount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          totalIssued: { $sum: "$principalAmount" }
-        }
-      }
-    ]);
+      ]);
 
-    const loansIssued = loanAgg[0]?.totalIssued || 0;
+    const loansIssued =
+      loanAgg[0]?.totalIssued || 0;
 
-    // =====================
     // PAYMENTS
-    // =====================
-    const paymentAgg = await DebtPayment.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: start, $lt: end }
+    const paymentAgg =
+      await DebtPayment.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalCollected: {
+              $sum: "$amount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          totalCollected: { $sum: "$amount" }
-        }
-      }
-    ]);
+      ]);
 
-    const collected = paymentAgg[0]?.totalCollected || 0;
+    const collected =
+      paymentAgg[0]
+        ?.totalCollected || 0;
 
-    // =====================
-    // OVERDUE (ALL TIME)
-    // =====================
-    const overdueCount = await DebtLoan.countDocuments({
-      owner: ownerId,
-      status: "overdue"
-    });
+    // OVERDUE
+    const overdueCount =
+      await DebtLoan.countDocuments({
+        owner: ownerId,
+        branch: branchId,
+        status: "overdue"
+      });
 
-    // =====================
     // CALCULATIONS
-    // =====================
     const netPosition =
       totalSales +
       income +
@@ -736,7 +1007,9 @@ require("../models/Product");
 
     const profitMargin =
       totalBusinessProfit > 0
-        ? (netProfit / totalBusinessProfit) * 100
+        ? (netProfit /
+            totalBusinessProfit) *
+          100
         : 0;
 
     const profitStatus =
@@ -744,9 +1017,7 @@ require("../models/Product");
         ? "BIASHARA INA FAIDA"
         : "BIASHARA INA HASARA";
 
-    // =====================
     // RESPONSE
-    // =====================
     res.status(200).json({
       startDate: start,
       endDate: end,
@@ -776,7 +1047,8 @@ require("../models/Product");
       },
 
       summary: {
-        netCashFlow: netPosition,
+        netCashFlow:
+          netPosition,
         totalBusinessProfit,
         netProfit,
         profitMargin,
@@ -785,228 +1057,364 @@ require("../models/Product");
     });
 
   } catch (error) {
-    console.log("WEEKLY REPORT ERROR:", error);
+    console.log(
+      "WEEKLY REPORT ERROR:",
+      error
+    );
+
     res.status(500).json({
-      message: error.message
+      message:
+        error.message
     });
   }
 };
-
  
- const getTopProductsReport = async (req, res) => {
+const getTopProductsReport = async (req, res) => {
   try {
-    // 🔐 SECURITY
-    if (!req.ownerId) {
+    // SECURITY
+    if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
         message: "Unauthorized"
       });
     }
 
-    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
+    const ownerId =
+      new mongoose.Types.ObjectId(
+        req.ownerId
+      );
 
-    // 🔥 DEFAULT RANGE = THIS MONTH
+    const branchId =
+      new mongoose.Types.ObjectId(
+        req.branchId
+      );
+
+    // THIS MONTH
     const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
-    const result = await Sale.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: start, $lt: end }
-        }
-      },
+    const start = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        1
+      )
+    );
 
-      // 🔥 BREAK ITEMS ARRAY
-      { $unwind: "$items" },
+    const end = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth() + 1,
+        1
+      )
+    );
 
-      {
-        $group: {
-          _id: "$items.name",
-
-          name: { $first: "$items.name" },
-
-          qty: {
-            $sum: {
-              $ifNull: ["$items.qty", 0]
+    const result =
+      await Sale.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
             }
-          },
+          }
+        },
 
-          revenue: {
-            $sum: {
-              $ifNull: ["$items.total", 0]
+        {
+          $unwind: "$items"
+        },
+
+        {
+          $group: {
+            _id: "$items.name",
+
+            name: {
+              $first:
+                "$items.name"
+            },
+
+            qty: {
+              $sum: {
+                $ifNull: [
+                  "$items.qty",
+                  0
+                ]
+              }
+            },
+
+            revenue: {
+              $sum: {
+                $ifNull: [
+                  "$items.total",
+                  0
+                ]
+              }
+            },
+
+            profit: {
+              $sum: {
+                $multiply: [
+                  {
+                    $subtract: [
+                      {
+                        $ifNull: [
+                          "$items.price",
+                          0
+                        ]
+                      },
+                      {
+                        $ifNull: [
+                          "$items.buyPrice",
+                          0
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    $ifNull: [
+                      "$items.qty",
+                      0
+                    ]
+                  }
+                ]
+              }
+            },
+
+            count: {
+              $sum: 1
             }
-          },
+          }
+        },
 
-          profit: {
-            $sum: {
-              $multiply: [
-                {
-                  $subtract: [
-                    { $ifNull: ["$items.price", 0] },
-                    { $ifNull: ["$items.buyPrice", 0] }
-                  ]
-                },
-                { $ifNull: ["$items.qty", 0] }
-              ]
-            }
-          },
+        {
+          $sort: {
+            qty: -1,
+            revenue: -1
+          }
+        },
 
-          count: { $sum: 1 }
+        {
+          $limit: 20
         }
-      },
+      ]);
 
-      // 🔥 SORT (BEST SELLERS FIRST)
-      {
-        $sort: {
-          qty: -1,
-          revenue: -1
-        }
-      },
-
-      // 🔥 LIMIT
-      { $limit: 20 }
-    ]);
-
-    res.status(200).json(result);
+    res.status(200).json(
+      result
+    );
 
   } catch (error) {
-    console.log("TOP PRODUCTS ERROR:", error);
+    console.log(
+      "TOP PRODUCTS ERROR:",
+      error
+    );
+
     res.status(500).json({
-      message: error.message
+      message:
+        error.message
     });
   }
 };
- const getCreditReport = async (req, res) => {
+   
+const getCreditReport = async (req, res) => {
   try {
-    // 🔐 SECURITY
-    if (!req.ownerId) {
+    // SECURITY
+    if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
         message: "Unauthorized"
       });
     }
 
-    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
+    const ownerId =
+      new mongoose.Types.ObjectId(
+        req.ownerId
+      );
 
-    // 🔥 CURRENT MONTH RANGE (HAIJABADILIKA)
+    const branchId =
+      new mongoose.Types.ObjectId(
+        req.branchId
+      );
+
+    // CURRENT MONTH
     const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
-    // 🔥 TODAY RANGE (NEW)
+    const start = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        1
+      )
+    );
+
+    const end = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth() + 1,
+        1
+      )
+    );
+
+    // TODAY
     const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    today.setUTCHours(
+      0,
+      0,
+      0,
+      0
+    );
 
-    const tomorrow = new Date(today);
-    tomorrow.setUTCDate(today.getUTCDate() + 1);
+    const tomorrow =
+      new Date(today);
 
-    // =====================
-    // LOANS (MONTH)
-    // =====================
-    const loanAgg = await DebtLoan.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: start, $lt: end }
-        }
-      },
-      {
-        $group: {
-          _id: "$status",
-          count: { $sum: 1 },
-          totalIssued: { $sum: "$principalAmount" },
-          outstanding: { $sum: "$balanceAmount" }
-        }
-      }
-    ]);
+    tomorrow.setUTCDate(
+      today.getUTCDate() + 1
+    );
 
-    // =====================
-    // PAYMENTS (MONTH)
-    // =====================
-    const paymentAgg = await DebtPayment.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: start, $lt: end }
+    // MONTH LOANS
+    const loanAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: "$status",
+            count: {
+              $sum: 1
+            },
+            totalIssued: {
+              $sum:
+                "$principalAmount"
+            },
+            outstanding: {
+              $sum:
+                "$balanceAmount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          totalCollected: { $sum: "$amount" }
-        }
-      }
-    ]);
+      ]);
 
-    // =====================
-    // TODAY DATA (NEW 🔥)
-    // =====================
-    const todayLoans = await DebtLoan.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: today, $lt: tomorrow }
+    // MONTH PAYMENTS
+    const paymentAgg =
+      await DebtPayment.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalCollected: {
+              $sum: "$amount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          issued: { $sum: "$principalAmount" }
-        }
-      }
-    ]);
+      ]);
 
-    const todayPayments = await DebtPayment.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $gte: today, $lt: tomorrow }
+    // TODAY LOANS
+    const todayLoans =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: today,
+              $lt: tomorrow
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            issued: {
+              $sum:
+                "$principalAmount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          collected: { $sum: "$amount" }
-        }
-      }
-    ]);
+      ]);
 
-    // =====================
-    // OLD DATA (BEFORE TODAY 🔥)
-    // =====================
-    const oldLoans = await DebtLoan.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $lt: today }
+    // TODAY PAYMENTS
+    const todayPayments =
+      await DebtPayment.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: today,
+              $lt: tomorrow
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            collected: {
+              $sum: "$amount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          issued: { $sum: "$principalAmount" }
-        }
-      }
-    ]);
+      ]);
 
-    const oldPayments = await DebtPayment.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          createdAt: { $lt: today }
+    // OLD LOANS
+    const oldLoans =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $lt: today
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            issued: {
+              $sum:
+                "$principalAmount"
+            }
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          collected: { $sum: "$amount" }
-        }
-      }
-    ]);
+      ]);
 
-    // =====================
-    // PROCESS ORIGINAL SUMMARY (HAIJAGUSWA)
-    // =====================
+    // OLD PAYMENTS
+    const oldPayments =
+      await DebtPayment.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $lt: today
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            collected: {
+              $sum: "$amount"
+            }
+          }
+        }
+      ]);
+
     let overdueCount = 0;
     let activeCount = 0;
     let paidCount = 0;
@@ -1015,32 +1423,58 @@ require("../models/Product");
     let totalIssued = 0;
     let outstanding = 0;
 
-    loanAgg.forEach(l => {
-      totalLoans += l.count || 0;
-      totalIssued += l.totalIssued || 0;
-      outstanding += l.outstanding || 0;
+    loanAgg.forEach((l) => {
+      totalLoans +=
+        l.count || 0;
 
-      if (l._id === "overdue") overdueCount = l.count;
-      if (l._id === "active") activeCount = l.count;
-      if (l._id === "paid") paidCount = l.count;
+      totalIssued +=
+        l.totalIssued || 0;
+
+      outstanding +=
+        l.outstanding || 0;
+
+      if (
+        l._id === "overdue"
+      ) {
+        overdueCount =
+          l.count;
+      }
+
+      if (
+        l._id === "active"
+      ) {
+        activeCount =
+          l.count;
+      }
+
+      if (
+        l._id === "paid"
+      ) {
+        paidCount =
+          l.count;
+      }
     });
 
-    const totalCollected = paymentAgg[0]?.totalCollected || 0;
+    const totalCollected =
+      paymentAgg[0]
+        ?.totalCollected || 0;
 
-    // =====================
-    // RISKY CUSTOMERS (HAIJAGUSWA)
-    // =====================
-    const riskyCustomers = await DebtLoan.find({
-      owner: ownerId,
-      status: "overdue"
-    })
-      .sort({ balanceAmount: -1 })
-      .limit(5)
-      .populate("customer", "fullName phone riskScore");
+    // RISKY CUSTOMERS
+    const riskyCustomers =
+      await DebtLoan.find({
+        owner: ownerId,
+        branch: branchId,
+        status: "overdue"
+      })
+        .sort({
+          balanceAmount: -1
+        })
+        .limit(5)
+        .populate(
+          "customer",
+          "fullName phone riskScore"
+        );
 
-    // =====================
-    // FINAL RESPONSE (UPGRADE ONLY)
-    // =====================
     res.status(200).json({
       summary: {
         totalLoans,
@@ -1052,117 +1486,173 @@ require("../models/Product");
         paidCount
       },
 
-      // 🔥 NEW CARDS DATA
       today: {
-        issued: todayLoans[0]?.issued || 0,
-        collected: todayPayments[0]?.collected || 0
+        issued:
+          todayLoans[0]
+            ?.issued || 0,
+        collected:
+          todayPayments[0]
+            ?.collected || 0
       },
 
       old: {
-        issued: oldLoans[0]?.issued || 0,
-        collected: oldPayments[0]?.collected || 0
+        issued:
+          oldLoans[0]
+            ?.issued || 0,
+        collected:
+          oldPayments[0]
+            ?.collected || 0
       },
 
       riskyCustomers
     });
 
   } catch (error) {
-    console.log("CREDIT REPORT ERROR:", error);
+    console.log(
+      "CREDIT REPORT ERROR:",
+      error
+    );
+
     res.status(500).json({
-      message: error.message
+      message:
+        error.message
     });
   }
 };
-
-const getExpenseReport = async (req, res) => {
+ 
+ const getExpenseReport = async (req, res) => {
   try {
-    // 🔐 SECURITY
-    if (!req.ownerId) {
+    // SECURITY
+    if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
         message: "Unauthorized"
       });
     }
 
-    const ownerId = new mongoose.Types.ObjectId(req.ownerId);
+    const ownerId =
+      new mongoose.Types.ObjectId(
+        req.ownerId
+      );
 
-    // 🔥 DEFAULT RANGE = THIS MONTH
+    const branchId =
+      new mongoose.Types.ObjectId(
+        req.branchId
+      );
+
+    // THIS MONTH
     const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
 
-    // =====================
-    // CATEGORY AGGREGATION
-    // =====================
-    const expenseAgg = await CashEntry.aggregate([
-      {
-        $match: {
-          owner: ownerId,
-          status: "active",
-          type: "expense",
-          createdAt: { $gte: start, $lt: end }
-        }
-      },
-      {
-        $group: {
-          _id: "$category",
-          category: { $first: "$category" },
-          amount: { $sum: "$amount" },
-          count: { $sum: 1 }
-        }
-      },
-      {
-        $sort: { amount: -1 }
-      }
-    ]);
-
-    // =====================
-    // TOTAL
-    // =====================
-    const totalExpense = expenseAgg.reduce(
-      (sum, x) => sum + (x.amount || 0),
-      0
+    const start = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        1
+      )
     );
 
-    // =====================
+    const end = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth() + 1,
+        1
+      )
+    );
+
+    // CATEGORY AGGREGATION
+    const expenseAgg =
+      await CashEntry.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            status: "active",
+            type: "expense",
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: "$category",
+            category: {
+              $first:
+                "$category"
+            },
+            amount: {
+              $sum: "$amount"
+            },
+            count: {
+              $sum: 1
+            }
+          }
+        },
+        {
+          $sort: {
+            amount: -1
+          }
+        }
+      ]);
+
+    // TOTAL
+    const totalExpense =
+      expenseAgg.reduce(
+        (sum, x) =>
+          sum +
+          (x.amount || 0),
+        0
+      );
+
     // TOP 3
-    // =====================
-    const top3 = expenseAgg.slice(0, 3);
+    const top3 =
+      expenseAgg.slice(0, 3);
 
-    // =====================
     // RECENT EXPENSES
-    // =====================
-    const recent = await CashEntry.find({
-      owner: ownerId,
-      status: "active",
-      type: "expense",
-      createdAt: { $gte: start, $lt: end }
-    })
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .select("category amount createdAt")
-      .lean();
+    const recent =
+      await CashEntry.find({
+        owner: ownerId,
+        branch: branchId,
+        status: "active",
+        type: "expense",
+        createdAt: {
+          $gte: start,
+          $lt: end
+        }
+      })
+        .sort({
+          createdAt: -1
+        })
+        .limit(10)
+        .select(
+          "category amount createdAt"
+        )
+        .lean();
 
-    // =====================
-    // RESPONSE
-    // =====================
     res.status(200).json({
       summary: {
         totalExpense,
-        entries: recent.length
+        entries:
+          recent.length
       },
-      categories: expenseAgg,
+      categories:
+        expenseAgg,
       top3,
       recent
     });
 
   } catch (error) {
-    console.log("EXPENSE REPORT ERROR:", error);
+    console.log(
+      "EXPENSE REPORT ERROR:",
+      error
+    );
+
     res.status(500).json({
-      message: error.message
+      message:
+        error.message
     });
   }
 };
- 
  module.exports = {
   getDailyReport,
   getWeeklyReport,
