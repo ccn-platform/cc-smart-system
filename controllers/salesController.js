@@ -1,16 +1,11 @@
   const Sale = require("../models/Sale");
 const Product = require("../models/Product");
 
-const calculateProfit = require("../utils/calculateprofit");
-const generateReceipt = require("../utils/generateReceipt");
+const calculateProfit =
+  require("../utils/calculateprofit");
 
-
-// helper
-const getOwnerId = (user) => {
-  return user.role === "staff"
-    ? user.owner
-    : user._id;
-};
+const generateReceipt =
+  require("../utils/generateReceipt");
 
 
 // CREATE SALE
@@ -33,22 +28,19 @@ const createSale = async (
       });
     }
 
-    const ownerId =
-      getOwnerId(req.user);
-
     let saleItems = [];
     let totalAmount = 0;
     let totalProfit = 0;
 
     for (const item of items) {
-     
-const product =
-  await Product.findOne({
-    _id: item.productId,
-    owner: ownerId,
-    isActive: true
-  });
-  
+      const product =
+        await Product.findOne({
+          _id: item.productId,
+          owner: req.ownerId,
+          branch: req.branchId,
+          isActive: true
+        });
+
       if (!product) {
         return res.status(404).json({
           message:
@@ -92,13 +84,12 @@ const product =
           item.qty,
         price:
           product.sellPrice,
-        buyPrice:
+          buyPrice:
           product.buyPrice,
         total:
           lineTotal
       });
 
-      // reduce stock
       product.stockQty -=
         item.qty;
 
@@ -110,7 +101,8 @@ const product =
 
     const sale =
       await Sale.create({
-        owner: ownerId,
+        owner: req.ownerId,
+        branch: req.branchId,
         items: saleItems,
         totalAmount,
         totalProfit,
@@ -118,11 +110,12 @@ const product =
         receiptNo
       });
 
-    res.status(201).json(
+    return res.status(201).json(
       sale
     );
+
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       message:
         error.message
     });
@@ -136,21 +129,20 @@ const getSales = async (
   res
 ) => {
   try {
-    const ownerId =
-      getOwnerId(req.user);
-
     const sales =
       await Sale.find({
-        owner: ownerId
+        owner: req.ownerId,
+        branch: req.branchId
       }).sort({
         createdAt: -1
       });
 
-    res.status(200).json(
+    return res.status(200).json(
       sales
     );
+
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       message:
         error.message
     });
@@ -162,9 +154,6 @@ const getSales = async (
 const getTodaySales =
   async (req, res) => {
     try {
-      const ownerId =
-        getOwnerId(req.user);
-
       const start =
         new Date();
 
@@ -177,7 +166,8 @@ const getTodaySales =
 
       const sales =
         await Sale.find({
-          owner: ownerId,
+          owner: req.ownerId,
+          branch: req.branchId,
           createdAt: {
             $gte: start
           }
@@ -190,19 +180,19 @@ const getTodaySales =
           s.totalAmount;
       }
 
-      res.status(200).json({
+      return res.status(200).json({
         count:
           sales.length,
         total
       });
+
     } catch (error) {
-      res.status(500).json({
+      return res.status(500).json({
         message:
           error.message
       });
     }
   };
-
 
 module.exports = {
   createSale,
