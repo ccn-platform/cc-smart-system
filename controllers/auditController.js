@@ -1,169 +1,265 @@
-  const Audit = require("../models/Audit");
-const Product = require("../models/Product");
+  const Audit =
+  require("../models/Audit");
+
+const Product =
+  require("../models/Product");
 
 
-// =====================
 // CREATE MANUAL AUDIT
-// =====================
-const createManualAudit = async (req, res) => {
-  try {
-    // 🔐 SECURITY
-    if (!req.ownerId) {
-      return res.status(401).json({
-        message: "Unauthorized"
-      });
-    }
-
-    const { items, branch, note } = req.body;
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        message: "Items required"
-      });
-    }
-
-    // 🔥 FETCH PRODUCTS ONCE (FAST)
-    const productIds = items.map(i => i.product);
-
-    const products = await Product.find({
-      _id: { $in: productIds },
-      owner: req.ownerId
-    });
-
-    const productMap = {};
-    products.forEach(p => {
-      productMap[p._id.toString()] = p;
-    });
-
-    const results = [];
-
-    let shortageCount = 0;
-    let excessCount = 0;
-
-    let totalLossValue = 0;
-    let totalGainValue = 0;
-
-    for (const row of items) {
-      const product = productMap[row.product];
-
-      if (!product) continue;
-
-      const systemQty = product.stockQty;
-      const countedQty = Number(row.countedQty) || 0;
-
-      const difference = countedQty - systemQty;
-
-      let lossValue = 0;
-      let gainValue = 0;
-
-      if (difference < 0) {
-        shortageCount++;
-
-        lossValue =
-          Math.abs(difference) *
-          product.buyPrice;
-
-        totalLossValue += lossValue;
+const createManualAudit =
+  async (req, res) => {
+    try {
+      if (
+        !req.ownerId ||
+        !req.branchId
+      ) {
+        return res.status(401).json({
+          message:
+            "Unauthorized"
+        });
       }
 
-      if (difference > 0) {
-        excessCount++;
+      const {
+        items,
+        note
+      } = req.body;
 
-        gainValue =
-          difference *
-          product.buyPrice;
-
-        totalGainValue += gainValue;
+      if (
+        !items ||
+        !Array.isArray(items) ||
+        items.length === 0
+      ) {
+        return res.status(400).json({
+          message:
+            "Items required"
+        });
       }
 
-      results.push({
-        product: product._id,
-        name: product.name,
-        systemQty,
-        countedQty,
-        difference,
-        buyPrice: product.buyPrice,
-        sellPrice: product.sellPrice,
-        lossValue,
-        gainValue
+      const productIds =
+        items.map(
+          (i) => i.product
+        );
+
+      const products =
+        await Product.find({
+          _id: {
+            $in:
+              productIds
+          },
+          owner:
+            req.ownerId,
+          branch:
+            req.branchId,
+          isActive: true
+        });
+
+      const productMap = {};
+
+      products.forEach((p) => {
+        productMap[
+          p._id.toString()
+        ] = p;
+      });
+
+      const results = [];
+
+      let shortageCount = 0;
+      let excessCount = 0;
+
+      let totalLossValue = 0;
+      let totalGainValue = 0;
+
+      for (const row of items) {
+        const product =
+          productMap[
+            row.product
+          ];
+
+        if (!product)
+          continue;
+
+        const systemQty =
+          Number(
+            product.stockQty
+          ) || 0;
+
+        const countedQty =
+          Number(
+            row.countedQty
+          ) || 0;
+
+        const difference =
+          countedQty -
+          systemQty;
+
+        let lossValue = 0;
+        let gainValue = 0;
+
+        if (
+          difference < 0
+        ) {
+          shortageCount++;
+
+          lossValue =
+            Math.abs(
+              difference
+            ) *
+            product.buyPrice;
+
+          totalLossValue +=
+            lossValue;
+        }
+
+        if (
+          difference > 0
+        ) {
+          excessCount++;
+
+          gainValue =
+            difference *
+            product.buyPrice;
+
+          totalGainValue +=
+            gainValue;
+        }
+
+        results.push({
+          product:
+            product._id,
+          name:
+            product.name,
+          systemQty,
+          countedQty,
+          difference,
+          buyPrice:
+            product.buyPrice,
+          sellPrice:
+            product.sellPrice,
+          lossValue,
+          gainValue
+        });
+      }
+
+      const audit =
+        await Audit.create({
+          owner:
+            req.ownerId,
+
+          createdBy:
+            req.user.id,
+
+          branch:
+            req.branchId,
+
+          method:
+            "manual",
+
+          status:
+            "completed",
+
+          items:
+            results,
+
+          totalItems:
+            results.length,
+
+          shortageCount,
+
+          excessCount,
+
+          totalLossValue,
+
+          totalGainValue,
+
+          note:
+            note || ""
+        });
+
+      return res.status(201).json(
+        audit
+      );
+
+    } catch (error) {
+      console.log(
+        "AUDIT ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        message:
+          error.message
       });
     }
-
-    const audit = await Audit.create({
-      owner: req.ownerId,       // 🔥 muhimu
-      createdBy: req.user.id,   // 🔥 nani kafanya audit
-      branch: branch || null,
-      method: "manual",
-      status: "completed",
-      items: results,
-      totalItems: results.length,
-      shortageCount,
-      excessCount,
-      totalLossValue,
-      totalGainValue,
-      note: note || ""
-    });
-
-    res.status(201).json(audit);
-
-  } catch (error) {
-    console.log("AUDIT ERROR:", error);
-    res.status(500).json({
-      message: error.message
-    });
-  }
-};
+  };
 
 
-// =====================
 // GET HISTORY
-// =====================
-const getAuditHistory = async (req, res) => {
-  try {
-    const audits = await Audit.find({
-      owner: req.ownerId
-    })
-      .sort({ createdAt: -1 })
-      .select(
-        "_id method totalItems shortageCount excessCount totalLossValue totalGainValue createdAt"
-      )
-      .lean(); // 🔥 faster
+const getAuditHistory =
+  async (req, res) => {
+    try {
+      const audits =
+        await Audit.find({
+          owner:
+            req.ownerId,
 
-    res.status(200).json(audits);
+          branch:
+            req.branchId
+        })
+          .sort({
+            createdAt: -1
+          })
+          .select(
+            "_id method totalItems shortageCount excessCount totalLossValue totalGainValue createdAt"
+          )
+          .lean();
 
-  } catch (error) {
-    res.status(500).json({
-      message: error.message
-    });
-  }
-};
+      return res.status(200).json(
+        audits
+      );
 
-
-// =====================
-// GET SINGLE AUDIT
-// =====================
-const getAuditById = async (req, res) => {
-  try {
-    const audit = await Audit.findOne({
-      _id: req.params.id,
-      owner: req.ownerId
-    }).lean();
-
-    if (!audit) {
-      return res.status(404).json({
-        message: "Audit not found"
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
       });
     }
+  };
 
-    res.status(200).json(audit);
 
-  } catch (error) {
-    res.status(500).json({
-      message: error.message
-    });
-  }
-};
+// GET SINGLE
+const getAuditById =
+  async (req, res) => {
+    try {
+      const audit =
+        await Audit.findOne({
+          _id:
+            req.params.id,
 
+          owner:
+            req.ownerId,
+
+          branch:
+            req.branchId
+        }).lean();
+
+      if (!audit) {
+        return res.status(404).json({
+          message:
+            "Audit not found"
+        });
+      }
+
+      return res.status(200).json(
+        audit
+      );
+
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }
+  };
 
 module.exports = {
   createManualAudit,
