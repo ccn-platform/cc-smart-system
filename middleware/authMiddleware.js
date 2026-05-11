@@ -1,4 +1,4 @@
- const jwt =
+  const jwt =
   require("jsonwebtoken");
 
 const User =
@@ -189,6 +189,20 @@ const branchAccess =
             "Invalid branch access"
         });
       }
+
+// 🔥 SUBSCRIPTION CHECK
+if (
+  !branch.subscription ||
+  !branch.subscription.isActive ||
+  !branch.subscription.expiresAt ||
+  new Date(branch.subscription.expiresAt) <
+    new Date()
+) {
+  return res.status(403).json({
+    message:
+      "Branch subscription expired"
+  });
+}
 
       // STAFF RESTRICTION
       if (
