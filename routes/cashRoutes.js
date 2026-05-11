@@ -1,11 +1,12 @@
-const express =
-require("express");
+  const express =
+  require("express");
 
 const router =
-express.Router();
+  express.Router();
 
 const {
-  protect
+  protect,
+  branchAccess
 } = require(
   "../middleware/authMiddleware"
 );
@@ -24,6 +25,7 @@ const {
 router.post(
   "/",
   protect,
+  branchAccess,
   createCashEntry
 );
 
@@ -32,6 +34,7 @@ router.post(
 router.get(
   "/history",
   protect,
+  branchAccess,
   getCashHistory
 );
 
@@ -40,6 +43,7 @@ router.get(
 router.get(
   "/:id",
   protect,
+  branchAccess,
   getCashById
 );
 
@@ -48,8 +52,9 @@ router.get(
 router.put(
   "/:id/void",
   protect,
+  branchAccess,
   voidCashEntry
 );
 
 module.exports =
-router;
+  router;
