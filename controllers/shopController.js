@@ -253,6 +253,7 @@ const branch = await Branch.create({
 
 
 // GET BRANCHES
+ 
 const getBranches = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
@@ -273,7 +274,8 @@ const getBranches = async (req, res) => {
     }).sort({
       createdAt: -1
     });
-   console.log(
+
+    console.log(
       "BRANCHES RESPONSE:",
       JSON.stringify(
         branches,
@@ -281,6 +283,7 @@ const getBranches = async (req, res) => {
         2
       )
     );
+
     return res.status(200).json(branches);
 
   } catch (error) {
@@ -289,8 +292,6 @@ const getBranches = async (req, res) => {
     });
   }
 };
-
-
 module.exports = {
   createShop,
   getMyShop,
