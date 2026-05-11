@@ -1,26 +1,49 @@
-  const express = require("express");
+ const express = require("express");
 const router = express.Router();
 
-const {
-  registerUser,
-  loginUser,
-  addStaff,
-   getStaff
-} = require("../controllers/authController");
+const authController =
+  require("../controllers/authController");
 
-// 🔥 IMPORT MIDDLEWARE
-const {
-  protect,
-  onlyOwner
-} = require("../middleware/authMiddleware");
+const middleware =
+  require("../middleware/authMiddleware");
 
-// 🔥 ROUTES
-router.post("/register", registerUser);
-router.post("/login", loginUser);
+console.log({
+  registerUser:
+    typeof authController.registerUser,
+  loginUser:
+    typeof authController.loginUser,
+  addStaff:
+    typeof authController.addStaff,
+  getStaff:
+    typeof authController.getStaff,
+  protect:
+    typeof middleware.protect,
+  onlyOwner:
+    typeof middleware.onlyOwner
+});
 
-// 🔥 OWNER ONLY
-router.post("/add-staff", protect, onlyOwner, addStaff);
+router.post(
+  "/register",
+  authController.registerUser
+);
 
-router.get("/staff", protect, onlyOwner, getStaff); // 🔥 mpya
+router.post(
+  "/login",
+  authController.loginUser
+);
+
+router.post(
+  "/add-staff",
+  middleware.protect,
+  middleware.onlyOwner,
+  authController.addStaff
+);
+
+router.get(
+  "/staff",
+  middleware.protect,
+  middleware.onlyOwner,
+  authController.getStaff
+);
 
 module.exports = router;
