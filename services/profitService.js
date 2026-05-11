@@ -1,4 +1,4 @@
- const Product = require("../models/Product");
+  const Product = require("../models/Product");
 
 const normalizeProductName =
   require("../utils/normalizeProductName");
@@ -6,10 +6,10 @@ const normalizeProductName =
 // 🔥 MEMORY CACHE
 const learnedMap = new Map();
 
-const analyzeProfit = async (
+ const analyzeProfit = async (
   userId,
-  items,
-  branchId = null
+  branchId,
+  items
 ) => {
   let results = [];
 
@@ -69,8 +69,8 @@ const analyzeProfit = async (
     let matched = null;
 
     // ✅ CACHE MATCH
-   const cacheKey =
-  `${userId}_${clean}`;
+  const cacheKey =
+  `${userId}_${branchId}_${clean}`;
 
 if (learnedMap.has(cacheKey)) {
   matched =
@@ -237,4 +237,4 @@ matched =
 
 module.exports = {
   analyzeProfit,
-}; 
+};
