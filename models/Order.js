@@ -38,24 +38,28 @@ const orderItemSchema =
         default: false
       }
     },
-    { _id: false }
+    {
+      _id: false
+    }
   );
 
 const orderSchema =
   new mongoose.Schema(
     {
-       owner: {
-      type: mongoose.Schema.Types.ObjectId,
-         ref: "User",
-          required: true,
-         index: true
+      owner: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+        index: true
       },
 
       branch: {
         type:
           mongoose.Schema.Types.ObjectId,
         ref: "Branch",
-        default: null
+        required: true,
+        index: true
       },
 
       rawText: {
@@ -63,7 +67,9 @@ const orderSchema =
         default: ""
       },
 
-      items: [orderItemSchema],
+      items: [
+        orderItemSchema
+      ],
 
       buyTotal: {
         type: Number,
@@ -82,20 +88,29 @@ const orderSchema =
 
       status: {
         type: String,
-        default: "completed"
+        default: "completed",
+        index: true
       }
     },
     {
       timestamps: true,
-      minimize: true // 🔥 optimization (safe)
+      minimize: true
     }
   );
 
-// 🔥 INDEXES (hazijabadilishwa logic)
-orderSchema.index({ branch: 1 });
-orderSchema.index({ status: 1 });
- orderSchema.index({ owner: 1, createdAt: -1 });
-orderSchema.index({ createdAt: -1 });
+
+// MULTI BRANCH INDEXES
+orderSchema.index({
+  owner: 1,
+  branch: 1,
+  createdAt: -1
+});
+
+orderSchema.index({
+  owner: 1,
+  branch: 1,
+  status: 1
+});
 
 module.exports =
   mongoose.model(
