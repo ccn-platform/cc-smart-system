@@ -1,20 +1,24 @@
-    const mongoose = require("mongoose");
+  const mongoose = require("mongoose");
+const normalizeProductName =
+  require("../utils/normalizeProductName");
 
 const productSchema =
   new mongoose.Schema(
     {
-     owner: {
-      type: mongoose.Schema.Types.ObjectId,
-       ref: "User",
-       required: true,
-       index: true
-     },
+      owner: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+        index: true
+      },
 
       branch: {
         type:
           mongoose.Schema.Types.ObjectId,
         ref: "Branch",
-        default: null
+        required: true,
+        index: true
       },
 
       name: {
@@ -23,10 +27,11 @@ const productSchema =
         trim: true,
         index: true
       },
-normalizedName: {
-  type: String,
-  index: true,
-},
+
+      normalizedName: {
+        type: String,
+        index: true
+      },
 
       aliases: [
         {
@@ -36,17 +41,16 @@ normalizedName: {
       ],
 
       barcode: {
-       type: String,
+        type: String,
         default: null,
-        trim: true,
-       index: true
-     },
+        trim: true
+      },
 
       category: {
         type: String,
         default: "General",
         trim: true,
-        index: true // 🔥 added (search/filter fast)
+        index: true
       },
 
       unit: {
@@ -65,7 +69,6 @@ normalizedName: {
         default: ""
       },
 
-
       buyPrice: {
         type: Number,
         default: 0
@@ -80,7 +83,7 @@ normalizedName: {
         type: Number,
         default: 0,
         min: 0,
-        index: true // 🔥 useful kwa stock queries
+        index: true
       },
 
       lowStockAlert: {
@@ -91,66 +94,91 @@ normalizedName: {
       isActive: {
         type: Boolean,
         default: true,
-        index: true // 🔥 filtering fast
+        index: true
       },
 
-createdBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "User",
-  default: null
-},
+      createdBy: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null
+      },
 
-updatedBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "User",
-  default: null
-},
+      updatedBy: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null
+      },
 
-deletedBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "User",
-  default: null
-},
+      deletedBy: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null
+      },
 
-deletedAt: {
-  type: Date,
-  default: null
-}
+      deletedAt: {
+        type: Date,
+        default: null
+      }
     },
     {
       timestamps: true,
-      minimize: true // 🔥 optimization
+      minimize: true
     }
   );
 
-  const normalizeProductName =
- require("../utils/normalizeProductName");
 
-// 🔥 AUTO NORMALIZE
- productSchema.pre("save", function () {
+// AUTO NORMALIZE
+productSchema.pre("save", function () {
   if (this.name) {
     this.normalizedName =
       normalizeProductName(this.name);
   }
 });
-// 🔥 IMPORTANT INDEXES (HAZIBADILISHI LOGIC)
- productSchema.index({ owner: 1, name: 1 });
- productSchema.index(
-  { owner: 1, barcode: 1 },
-  { unique: true, sparse: true }
-);
-productSchema.index({ owner: 1, createdAt: -1 });
+
+
+// MULTI-BRANCH INDEXES
 productSchema.index({
   owner: 1,
+  branch: 1,
+  name: 1
+});
+
+productSchema.index(
+  {
+    owner: 1,
+    branch: 1,
+    barcode: 1
+  },
+  {
+    unique: true,
+    sparse: true
+  }
+);
+
+productSchema.index({
+  owner: 1,
+  branch: 1,
+  createdAt: -1
+});
+
+productSchema.index({
+  owner: 1,
+  branch: 1,
   normalizedName: 1,
   isActive: 1
 });
-// 🔥 TEXT SEARCH (fast search)
+
+
+// TEXT SEARCH
 productSchema.index({
   name: "text",
   aliases: "text",
   category: "text"
 });
+
 module.exports =
   mongoose.model(
     "Product",
