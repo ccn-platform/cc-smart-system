@@ -273,7 +273,14 @@ const getBranches = async (req, res) => {
     }).sort({
       createdAt: -1
     });
-
+   console.log(
+      "BRANCHES RESPONSE:",
+      JSON.stringify(
+        branches,
+        null,
+        2
+      )
+    );
     return res.status(200).json(branches);
 
   } catch (error) {
