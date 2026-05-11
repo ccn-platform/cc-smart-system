@@ -29,22 +29,30 @@ const { readImageText } = require("../services/ocrService");
 
 try {
 
-  order = await Order.create({
+ order = await Order.create({
   owner: ownerId,
   branch: branchId,
   rawText: cleanText,
-    items: result.items,
-    buyTotal: result.buyTotal,
-    sellTotal: result.sellTotal,
-    totalProfit: result.totalProfit
-  });
 
-} catch (dbError) {
+  items: result.items.map((x) => ({
+    name: x.name || "Unknown",
+    qty: x.qty || 0,
+    buyPrice: x.buyPrice || 0,
+    sellPrice: x.sellPrice || 0,
+    profitEach: x.profitEach || 0,
+    profitTotal: x.profitTotal || 0,
+    matched: x.matched || false
+  })),
 
-  console.log(
-    "ORDER SAVE ERROR:",
-    dbError
-  );
+  buyTotal: result.buyTotal,
+  sellTotal: result.sellTotal,
+  totalProfit: result.totalProfit
+});
+
+}  
+catch (dbError) {
+  console.log("ORDER SAVE ERROR:", dbError);
+  throw dbError;
 }
 
   return { order, cleanText, result };
