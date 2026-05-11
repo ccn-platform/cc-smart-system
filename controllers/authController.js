@@ -194,9 +194,11 @@ const loginUser = async (req, res) => {
 
     // FIND USER
     const user = await User.findOne({
-      phone
-    });
-
+        phone
+         }).populate(
+        "branch",
+         "name"
+       );
     if (!user) {
       return res.status(400).json({
         message:
@@ -242,20 +244,29 @@ const loginUser = async (req, res) => {
         owner?.subscription;
     }
 
-    // RESPONSE
-    return res.status(200).json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        businessName:
-          user.businessName,
-        phone: user.phone,
-        role: user.role,
-        owner: user.owner,
-        subscription
-      }
-    });
+   
+  // RESPONSE
+return res.status(200).json({
+  token,
+  user: {
+    id: user._id,
+    name: user.name,
+    businessName:
+      user.businessName,
+    phone: user.phone,
+    role: user.role,
+    owner: user.owner,
+
+    // 🔥 MULTI BRANCH
+    branch: user.branch
+  ? {
+      id: user.branch._id,
+      name: user.branch.name
+    }
+  : null,
+    subscription
+  }
+});
 
   } catch (error) {
     console.log(
@@ -269,126 +280,206 @@ const loginUser = async (req, res) => {
   }
 };
 
-
-const addStaff = async (req, res) => {
-  try {
-    if (!req.user || !req.ownerId) {
-      return res.status(401).json({
-        message:
-          "Invalid owner session"
-      });
-    }
-
-    const {
-      name,
-      phone,
-      password
-    } = req.body;
-
-    if (
-      !name ||
-      !phone ||
-      !password
-    ) {
-      return res.status(400).json({
-        message:
-          "All fields are required"
-      });
-    }
-
-    const normalizedPhone =
-      normalizePhone(phone);
-
-    const exists =
-      await User.findOne({
-        phone:
-          normalizedPhone
-      });
-
-    if (exists) {
-      return res.status(400).json({
-        message:
-          "Phone already registered"
-      });
-    }
-
-    const hashedPassword =
-      await bcrypt.hash(password, 10);
-
-    const staff = new User({
-      name: name.trim(),
-      phone:
-        normalizedPhone,
-      password:
-        hashedPassword,
-      role: "staff",
-      owner: req.ownerId,
-      businessName:
-        req.user.businessName,
-      businessCategory:
-        req.user.businessCategory,
-      mkoa: req.user.mkoa,
-      wilaya:
-        req.user.wilaya,
-      mtaa: req.user.mtaa
-    });
-
-    await staff.save();
-
-    return res.status(201).json({
-      message:
-        "Staff created successfully",
-      staff: {
-        id: staff._id,
-        name: staff.name,
-        phone: staff.phone,
-        role: staff.role
+ 
+const addStaff =
+  async (req, res) => {
+    try {
+      if (
+        !req.user ||
+        !req.ownerId
+      ) {
+        return res.status(401).json({
+          message:
+            "Invalid owner session"
+        });
       }
-    });
 
-  } catch (error) {
-    console.log(
-      "ADD STAFF ERROR FULL:",
-      error
-    );
+      const {
+        name,
+        phone,
+        password,
+        branchId
+      } = req.body;
 
-    return res.status(500).json({
-      message:
-        error.message ||
-        "Failed to create staff"
-    });
-  }
-};
+      if (
+        !name ||
+        !phone ||
+        !password ||
+        !branchId
+      ) {
+        return res.status(400).json({
+          message:
+            "Name, phone, password and branch required"
+        });
+      }
 
+      const normalizedPhone =
+        normalizePhone(phone);
 
-const getStaff = async (req, res) => {
-  try {
-    const staff =
-      await User.find({
-        owner: req.ownerId,
-        role: "staff",
-        isActive: true
-      })
-        .select(
-          "name phone role createdAt"
-        )
-        .sort({
-          createdAt: -1
+      const exists =
+        await User.findOne({
+          phone:
+            normalizedPhone
+        });
+
+      if (exists) {
+        return res.status(400).json({
+          message:
+            "Phone already registered"
+        });
+      }
+
+      // OWNER SHOP
+      const shop =
+        await Shop.findOne({
+          owner:
+            req.ownerId
+        });
+
+      if (!shop) {
+        return res.status(404).json({
+          message:
+            "Shop not found"
+        });
+      }
+
+      // VALIDATE BRANCH
+      const branch =
+        await Branch.findOne({
+          _id:
+            branchId,
+          shop:
+            shop._id,
+          isActive: true
+        });
+
+      if (!branch) {
+        return res.status(400).json({
+          message:
+            "Invalid branch selected"
+        });
+      }
+
+      const hashedPassword =
+        await bcrypt.hash(
+          password,
+          10
+        );
+
+      const staff =
+        new User({
+          name:
+            name.trim(),
+
+          phone:
+            normalizedPhone,
+
+          password:
+            hashedPassword,
+
+          role:
+            "staff",
+
+          owner:
+            req.ownerId,
+
+          branch:
+            branch._id,
+
+          businessName:
+            req.user.businessName,
+
+          businessCategory:
+            req.user.businessCategory,
+
+          mkoa:
+            req.user.mkoa,
+
+          wilaya:
+            req.user.wilaya,
+
+          mtaa:
+            req.user.mtaa
+        });
+
+      await staff.save();
+
+      return res.status(201).json({
+        message:
+          "Staff created successfully",
+
+        staff: {
+          id:
+            staff._id,
+
+          name:
+            staff.name,
+
+          phone:
+            staff.phone,
+
+          role:
+            staff.role,
+
+          branch:
+            {
+              id:
+                branch._id,
+
+              name:
+                branch.name
+            }
+        }
+      });
+
+    } catch (error) {
+      console.log(
+        "ADD STAFF ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        message:
+          error.message ||
+          "Failed to create staff"
+      });
+    }
+  };
+
+ const getStaff =
+  async (req, res) => {
+    try {
+      const staff =
+        await User.find({
+          owner:
+            req.ownerId,
+          role:
+            "staff",
+          isActive: true
         })
-        .lean();
+          .select(
+            "name phone role branch createdAt"
+          )
+          .populate(
+            "branch",
+            "name"
+          )
+          .sort({
+            createdAt: -1
+          })
+          .lean();
 
-    return res.status(200).json(
-      staff
-    );
+      return res.status(200).json(
+        staff
+      );
 
-  } catch (error) {
-    return res.status(500).json({
-      message:
-        error.message
-    });
-  }
-};
-
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }
+  };
 module.exports = {
   registerUser,
   loginUser,
