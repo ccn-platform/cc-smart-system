@@ -50,17 +50,25 @@ const createShop = async (req, res) => {
     });
 
     await Branch.create({
-      shop: shop._id,
-      name: `${user.businessName} Main Branch`,
-      phone: user.phone,
-      manager: user.name,
-      mkoa: user.mkoa,
-      wilaya: user.wilaya,
-      mtaa: user.mtaa,
-      isMain: true,
-      isActive: true
-    });
+  shop: shop._id,
+  name: `${user.businessName} Main Branch`,
+  phone: user.phone,
+  manager: user.name,
+  mkoa: user.mkoa,
+  wilaya: user.wilaya,
+  mtaa: user.mtaa,
+  isMain: true,
+  isActive: true,
 
+  subscription: {
+    plan: "trial",
+    startDate: new Date(),
+    expiresAt: new Date(
+      Date.now() + 14 * 24 * 60 * 60 * 1000
+    ),
+    isActive: true
+  }
+});
     return res.status(201).json(shop);
 
   } catch (error) {
@@ -213,19 +221,27 @@ const addBranch = async (req, res) => {
           "Branch already exists"
       });
     }
+const branch = await Branch.create({
+  shop: shop._id,
+  name: req.body.name.trim(),
+  phone: req.body.phone || "",
+  manager: req.body.manager || "",
+  mkoa: req.body.mkoa || "",
+  wilaya: req.body.wilaya || "",
+  mtaa: req.body.mtaa || "",
+  isMain: false,
+  isActive: true,
 
-    const branch = await Branch.create({
-      shop: shop._id,
-      name: req.body.name.trim(),
-      phone: req.body.phone || "",
-      manager: req.body.manager || "",
-      mkoa: req.body.mkoa || "",
-      wilaya: req.body.wilaya || "",
-      mtaa: req.body.mtaa || "",
-      isMain: false,
-      isActive: true
-    });
-
+  subscription: {
+    plan: "trial",
+    startDate: new Date(),
+    expiresAt: new Date(
+      Date.now() + 14 * 24 * 60 * 60 * 1000
+    ),
+    isActive: true
+  }
+});
+   
     return res.status(201).json(branch);
 
   } catch (error) {
