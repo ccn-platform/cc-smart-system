@@ -2,7 +2,8 @@
 const router = express.Router();
 
 const {
-  protect
+  protect,
+  branchAccess
 } = require("../middleware/authMiddleware");
 
 const {
@@ -13,23 +14,43 @@ const {
   deleteProduct
 } = require("../controllers/productController");
 
-// 🔥 CREATE + GET (with pagination kupitia query ?page=0)
+
+// CREATE + GET PRODUCTS
 router
   .route("/")
-  .post(protect, createProduct)
-  .get(protect, getProducts);
+  .post(
+    protect,
+    branchAccess,
+    createProduct
+  )
+  .get(
+    protect,
+    branchAccess,
+    getProducts
+  );
 
-// 🔥 SEARCH (query: ?keyword=milk&page=0)
+
+// SEARCH PRODUCTS
 router.get(
   "/search",
   protect,
+  branchAccess,
   searchProducts
 );
 
-// 🔥 UPDATE + DELETE
+
+// UPDATE + DELETE
 router
   .route("/:id")
-  .put(protect, updateProduct)
-  .delete(protect, deleteProduct);
+  .put(
+    protect,
+    branchAccess,
+    updateProduct
+  )
+  .delete(
+    protect,
+    branchAccess,
+    deleteProduct
+  );
 
 module.exports = router;
