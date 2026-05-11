@@ -1,10 +1,17 @@
-   const User = require("../models/User");
+  const mongoose = require("mongoose");
+const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const Shop = require("../models/Shop");
+const Branch = require("../models/Branch");
 const normalizePhone = require("../utils/normalizePhone");
 
 const registerUser = async (req, res) => {
+  const session = await mongoose.startSession();
+
   try {
+    session.startTransaction();
+
     let {
       name,
       businessName,
@@ -16,10 +23,10 @@ const registerUser = async (req, res) => {
       mtaa
     } = req.body;
 
-    // normalize phone
+    // NORMALIZE PHONE
     phone = normalizePhone(phone);
 
-    // validate
+    // VALIDATION
     if (
       !name ||
       !businessName ||
@@ -30,63 +37,140 @@ const registerUser = async (req, res) => {
       !wilaya ||
       !mtaa
     ) {
+      await session.abortTransaction();
+      session.endSession();
+
       return res.status(400).json({
         message: "All fields are required"
       });
     }
 
-    // duplicate phone
-    const exists = await User.findOne({ phone });
+    // CHECK DUPLICATE
+    const exists = await User.findOne({
+      phone
+    }).session(session);
 
     if (exists) {
+      await session.abortTransaction();
+      session.endSession();
+
       return res.status(400).json({
         message: "Phone already registered"
       });
     }
 
-    // hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // HASH PASSWORD
+    const hashedPassword =
+      await bcrypt.hash(password, 10);
 
-    // create user
-     const user = await User.create({
-  name,
-  businessName,
-  phone,
-  password: hashedPassword,
-  businessCategory,
-  mkoa,
-  wilaya,
-  mtaa,
-  subscription: {
-    plan: "trial",
-    startDate: new Date(),
-    expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    isActive: true
-  }
-});
-    // token
+    // CREATE USER
+    const users = await User.create(
+      [{
+        name: name.trim(),
+        businessName:
+          businessName.trim(),
+        phone,
+        password: hashedPassword,
+        businessCategory,
+        mkoa,
+        wilaya,
+        mtaa,
+        subscription: {
+          plan: "trial",
+          startDate: new Date(),
+          expiresAt: new Date(
+            Date.now() +
+            14 * 24 * 60 * 60 * 1000
+          ),
+          isActive: true
+        }
+      }],
+      { session }
+    );
+
+    const user = users[0];
+
+    // CREATE SHOP
+    const shops = await Shop.create(
+      [{
+        owner: user._id,
+        businessName:
+          user.businessName,
+        category:
+          user.businessCategory,
+        phone:
+          user.phone,
+        mkoa:
+          user.mkoa,
+        wilaya:
+          user.wilaya,
+        mtaa:
+          user.mtaa
+      }],
+      { session }
+    );
+
+    const shop = shops[0];
+
+    // CREATE MAIN BRANCH
+    await Branch.create(
+      [{
+        shop: shop._id,
+        name:
+          `${user.businessName} Main Branch`,
+        phone:
+          user.phone,
+        manager:
+          user.name,
+        mkoa:
+          user.mkoa,
+        wilaya:
+          user.wilaya,
+        mtaa:
+          user.mtaa,
+        isMain: true,
+        isActive: true
+      }],
+      { session }
+    );
+
+    // COMMIT
+    await session.commitTransaction();
+    session.endSession();
+
+    // TOKEN
     const token = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: "30d" }
     );
 
-    res.status(201).json({
+    // RESPONSE
+    return res.status(201).json({
       token,
       user: {
         id: user._id,
         name: user.name,
-        businessName: user.businessName,
+        businessName:
+          user.businessName,
         phone: user.phone,
         role: user.role,
-
-        owner: user.owner || null, // ✅ ONGEZA HII
-
-        subscription: user.subscription
+        owner: user.owner || null,
+        subscription:
+          user.subscription
       }
     });
+
   } catch (error) {
-    res.status(500).json({
+    await session.abortTransaction();
+    session.endSession();
+
+    console.log(
+      "REGISTER ERROR:",
+      error
+    );
+
+    return res.status(500).json({
       message: error.message
     });
   }
@@ -97,135 +181,163 @@ const loginUser = async (req, res) => {
   try {
     let { phone, password } = req.body;
 
-    // 🔥 NORMALIZE PHONE
+    // NORMALIZE PHONE
     phone = normalizePhone(phone);
 
-    // 🔥 VALIDATION
+    // VALIDATION
     if (!phone || !password) {
       return res.status(400).json({
-        message: "Phone and password required"
+        message:
+          "Phone and password required"
       });
     }
 
-    // 🔥 FIND USER
-    const user = await User.findOne({ phone });
+    // FIND USER
+    const user = await User.findOne({
+      phone
+    });
 
     if (!user) {
       return res.status(400).json({
-        message: "Invalid credentials"
+        message:
+          "Invalid credentials"
       });
     }
 
-    // 🔥 CHECK PASSWORD
-    const match = await bcrypt.compare(password, user.password);
+    // CHECK PASSWORD
+    const match =
+      await bcrypt.compare(
+        password,
+        user.password
+      );
 
     if (!match) {
       return res.status(400).json({
-        message: "Invalid credentials"
+        message:
+          "Invalid credentials"
       });
     }
 
-    // 🔥 GENERATE TOKEN
+    // TOKEN
     const token = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
       { expiresIn: "30d" }
     );
 
-    // 🔥 FIX: HANDLE SUBSCRIPTION FOR STAFF
-    let subscription = user.subscription;
+    // STAFF SUBSCRIPTION
+    let subscription =
+      user.subscription;
 
-    if (user.role === "staff" && user.owner) {
-      const owner = await User.findById(user.owner);
-      subscription = owner?.subscription;
+    if (
+      user.role === "staff" &&
+      user.owner
+    ) {
+      const owner =
+        await User.findById(
+          user.owner
+        );
+
+      subscription =
+        owner?.subscription;
     }
 
-    // 🔥 RESPONSE
+    // RESPONSE
     return res.status(200).json({
       token,
       user: {
         id: user._id,
         name: user.name,
-        businessName: user.businessName,
+        businessName:
+          user.businessName,
         phone: user.phone,
-
         role: user.role,
         owner: user.owner,
-
-        subscription // 🔥 FIXED HAPA
+        subscription
       }
     });
 
   } catch (error) {
-    console.log("LOGIN ERROR:", error.message);
+    console.log(
+      "LOGIN ERROR:",
+      error.message
+    );
 
     return res.status(500).json({
       message: error.message
     });
   }
 };
- 
- 
+
+
 const addStaff = async (req, res) => {
   try {
-    // 🔥 CHECK AUTH + OWNER
     if (!req.user || !req.ownerId) {
       return res.status(401).json({
-        message: "Invalid owner session"
+        message:
+          "Invalid owner session"
       });
     }
 
-    const { name, phone, password } = req.body;
+    const {
+      name,
+      phone,
+      password
+    } = req.body;
 
-    // 🔥 VALIDATION
-    if (!name || !phone || !password) {
+    if (
+      !name ||
+      !phone ||
+      !password
+    ) {
       return res.status(400).json({
-        message: "All fields are required"
+        message:
+          "All fields are required"
       });
     }
 
-    // 🔥 NORMALIZE PHONE
-    const normalizedPhone = normalizePhone(phone);
+    const normalizedPhone =
+      normalizePhone(phone);
 
-    // 🔥 CHECK DUPLICATE
-    const exists = await User.findOne({
-      phone: normalizedPhone
-    });
+    const exists =
+      await User.findOne({
+        phone:
+          normalizedPhone
+      });
 
     if (exists) {
       return res.status(400).json({
-        message: "Phone already registered"
+        message:
+          "Phone already registered"
       });
     }
 
-    // 🔥 HASH PASSWORD
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword =
+      await bcrypt.hash(password, 10);
 
-    // 🔥 CREATE USER INSTANCE (SAFE)
     const staff = new User({
       name: name.trim(),
-      phone: normalizedPhone,
-      password: hashedPassword,
-
+      phone:
+        normalizedPhone,
+      password:
+        hashedPassword,
       role: "staff",
-
-      // 🔥 LINK OWNER
       owner: req.ownerId,
-
-      // 🔥 COPY BUSINESS DATA
-      businessName: req.user.businessName,
-      businessCategory: req.user.businessCategory,
+      businessName:
+        req.user.businessName,
+      businessCategory:
+        req.user.businessCategory,
       mkoa: req.user.mkoa,
-      wilaya: req.user.wilaya,
+      wilaya:
+        req.user.wilaya,
       mtaa: req.user.mtaa
     });
 
-    // 🔥 SAVE (important for schema hooks)
     await staff.save();
 
-    // 🔥 RESPONSE
     return res.status(201).json({
-      message: "Staff created successfully",
+      message:
+        "Staff created successfully",
       staff: {
         id: staff._id,
         name: staff.name,
@@ -235,34 +347,51 @@ const addStaff = async (req, res) => {
     });
 
   } catch (error) {
-    console.log("ADD STAFF ERROR FULL:", error);
+    console.log(
+      "ADD STAFF ERROR FULL:",
+      error
+    );
 
     return res.status(500).json({
-      message: error.message || "Failed to create staff"
+      message:
+        error.message ||
+        "Failed to create staff"
     });
   }
 };
-// 🔥 GET STAFF LIST (owner only)
+
+
 const getStaff = async (req, res) => {
   try {
-    // ownerId tayari unatoka middleware (req.ownerId)
-    const staff = await User.find({
-      owner: req.ownerId,
-      role: "staff",
-      isActive: true
-    })
-      .select("name phone role createdAt")
-      .sort({ createdAt: -1 })
-      .lean();
+    const staff =
+      await User.find({
+        owner: req.ownerId,
+        role: "staff",
+        isActive: true
+      })
+        .select(
+          "name phone role createdAt"
+        )
+        .sort({
+          createdAt: -1
+        })
+        .lean();
 
-    res.status(200).json(staff);
+    return res.status(200).json(
+      staff
+    );
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({
+      message:
+        error.message
+    });
   }
 };
+
 module.exports = {
   registerUser,
   loginUser,
-   getStaff,
-   addStaff // 🔥 ongeza hii
-}; 
+  getStaff,
+  addStaff
+};
