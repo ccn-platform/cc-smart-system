@@ -1,43 +1,62 @@
-  const PLANS = require("../utils/subscriptionPlans");
+  const PLANS =
+  require("../utils/subscriptionPlans");
 
-const activatePlan = async (user, planName) => {
-  const plan = PLANS[planName];
+const activatePlan =
+  async (target, planName) => {
+    const plan =
+      PLANS[planName];
 
-  if (!plan) {
-    throw new Error("Invalid plan");
-  }
+    if (!plan) {
+      throw new Error(
+        "Invalid plan"
+      );
+    }
 
-  const now = new Date();
+    const now =
+      new Date();
 
-  let startDate = now;
+    let startDate =
+      now;
 
-  // 🔥 kama bado subscription haijaisha → extend
-  if (
-    user.subscription?.expiresAt &&
-    new Date(user.subscription.expiresAt) > now
-  ) {
-    startDate = new Date(user.subscription.expiresAt);
-  }
+    if (
+      target.subscription?.expiresAt &&
+      new Date(
+        target.subscription.expiresAt
+      ) > now
+    ) {
+      startDate =
+        new Date(
+          target.subscription.expiresAt
+        );
+    }
 
-  const expiresAt = new Date(
-    startDate.getTime() + plan.days * 24 * 60 * 60 * 1000
-  );
+    const expiresAt =
+      new Date(
+        startDate.getTime() +
+        plan.days *
+          24 *
+          60 *
+          60 *
+          1000
+      );
 
-  user.subscription = {
-    plan: planName,
-    startDate,
-    expiresAt,
-    isActive: true
+    target.subscription = {
+      plan: planName,
+      startDate,
+      expiresAt,
+      isActive: true
+    };
+
+    target.pendingPlan = null;
+    target.paymentReference =
+      null;
+    target.pendingExpiresAt =
+      null;
+
+    await target.save();
+
+    return target.subscription;
   };
-
-  // 🔥 NEW (MUHIMU SANA)
-  user.pendingPlan = null;
-  user.paymentReference = null;
-
-  await user.save();
-
-  return user.subscription;
-};
 
 module.exports = {
   activatePlan
