@@ -2,11 +2,13 @@ const mongoose = require("mongoose");
 
 const shopSchema = new mongoose.Schema(
   {
-    owner: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true
-    },
+  owner: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User",
+  required: true,
+  unique: true,
+  index: true
+},
 
     businessName: {
       type: String,
