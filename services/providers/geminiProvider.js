@@ -73,14 +73,20 @@ const sendWithGemini =
               }
             ]
           }));
-
-      const chat =
-        model.startChat({
-          history,
-          systemInstruction:
+const chat =
+  model.startChat({
+    history,
+    systemInstruction: {
+      role: "system",
+      parts: [
+        {
+          text:
             systemPrompt
-        });
-
+        }
+      ]
+    }
+  });
+      
       let result =
         await chat.sendMessage(
           message
