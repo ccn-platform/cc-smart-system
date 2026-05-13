@@ -32,17 +32,48 @@ const sendWithGemini =
     conversation = []
   }) => {
     try {
-      const model =
-        genAI.getGenerativeModel(
-          {
-            model:
-              process.env.GEMINI_MODEL ||
-              "gemini-1.5-pro"
-          }
-        );
+     const MODELS = [
+  process.env.GEMINI_MODEL,
+  "gemini-2.5-flash",
+  "gemini-1.5-flash"
+].filter(Boolean);
 
-      const tools =
-        getBusinessTools();
+let model = null;
+let activeModel = null;
+
+for (const modelName of MODELS) {
+  try {
+    model =
+      genAI.getGenerativeModel({
+        model:
+          modelName
+      });
+
+    activeModel =
+      modelName;
+
+    break;
+
+  } catch (error) {
+    console.log(
+      "MODEL FAILED:",
+      modelName
+    );
+  }
+}
+
+if (!model) {
+  throw new Error(
+    "No Gemini model available"
+  );
+}
+
+       const tools =
+  getBusinessTools({
+    ownerId,
+    branchId,
+    user
+  });
 
       const systemPrompt =
         buildSystemPrompt({
@@ -152,9 +183,8 @@ const chat =
         provider:
           "gemini",
 
-        model:
-          process.env.GEMINI_MODEL ||
-          "gemini-1.5-pro",
+         model:
+           activeModel,
 
         toolsUsed:
           [
