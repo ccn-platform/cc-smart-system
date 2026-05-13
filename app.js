@@ -18,7 +18,8 @@ const metaRoutes = require("./routes/metaRoutes");
 const productRoutes = require("./routes/productRoutes");
 const salesRoutes =require("./routes/salesRoutes");
 const creditRoutes =require("./routes/creditRoutes");
-const app = express();
+const aiRoutes =require("./routes/aiRoutes");
+  const app = express();
 
 app.use(cors());
 app.use(express.json());
@@ -39,6 +40,7 @@ app.use("/api/meta", metaRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/sales",salesRoutes);
 app.use("/api/orders",orderRoutes);
+app.use("/api/ai",aiRoutes);
 app.use("/api/cash",cashRoutes);
 app.use("/api/credit",creditRoutes);
 app.use("/api/subscription", subscriptionRoutes);
