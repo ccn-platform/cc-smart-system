@@ -1,12 +1,8 @@
-  const Product = require("../models/Product");
-
+ const Product = require("../models/Product");
 const normalizeProductName =
   require("../utils/normalizeProductName");
 
-// 🔥 MEMORY CACHE
-const learnedMap = new Map();
-
- const analyzeProfit = async (
+const analyzeProfit = async (
   userId,
   branchId,
   items
@@ -20,131 +16,128 @@ const learnedMap = new Map();
   let matchedCount = 0;
   let unmatchedCount = 0;
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
+  // STEP 1: normalize all valid names
+  const normalizedItems = items.map(
+    (item, index) => {
+      const qty =
+        Math.max(
+          Number(item.qty) || 0,
+          0
+        );
 
-    const qty =
-      Math.max(Number(item.qty) || 0, 0);
+      const buyPrice =
+        Math.max(
+          Number(item.buyPrice) || 0,
+          0
+        );
 
-    const buyPrice =
-      Math.max(Number(item.buyPrice) || 0, 0);
+      const clean =
+        normalizeProductName(
+          item.name || ""
+        );
 
-    // 🔥 NORMALIZE OCR NAME
-    const clean =
-      normalizeProductName(item.name || "");
- 
-      if (!clean || clean.length < 2) {
+      return {
+        index,
+        original: item,
+        qty,
+        buyPrice,
+        clean,
+      };
+    }
+  );
 
-  unmatchedCount++;
+  // STEP 2: collect unique valid names
+  const uniqueNames = [
+    ...new Set(
+      normalizedItems
+        .filter(
+          (x) =>
+            x.clean &&
+            x.clean.length >= 2
+        )
+        .map((x) => x.clean)
+    ),
+  ];
 
-  results.push({
-    no: i + 1,
+  // STEP 3: batch database lookup (ONE QUERY)
+  let products = [];
 
-    name: item.name || "",
+  if (uniqueNames.length > 0) {
+    const query = {
+      owner: userId,
+      isActive: true,
+      normalizedName: {
+        $in: uniqueNames,
+      },
+    };
 
-    normalizedName: clean,
+    if (branchId) {
+      query.branch = branchId;
+    }
 
-    qty,
-
-    buyPrice,
-
-    buyTotal:
-      qty * buyPrice,
-
-    sellPrice: 0,
-
-    sellTotal: 0,
-
-    profitEach: 0,
-
-    profitTotal: 0,
-
-    matched: false,
-
-    reason: "invalid_name",
-  });
-
-  continue;
-}
-    let matched = null;
-
-    // ✅ CACHE MATCH
-  const cacheKey =
-  `${userId}_${branchId}_${clean}`;
-
-if (learnedMap.has(cacheKey)) {
-  matched =
-    learnedMap.get(cacheKey);
-}
-    // ✅ INDEXED DATABASE MATCH
- if (!matched) {
-
-  // ✅ EXACT INDEXED MATCH
-  const query = {
-    owner: userId,
-    normalizedName: clean,
-    isActive: true,
-  };
-
-  if (branchId) {
-    query.branch = branchId;
+    products =
+      await Product.find(query)
+        .select(
+          "normalizedName sellPrice"
+        )
+        .lean();
   }
 
-  matched =
-    await Product.findOne(query).lean();
+  // STEP 4: fast lookup map
+  const productMap = new Map();
 
-  // ✅ FALLBACK LOOSE SEARCH
-  if (!matched) {
-
-    const words = clean
-      .split(" ")
-       .filter((w) => w.length > 2)
-.slice(0, 3);
-
-    if (words.length > 0) {
-
-      const regex =
-        words.join("|");
- const fallbackQuery = {
-  owner: userId,
-  isActive: true,
-  normalizedName: {
-    $regex: regex,
-    $options: "i",
-  },
-};
-
-if (branchId) {
-  fallbackQuery.branch =
-    branchId;
-}
-
-matched =
-  await Product.findOne(
-    fallbackQuery
-  ).lean();
-}
-    
-}
-
-  // ✅ CACHE
-  if (matched) {
-    learnedMap.set(
-  cacheKey,
-  matched
-);
+  for (const product of products) {
+    productMap.set(
+      product.normalizedName,
+      product
+    );
   }
-}
+
+  // STEP 5: calculate results
+  for (const row of normalizedItems) {
+    const {
+      index,
+      original,
+      qty,
+      buyPrice,
+      clean,
+    } = row;
 
     const itemBuyTotal =
       qty * buyPrice;
 
     buyTotal += itemBuyTotal;
 
-    // ✅ MATCHED PRODUCT
+    // invalid name
+    if (!clean || clean.length < 2) {
+      unmatchedCount++;
+
+      results.push({
+        no: index + 1,
+        name: original.name || "",
+        normalizedName: clean,
+        qty,
+        buyPrice,
+        buyTotal: itemBuyTotal,
+        sellPrice: 0,
+        sellTotal: 0,
+        profitEach: 0,
+        profitTotal: 0,
+        matched: false,
+        reason: "invalid_name",
+      });
+
+      continue;
+    }
+
+    const matched =
+      productMap.get(clean);
+
     if (matched) {
       const sellPrice =
-        Number(matched.sellPrice) || 0;
+        Number(
+          matched.sellPrice
+        ) || 0;
 
       const itemSellTotal =
         qty * sellPrice;
@@ -156,62 +149,37 @@ matched =
         profitEach * qty;
 
       sellTotal += itemSellTotal;
-
       totalProfit += profitTotal;
-
       matchedCount++;
 
       results.push({
-        no: i + 1,
-        name: item.name,
-
+        no: index + 1,
+        name: original.name,
         normalizedName: clean,
-
         qty,
-
         buyPrice,
-
         buyTotal: itemBuyTotal,
-
         sellPrice,
-
         sellTotal: itemSellTotal,
-
         profitEach,
-
         profitTotal,
-
         matched: true,
       });
-    }
-
-    // ❌ NOT MATCHED
-    else {
+    } else {
       unmatchedCount++;
 
       results.push({
-        no: i + 1,
-
-        name: item.name,
-
+        no: index + 1,
+        name: original.name,
         normalizedName: clean,
-
         qty,
-
         buyPrice,
-
         buyTotal: itemBuyTotal,
-
         sellPrice: 0,
-
         sellTotal: 0,
-
         profitEach: 0,
-
         profitTotal: 0,
-
         matched: false,
-
         reason: "not_matched",
       });
     }
@@ -219,18 +187,13 @@ matched =
 
   return {
     items: results,
-
     buyTotal:
       Math.round(buyTotal),
-
     sellTotal:
       Math.round(sellTotal),
-
     totalProfit:
       Math.round(totalProfit),
-
     matchedCount,
-
     unmatchedCount,
   };
 };
