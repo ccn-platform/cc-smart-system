@@ -1,6 +1,14 @@
- const Product = require("../models/Product");
+  const Product = require("../models/Product");
 const normalizeProductName =
   require("../utils/normalizeProductName");
+const stringSimilarity =
+  require("string-similarity");
+
+const escapeRegex = (text) =>
+  text.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
 
 const analyzeProfit = async (
   userId,
@@ -61,28 +69,63 @@ const analyzeProfit = async (
 
   // STEP 3: batch database lookup (ONE QUERY)
   let products = [];
+let candidateProducts = [];
 
-  if (uniqueNames.length > 0) {
-    const query = {
-      owner: userId,
-      isActive: true,
+if (uniqueNames.length > 0) {
+  const baseQuery = {
+    owner: userId,
+    isActive: true,
+  };
+
+  if (branchId) {
+    baseQuery.branch = branchId;
+  }
+
+  // exact matches
+  products =
+    await Product.find({
+      ...baseQuery,
       normalizedName: {
         $in: uniqueNames,
       },
-    };
+    })
+      .select(
+        "normalizedName sellPrice name"
+      )
+      .lean();
 
-    if (branchId) {
-      query.branch = branchId;
-    }
+  // candidate pool for fuzzy matching
+  const searchWords = [
+  ...new Set(
+    uniqueNames
+      .flatMap((name) =>
+        name.split(" ")
+      )
+      .filter(
+        (word) => word.length >= 3
+      )
+      .slice(0, 30)
+  ),
+];
 
-    products =
-      await Product.find(query)
-        .select(
-          "normalizedName sellPrice"
-        )
-        .lean();
-  }
-
+if (searchWords.length > 0) {
+ candidateProducts =
+  await Product.find({
+    ...baseQuery,
+    $or: searchWords.map((w) => ({
+      normalizedName: {
+         $regex: escapeRegex(w),
+        $options: "i",
+      },
+    })),
+  })
+    .select(
+      "normalizedName sellPrice name"
+    )
+    .limit(500)
+    .lean();
+}
+}
   // STEP 4: fast lookup map
   const productMap = new Map();
 
@@ -92,6 +135,21 @@ const analyzeProfit = async (
       product
     );
   }
+
+  const candidateNames =
+  candidateProducts.map(
+    (p) => p.normalizedName
+  );
+
+  const candidateMap = new Map();
+
+for (const product of candidateProducts) {
+  candidateMap.set(
+    product.normalizedName,
+    product
+  );
+}
+const fuzzyResultCache = new Map();
 
   // STEP 5: calculate results
   for (const row of normalizedItems) {
@@ -129,11 +187,45 @@ const analyzeProfit = async (
 
       continue;
     }
+let matched =
+  productMap.get(clean);
 
-    const matched =
-      productMap.get(clean);
+// exact match failed → fuzzy match
+ if (
+  !matched &&
+  candidateProducts.length > 0
+) {
+  if (fuzzyResultCache.has(clean)) {
+    matched =
+      fuzzyResultCache.get(clean);
+  } else {
+    const best =
+      stringSimilarity
+        .findBestMatch(
+          clean,
+          candidateNames
+        );
 
-    if (matched) {
+    const topMatches =
+      best.ratings.filter(
+        (r) => r.rating >= 0.9
+      );
+
+    if (topMatches.length === 1) {
+      matched =
+        candidateMap.get(
+          best.bestMatch.target
+        );
+    }
+
+    fuzzyResultCache.set(
+      clean,
+      matched || null
+    );
+  }
+}
+if (matched) {
+    
       const sellPrice =
         Number(
           matched.sellPrice
