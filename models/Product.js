@@ -5,68 +5,72 @@ const normalizeProductName =
 const productSchema =
   new mongoose.Schema(
     {
-      owner: {
-        type:
-          mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
-        index: true
-      },
+     owner: {
+       type:
+         mongoose.Schema.Types.ObjectId,
+       ref: "User",
+      required: true
+    },
 
       branch: {
         type:
           mongoose.Schema.Types.ObjectId,
         ref: "Branch",
-        required: true,
-        index: true
+        required: true
+         
       },
 
-      name: {
-        type: String,
+     name: {
+      type: String,
         required: true,
-        trim: true,
-        index: true
+       trim: true,
+       maxlength: 200
       },
-
+      
       normalizedName: {
-        type: String,
-        index: true
-      },
-
+         type: String,
+          trim: true,
+         maxlength: 200
+     },
       aliases: [
         {
-          type: String,
-          trim: true
-        }
-      ],
+           type: String,
+           trim: true,
+           maxlength: 100
+         }
+       ],
 
-      barcode: {
-        type: String,
-        default: null,
-        trim: true
-      },
+     barcode: {
+       type: String,
+       default: null,
+       trim: true,
+         maxlength: 100
+       },
 
       category: {
-        type: String,
+       type: String,
         default: "General",
-        trim: true,
-        index: true
-      },
+       trim: true,
+       maxlength: 100
+     },
 
       unit: {
-        type: String,
-        default: "pcs",
-        trim: true
+       type: String,
+       default: "pcs",
+        trim: true,
+        maxlength: 20
       },
 
       description: {
         type: String,
-        default: ""
-      },
+         default: "",
+         maxlength: 1000
+        },
 
-      image: {
-        type: String,
-        default: ""
+     image: {
+       type: String,
+       default: "",
+       maxlength: 1000
       },
 
       buyPrice: {
@@ -79,12 +83,11 @@ const productSchema =
         default: 0
       },
 
-      stockQty: {
-        type: Number,
-        default: 0,
-        min: 0,
-        index: true
-      },
+       stockQty: {
+         type: Number,
+          default: 0,
+          min: 0
+       },
 
       lowStockAlert: {
         type: Number,
@@ -92,10 +95,9 @@ const productSchema =
       },
 
       isActive: {
-        type: Boolean,
-        default: true,
-        index: true
-      },
+       type: Boolean,
+        default: true
+       },
 
       createdBy: {
         type:
@@ -129,16 +131,54 @@ const productSchema =
     }
   );
 
-
-// AUTO NORMALIZE
-productSchema.pre("save", function () {
+productSchema.pre("save", function (next) {
   if (this.name) {
     this.normalizedName =
       normalizeProductName(this.name);
   }
+
+  next();
 });
+ 
+productSchema.pre("findOneAndUpdate", function (next) {
+  const update = this.getUpdate();
 
+  const newName =
+    update?.name ||
+    update?.$set?.name;
 
+  if (newName) {
+    if (update.$set) {
+      update.$set.normalizedName =
+        normalizeProductName(newName);
+    } else {
+      update.normalizedName =
+        normalizeProductName(newName);
+    }
+  }
+
+  next();
+});
+ 
+productSchema.pre("updateOne", function (next) {
+  const update = this.getUpdate();
+
+  const newName =
+    update?.name ||
+    update?.$set?.name;
+
+  if (newName) {
+    if (update.$set) {
+      update.$set.normalizedName =
+        normalizeProductName(newName);
+    } else {
+      update.normalizedName =
+        normalizeProductName(newName);
+    }
+  }
+
+  next();
+});
 // MULTI-BRANCH INDEXES
 productSchema.index({
   owner: 1,
@@ -146,7 +186,7 @@ productSchema.index({
   name: 1
 });
 
-productSchema.index(
+ productSchema.index(
   {
     owner: 1,
     branch: 1,
@@ -154,7 +194,11 @@ productSchema.index(
   },
   {
     unique: true,
-    sparse: true
+    partialFilterExpression: {
+      barcode: {
+        $type: "string"
+      }
+    }
   }
 );
 
@@ -172,13 +216,7 @@ productSchema.index({
 });
 
 
-// TEXT SEARCH
-productSchema.index({
-  name: "text",
-  aliases: "text",
-  category: "text"
-});
-
+ 
 module.exports =
   mongoose.model(
     "Product",
