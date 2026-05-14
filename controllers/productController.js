@@ -30,23 +30,28 @@ const createProduct = async (
     }
 
     const product =
-      await Product.create({
-        owner: req.ownerId,
-        branch: req.branchId,
+  await Product.create({
+    owner: req.ownerId,
+    branch: req.branchId,
 
-        name: name.trim(),
-        barcode,
-        category,
-        unit,
-        description,
-        image,
-        buyPrice,
-        sellPrice,
-        stockQty,
-        lowStockAlert,
+    name: name.trim(),
 
-        createdBy: req.user.id
-      });
+    barcode:
+      barcode?.trim()
+        ? barcode.trim()
+        : null,
+
+    category,
+    unit,
+    description,
+    image,
+    buyPrice,
+    sellPrice,
+    stockQty,
+    lowStockAlert,
+
+    createdBy: req.user.id
+  });
 
     return res.status(201).json(
       product
