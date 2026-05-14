@@ -53,7 +53,8 @@ RULES:
 - Ignore row numbers
 - One product per line
 - Do not explain anything
--  If uncertain, skip the row
+-  If a row is partially unclear, make the best reasonable extraction.
+Only skip rows that are completely unreadable. 
 
 EXAMPLE:
 MAHARAGE NJANO | 20 | 46000
