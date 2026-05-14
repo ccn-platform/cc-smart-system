@@ -1,4 +1,4 @@
-  const mongoose = require("mongoose");
+   const mongoose = require("mongoose");
 
 const orderItemSchema =
   new mongoose.Schema(
@@ -95,15 +95,10 @@ const orderSchema =
       },
 
       status: {
-       type: String,
-         enum: [
-         "pending",
-           "completed",
-         "failed",
-         "cancelled"
-         ],
-        default: "completed"
-      },
+        type: String,
+        default: "completed",
+         
+      }
     },
     {
       timestamps: true,
