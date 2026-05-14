@@ -4,9 +4,11 @@ const orderItemSchema =
   new mongoose.Schema(
     {
       name: {
-        type: String,
-        required: true
-      },
+  type: String,
+  required: true,
+  trim: true,
+  maxlength: 200
+},
 
       qty: {
         type: Number,
@@ -51,25 +53,31 @@ const orderSchema =
           mongoose.Schema.Types.ObjectId,
         ref: "User",
         required: true,
-        index: true
-      },
+       },
 
       branch: {
         type:
           mongoose.Schema.Types.ObjectId,
         ref: "Branch",
         required: true,
-        index: true
+        
       },
 
       rawText: {
-        type: String,
-        default: ""
-      },
-
-      items: [
-        orderItemSchema
-      ],
+       type: String,
+        default: "",
+         maxlength: 50000
+       },
+      items: {
+        type: [orderItemSchema],
+          validate: {
+         validator(v) {
+         return !v || v.length <= 1000;
+        },
+       message: "Too many items"
+      }
+    },
+      
 
       buyTotal: {
         type: Number,
@@ -87,10 +95,15 @@ const orderSchema =
       },
 
       status: {
-        type: String,
-        default: "completed",
-        index: true
-      }
+       type: String,
+         enum: [
+         "pending",
+           "completed",
+         "failed",
+         "cancelled"
+         ],
+        default: "completed"
+      },
     },
     {
       timestamps: true,
