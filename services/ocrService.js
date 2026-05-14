@@ -31,7 +31,7 @@ const httpClient = axios.create({
 });
 
  // 🔥 SMART OCR PROMPT
-const PROMPT = `
+ const PROMPT = `
 You are an OCR engine for Tanzanian shop invoices and handwritten order sheets.
 
 Read ALL visible product rows from the image.
@@ -42,7 +42,7 @@ FORMAT:
 PRODUCT_NAME | QTY | TOTAL
 
 RULES:
-- Keep original product names
+- Keep original product names exactly as seen
 - Quantity must be number only
 - Total must be number only
 - Ignore headers
@@ -53,8 +53,9 @@ RULES:
 - Ignore row numbers
 - One product per line
 - Do not explain anything
--  If a row is partially unclear, make the best reasonable extraction.
-Only skip rows that are completely unreadable. 
+- If a row is partially unclear, extract the readable parts only
+- Only skip rows that are completely unreadable
+- Do not invent products or numbers that are not visible
 
 EXAMPLE:
 MAHARAGE NJANO | 20 | 46000
