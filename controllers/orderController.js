@@ -39,7 +39,7 @@ try {
 order = await Order.create({
   owner: ownerId,
   branch: branchId,
-  rawText: cleanText.slice(0, 5000),
+    rawText: cleanText.slice(0, 50000),
 
   items: result.items.map((x) => ({
     name: x.name || "Unknown",
@@ -88,7 +88,7 @@ const scanOrder = async (req, res) => {
 
     res.status(200).json({
        orderId: order?._id || null,
-       rawText: cleanText.slice(0, 5000),
+         rawText: cleanText.slice(0, 10000),
       ...result
     });
 
@@ -135,7 +135,7 @@ const scanImage = async (req, res) => {
 
     res.status(200).json({
      orderId: order?._id || null,
-       rawText: cleanText.slice(0, 5000),
+         rawText: cleanText.slice(0, 10000),
       ...result
     });
 } catch (error) {
