@@ -150,7 +150,7 @@ else {
               ],
               generationConfig: {
                 temperature: 0,
-                 maxOutputTokens: 1200
+                 maxOutputTokens: 2000
               },
             },
             {
