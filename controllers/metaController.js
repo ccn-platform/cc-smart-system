@@ -2,9 +2,12 @@ const BusinessCategory = require("../models/BusinessCategory");
 
 const getBusinessCategories = async (req, res) => {
   try {
-    const categories = await BusinessCategory.find({
-      isActive: true
-    }).sort({ sortOrder: 1 });
+    await BusinessCategory.find(
+  { isActive: true }
+)
+.select("name sortOrder")
+.sort({ sortOrder: 1 })
+.lean();
 
     res.status(200).json(categories);
   } catch (error) {
