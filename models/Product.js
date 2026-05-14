@@ -131,16 +131,14 @@ const productSchema =
     }
   );
 
-productSchema.pre("save", function (next) {
+ productSchema.pre("save", function () {
   if (this.name) {
     this.normalizedName =
       normalizeProductName(this.name);
   }
-
-  next();
 });
- 
-productSchema.pre("findOneAndUpdate", function (next) {
+
+productSchema.pre("findOneAndUpdate", function () {
   const update = this.getUpdate();
 
   const newName =
@@ -156,11 +154,9 @@ productSchema.pre("findOneAndUpdate", function (next) {
         normalizeProductName(newName);
     }
   }
-
-  next();
 });
- 
-productSchema.pre("updateOne", function (next) {
+
+productSchema.pre("updateOne", function () {
   const update = this.getUpdate();
 
   const newName =
@@ -176,8 +172,6 @@ productSchema.pre("updateOne", function (next) {
         normalizeProductName(newName);
     }
   }
-
-  next();
 });
 // MULTI-BRANCH INDEXES
 productSchema.index({
