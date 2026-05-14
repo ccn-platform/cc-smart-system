@@ -53,7 +53,7 @@ RULES:
 - Ignore row numbers
 - One product per line
 - Do not explain anything
-- If uncertain, still return best guess
+-  If uncertain, skip the row
 
 EXAMPLE:
 MAHARAGE NJANO | 20 | 46000
@@ -63,6 +63,7 @@ MCHELE | 100 | 220000
 
 // 🔥 core OCR processor
  const fs = require("fs/promises");
+ 
 
 const processOCR = async (file) => {
   if (process.env.NODE_ENV !== "production") {
@@ -78,6 +79,12 @@ const processOCR = async (file) => {
   throw new Error("No file provided");
 }
 
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error(
+    "OCR service not configured"
+  );
+}
+
 if (file.size && file.size > 5 * 1024 * 1024) {
   throw new Error("Image too large (max 5MB)");
 }
@@ -90,12 +97,17 @@ if (file.buffer) {
 
 // ✅ fallback kama buffer haipo
  else if (file.path) {
-  const fileData = fs.readFileSync(file.path);
-  imageBase64 = fileData.toString("base64");
+  const fileData =
+    await fs.readFile(file.path);
+
+  imageBase64 =
+    fileData.toString("base64");
 }
 // ❌ hakuna valid file
 else {
+  if (process.env.NODE_ENV !== "production") {
   console.log("⚠️ File object:", file);
+}
   throw new Error("Invalid file (no buffer/path)");
 }
 
@@ -109,10 +121,12 @@ else {
     // 🔥 retry attempts
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        console.log(
-          `➡️ OCR | model=${model} | attempt=${attempt + 1}`
-        );
-
+        
+     if (process.env.NODE_ENV !== "production") {
+       console.log(
+        `➡️ OCR | model=${model} | attempt=${attempt + 1}`
+       );
+      }
         const response =
           await httpClient.post(
             url,
@@ -134,7 +148,7 @@ else {
               ],
               generationConfig: {
                 temperature: 0,
-                maxOutputTokens: 4096,
+                 maxOutputTokens: 1200
               },
             },
             {
@@ -150,11 +164,30 @@ else {
 
         // 🔥 validate response
         if (!text || text.length < 10) {
-          throw new Error("Empty OCR response");
-        }
+  throw new Error("Empty OCR response");
+}
 
-         console.log("✅ OCR success");
-         console.log("🧾 RAW OCR:\n", text);
+const validLine =
+  text
+    .split("\n")
+    .some((line) =>
+       /^[^|]+\|\s*\d+\s*\|\s*\d+\s*$/.test(
+        line.trim()
+      )
+    );
+
+if (!validLine) {
+  throw new Error(
+    "Invalid OCR format"
+  );
+}
+
+          if (process.env.NODE_ENV !== "production") {
+            console.log("✅ OCR success");
+       }
+         if (process.env.NODE_ENV !== "production") {
+          console.log("🧾 RAW OCR:\n", text);
+        }
 
         return text
           .replace(/\r/g, "")
@@ -166,25 +199,32 @@ else {
         const status =
           error.response?.status;
 
-        console.log("❌ OCR fail:", {
+        if (process.env.NODE_ENV !== "production") {
+          console.log("❌ OCR fail:", {
           model,
           attempt,
           status,
           message: error.message,
-        });
+       });
+     }
 
         // 🔥 retry only for overload / timeout
-        if (
-          (status === 503 ||
-            error.code === "ECONNABORTED") &&
-          attempt < 2
+ const retryable =
+  [429, 500, 502, 503, 504];
+
+if (
+  (retryable.includes(status) ||
+    error.code === "ECONNABORTED") &&
+  attempt < 2
         ) {
           const wait =
             2000 * (attempt + 1);
 
-          console.log(
-            `⏳ retry in ${wait}ms`
-          );
+         if (process.env.NODE_ENV !== "production") {
+  console.log(
+    `⏳ retry in ${wait}ms`
+  );
+}
 
           await delay(wait);
           continue;
