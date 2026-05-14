@@ -193,7 +193,8 @@ let matched =
 // exact match failed → fuzzy match
  if (
   !matched &&
-  candidateProducts.length > 0
+  candidateProducts.length > 0 &&
+  clean.length >= 8
 ) {
   if (fuzzyResultCache.has(clean)) {
     matched =
