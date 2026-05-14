@@ -5,7 +5,14 @@ const parseOrderText = require("../utils/parseOrderText");
 const { analyzeProfit } = require("../services/profitService");
 const { readImageText } = require("../services/ocrService");
 
-
+const BAD_REQUEST_ERRORS = [
+  "Text required",
+  "Image required",
+  "No items detected",
+  "No file provided",
+  "Image too large (max 5MB)",
+  "Invalid file (no buffer/path)"
+];
 // 🔥 HELPER (avoid duplicate logic)
  const processOrder = async (
   ownerId,
@@ -29,10 +36,10 @@ const { readImageText } = require("../services/ocrService");
 
 try {
 
- order = await Order.create({
+order = await Order.create({
   owner: ownerId,
   branch: branchId,
-  rawText: cleanText,
+  rawText: cleanText.slice(0, 5000),
 
   items: result.items.map((x) => ({
     name: x.name || "Unknown",
@@ -51,7 +58,10 @@ try {
 
 }  
 catch (dbError) {
-  console.log("ORDER SAVE ERROR:", dbError);
+   console.error(
+  "ORDER SAVE ERROR:",
+  dbError.message
+);
   throw dbError;
 }
 
@@ -64,12 +74,11 @@ const scanOrder = async (req, res) => {
   try {
     const { text } = req.body;
 
-    if (!text) {
-      return res.status(400).json({
-        message: "Text required"
-      });
-    }
-
+   if (!text?.trim()) {
+  return res.status(400).json({
+    message: "Text required"
+  });
+}
     const { order, cleanText, result } =
       await processOrder(
         req.ownerId,
@@ -79,22 +88,29 @@ const scanOrder = async (req, res) => {
 
     res.status(200).json({
        orderId: order?._id || null,
-      rawText: cleanText,
+       rawText: cleanText.slice(0, 5000),
       ...result
     });
 
   } catch (error) {
 
-  console.log(
-    "SCAN ORDER ERROR:",
-    error
-  );
+   console.error(
+  "SCAN ORDER ERROR:",
+  error.message
+);
 
-  res.status(400).json({
-    message:
-      error.message ||
-      "Scan failed"
-  });
+ const status =
+  BAD_REQUEST_ERRORS.includes(
+    error.message
+  )
+    ? 400
+    : 500;
+ 
+res.status(status).json({
+  message:
+    error.message ||
+    "Scan failed"
+});
 }
 };
 
@@ -119,21 +135,30 @@ const scanImage = async (req, res) => {
 
     res.status(200).json({
      orderId: order?._id || null,
-      rawText: cleanText,
+       rawText: cleanText.slice(0, 5000),
       ...result
     });
 } catch (error) {
 
-  console.log(
-    "SCAN IMAGE ERROR:",
-    error
-  );
+   console.error(
+  "SCAN IMAGE ERROR:",
+  error.message
+);
 
-  res.status(400).json({
-    message:
-      error.message ||
-      "Scan failed"
-  });
+ 
+
+ const status =
+  BAD_REQUEST_ERRORS.includes(
+    error.message
+  )
+    ? 400
+    : 500;
+
+res.status(status).json({
+  message:
+    error.message ||
+    "Scan failed"
+});
 }
   
 };
@@ -142,7 +167,13 @@ const scanImage = async (req, res) => {
 // GET HISTORY (PAGINATION)
 const getOrderHistory = async (req, res) => {
   try {
-    const page = Math.max(0, Number(req.query.page) || 0);
+     const page = Math.min(
+  1000,
+  Math.max(
+    0,
+    Number(req.query.page) || 0
+  )
+);
     const limit = 20;
     const skip = page * limit;
 
@@ -167,13 +198,24 @@ const getOrderHistory = async (req, res) => {
 
 
 // GET SINGLE ORDER
-const getOrderById = async (req, res) => {
+ const getOrderById = async (req, res) => {
   try {
+
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        req.params.id
+      )
+    ) {
+      return res.status(400).json({
+        message: "Invalid order id"
+      });
+    }
+
     const order = await Order.findOne({
       _id: req.params.id,
-        owner: req.ownerId,
-         branch: req.branchId
-    }).lean(); // 🔥 faster read
+      owner: req.ownerId,
+      branch: req.branchId
+    }).lean();
 
     if (!order) {
       return res.status(404).json({
