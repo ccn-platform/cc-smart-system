@@ -12,7 +12,6 @@ const delay = (ms) =>
 
 const MODELS = [
   "gemini-2.5-flash",
-  "gemini-1.5-flash",
 ];
 
 const httpClient = axios.create({
@@ -28,15 +27,15 @@ const httpClient = axios.create({
 });
 
 const PROMPT = `
-You are a STRICT OCR extraction engine.
+You are a strict OCR extraction engine.
 
-Extract EVERY visible product row.
+Extract every visible product row.
 
 OUTPUT:
 PRODUCT_NAME | QTY | TOTAL
 
 RULES:
-- Return ALL visible rows
+- Return all visible rows
 - One row per line
 - Preserve exact spelling
 - Preserve exact capitalization
@@ -55,15 +54,12 @@ const callGeminiOCR = async (
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         console.log(
-          `➡️ OCR | model=${model} | attempt=${attempt + 1}`
+          `➡️ OCR | ${model} | attempt ${attempt + 1}`
         );
-
-        const url =
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
         const response =
           await httpClient.post(
-            url,
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
             {
               contents: [
                 {
@@ -83,8 +79,6 @@ const callGeminiOCR = async (
               generationConfig: {
                 temperature: 0,
                 maxOutputTokens: 2000,
-                topP: 1,
-                topK: 1,
               },
             },
             {
@@ -100,24 +94,17 @@ const callGeminiOCR = async (
         const candidate =
           response.data?.candidates?.[0];
 
-        if (!candidate) {
-          console.log(
-            "❌ No candidates:",
-            response.data
-          );
-          throw new Error(
-            "No candidates returned"
-          );
-        }
-
         const text =
-          candidate.content?.parts
+          candidate?.content?.parts
             ?.map((p) => p.text || "")
             .join("\n")
             .trim();
 
         if (!text || text.length < 5) {
-          throw new Error("Empty OCR");
+          console.log(
+            "⚠️ Empty OCR chunk"
+          );
+          return "";
         }
 
         console.log("✅ OCR success");
@@ -161,9 +148,7 @@ const callGeminiOCR = async (
     }
   }
 
-  throw new Error(
-    "OCR failed after all retries"
-  );
+  return "";
 };
 
 const splitImageIntoChunks = async (
@@ -224,8 +209,9 @@ const normalizeOCR = (text) => {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
-    .filter((line) =>
-      line.includes("|")
+    .filter(
+      (line) =>
+        line.includes("|")
     );
 };
 
@@ -265,7 +251,7 @@ const processOCR = async (file) => {
     await splitImageIntoChunks(buffer);
 
   const results =
-    await Promise.all(
+    await Promise.allSettled(
       chunks.map((chunk, index) =>
         limit(async () => {
           console.log(
@@ -286,8 +272,20 @@ const processOCR = async (file) => {
       )
     );
 
+  const rows =
+    results
+      .filter(
+        (result) =>
+          result.status ===
+          "fulfilled"
+      )
+      .flatMap(
+        (result) =>
+          result.value
+      );
+
   const merged =
-    dedupeRows(results.flat());
+    dedupeRows(rows);
 
   console.log(
     `✅ Final OCR rows: ${merged.length}`
