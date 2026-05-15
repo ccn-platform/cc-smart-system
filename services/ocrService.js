@@ -30,77 +30,97 @@ const httpClient = axios.create({
   maxBodyLength: 10 * 1024 * 1024,
 });
 
- // 🔥 STRICT OCR PROMPT
+ // 🔥 ULTRA STRICT OCR PROMPT
 const PROMPT = `
-You are a STRICT OCR extraction engine for Tanzanian shop invoices, printed receipts, and handwritten order sheets.
+You are a STRICT OCR extraction engine for Tanzanian shop invoices, receipts, and handwritten order sheets.
 
-YOUR JOB:
-Copy visible text EXACTLY from the image.
+MISSION:
+Extract EVERY visible product row from the image with maximum completeness.
+
+CRITICAL FAILURE CONDITIONS:
+Your answer is WRONG if:
+- even ONE visible product row is missing
+- spelling is changed
+- rows are merged
+- rows are skipped
+- values are invented
+
+READING INSTRUCTIONS:
+- Read image from TOP to BOTTOM
+- Read LEFT to RIGHT
+- Process rows ONE BY ONE sequentially
+- Continue until the LAST visible row
+- Do NOT stop early
+- Do NOT shorten output
 
 OUTPUT FORMAT:
 PRODUCT_NAME | QTY | TOTAL
 
 STRICT RULES:
-- Read EVERY visible product row
-- Preserve original spelling exactly as written
-- Preserve original capitalization exactly as written
-- DO NOT correct spelling mistakes
-- DO NOT guess missing letters
-- DO NOT invent products
-- DO NOT invent quantities
-- DO NOT invent totals
+- Return ONLY product rows
+- One row per line
+- Preserve exact original spelling
+- Preserve exact capitalization
+- Preserve abbreviations exactly
+- Preserve brand names exactly
+- Preserve handwritten spelling mistakes exactly
+- DO NOT autocorrect
 - DO NOT summarize
-- DO NOT explain anything
-- DO NOT merge multiple rows
-- One product per line only
+- DO NOT explain
+- DO NOT merge rows
+- DO NOT skip rows
+- DO NOT invent hidden text
+- DO NOT guess invisible values
 
-FIELD RULES:
 PRODUCT_NAME:
 - Copy exactly as visible
-- Keep abbreviations exactly
-- Keep brand names exactly
-- If partially unclear, keep readable part and use [UNCLEAR] for missing part
+- If partially unreadable:
+  keep readable text + [UNCLEAR]
 
 QTY:
 - Number only
-- No units
-- No text
-- If unclear, use [UNCLEAR]
+- If unreadable:
+  [UNCLEAR]
 
 TOTAL:
 - Number only
-- No currency symbols
 - No commas
-- If unclear, use [UNCLEAR]
+- No currency symbols
+- If unreadable:
+  [UNCLEAR]
 
 IGNORE COMPLETELY:
-- Invoice headers
-- Shop names
-- Dates
-- Phone numbers
-- Addresses
-- Receipt numbers
-- Grand totals
-- Subtotals
-- Profit rows
-- Footer text
-- Signatures
-- Row numbering if not part of product name
+- shop name
+- headers
+- dates
+- phone numbers
+- addresses
+- receipt numbers
+- totals
+- subtotals
+- grand totals
+- profit rows
+- footer text
+- signatures
 
-IMPORTANT:
-- Missing a visible product row is a serious error
-- Guessing is a serious error
-- Changing spelling is a serious error
-- Return ALL visible product rows
+SELF-CHECK BEFORE RESPONDING:
+1. Count visible product rows in image
+2. Count output rows
+3. If counts do not match, re-read image
+4. Ensure bottom-most row is included
+5. Ensure no visible row was skipped
 
-VALID EXAMPLE:
+FINAL RESPONSE:
+Only rows in this exact format:
+PRODUCT_NAME | QTY | TOTAL
+
+EXAMPLE:
 MAHARAGE NJANO | 20 | 46000
 DAGAA | 3 | 27000
 MCHELE SUPER | 100 | 220000
 COCA COLA | 24 | 36000
 AZAM [UNCLEAR] | 12 | 18000
 `;
-
 // 🔥 core OCR processor
  const fs = require("fs/promises");
  
