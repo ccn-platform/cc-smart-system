@@ -1,23 +1,22 @@
-      const axios = require("axios");
+ const axios = require("axios");
 const http = require("http");
 const https = require("https");
- const pLimit = require("p-limit").default;
-// 🔥 limit concurrency (VERY IMPORTANT kwa scale)
+const pLimit = require("p-limit").default;
+const sharp = require("sharp");
+const fs = require("fs/promises");
+
 const limit = pLimit(5);
 
-// 🔥 delay helper (retry backoff)
 const delay = (ms) =>
   new Promise((res) => setTimeout(res, ms));
 
-// 🔥 fallback models
 const MODELS = [
   "gemini-2.5-flash",
-  "gemini-1.5-flash"
+  "gemini-1.5-flash",
 ];
 
-// 🔥 axios instance with keep-alive (performance boost)
 const httpClient = axios.create({
-  timeout: 60000,
+  timeout: 90000,
   httpAgent: new http.Agent({
     keepAlive: true,
     maxSockets: 50,
@@ -26,167 +25,38 @@ const httpClient = axios.create({
     keepAlive: true,
     maxSockets: 50,
   }),
-  maxContentLength: 10 * 1024 * 1024,
-  maxBodyLength: 10 * 1024 * 1024,
 });
 
- // 🔥 ULTRA STRICT OCR PROMPT
 const PROMPT = `
-You are a STRICT OCR extraction engine for Tanzanian shop invoices, receipts, and handwritten order sheets.
+You are a STRICT OCR extraction engine.
 
-MISSION:
-Extract EVERY visible product row from the image with maximum completeness.
+Extract EVERY visible product row.
 
-CRITICAL FAILURE CONDITIONS:
-Your answer is WRONG if:
-- even ONE visible product row is missing
-- spelling is changed
-- rows are merged
-- rows are skipped
-- values are invented
-
-READING INSTRUCTIONS:
-- Read image from TOP to BOTTOM
-- Read LEFT to RIGHT
-- Process rows ONE BY ONE sequentially
-- Continue until the LAST visible row
-- Do NOT stop early
-- Do NOT shorten output
-
-OUTPUT FORMAT:
+OUTPUT:
 PRODUCT_NAME | QTY | TOTAL
 
-STRICT RULES:
-- Return ONLY product rows
+RULES:
+- Return ALL visible rows
 - One row per line
-- Preserve exact original spelling
+- Preserve exact spelling
 - Preserve exact capitalization
-- Preserve abbreviations exactly
-- Preserve brand names exactly
-- Preserve handwritten spelling mistakes exactly
-- DO NOT autocorrect
-- DO NOT summarize
-- DO NOT explain
-- DO NOT merge rows
-- DO NOT skip rows
-- DO NOT invent hidden text
-- DO NOT guess invisible values
-
-PRODUCT_NAME:
-- Copy exactly as visible
-- If partially unreadable:
-  keep readable text + [UNCLEAR]
-
-QTY:
-- Number only
-- If unreadable:
-  [UNCLEAR]
-
-TOTAL:
-- Number only
-- No commas
-- No currency symbols
-- If unreadable:
-  [UNCLEAR]
-
-IGNORE COMPLETELY:
-- shop name
-- headers
-- dates
-- phone numbers
-- addresses
-- receipt numbers
-- totals
-- subtotals
-- grand totals
-- profit rows
-- footer text
-- signatures
-
-SELF-CHECK BEFORE RESPONDING:
-1. Count visible product rows in image
-2. Count output rows
-3. If counts do not match, re-read image
-4. Ensure bottom-most row is included
-5. Ensure no visible row was skipped
-
-FINAL RESPONSE:
-Only rows in this exact format:
-PRODUCT_NAME | QTY | TOTAL
-
-EXAMPLE:
-MAHARAGE NJANO | 20 | 46000
-DAGAA | 3 | 27000
-MCHELE SUPER | 100 | 220000
-COCA COLA | 24 | 36000
-AZAM [UNCLEAR] | 12 | 18000
+- Do not skip rows
+- Do not summarize
+- Do not explain
+- Do not merge rows
+- If unclear use [UNCLEAR]
 `;
-// 🔥 core OCR processor
- const fs = require("fs/promises");
- 
 
-const processOCR = async (file) => {
-  if (process.env.NODE_ENV !== "production") {
-    console.log("📂 FILE CHECK:", {
-      hasFile: !!file,
-      hasBuffer: !!file?.buffer,
-      hasPath: !!file?.path,
-      mimetype: file?.mimetype,
-      size: file?.size,
-    });
-  }
-  if (!file) {
-  throw new Error("No file provided");
-}
-
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error(
-    "OCR service not configured"
-  );
-}
-
-if (file.size && file.size > 5 * 1024 * 1024) {
-  throw new Error("Image too large (max 5MB)");
-}
-let imageBase64;
-
-// ✅ kama buffer ipo
-if (file.buffer) {
-  imageBase64 = file.buffer.toString("base64");
-}
-
-// ✅ fallback kama buffer haipo
- else if (file.path) {
-  const fileData =
-    await fs.readFile(file.path);
-
-  imageBase64 =
-    fileData.toString("base64");
-}
-// ❌ hakuna valid file
-else {
-  if (process.env.NODE_ENV !== "production") {
-  console.log("⚠️ File object:", file);
-}
-  throw new Error("Invalid file (no buffer/path)");
-}
-
-  // 🔥 loop models
-  for (let m = 0; m < MODELS.length; m++) {
-    const model = MODELS[m];
-
-    const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-
-    // 🔥 retry attempts
+const callGeminiOCR = async (
+  imageBase64,
+  mimeType
+) => {
+  for (const model of MODELS) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        
-     if (process.env.NODE_ENV !== "production") {
-       console.log(
-        `➡️ OCR | model=${model} | attempt=${attempt + 1}`
-       );
-      }
+        const url =
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
         const response =
           await httpClient.post(
             url,
@@ -197,9 +67,7 @@ else {
                     { text: PROMPT },
                     {
                       inline_data: {
-                        mime_type: file.mimetype?.startsWith("image/")
-                           ? file.mimetype
-                        : "image/jpeg",
+                        mime_type: mimeType,
                         data: imageBase64,
                       },
                     },
@@ -208,7 +76,7 @@ else {
               ],
               generationConfig: {
                 temperature: 0,
-                 maxOutputTokens: 2000
+                maxOutputTokens: 4000,
               },
             },
             {
@@ -220,89 +88,153 @@ else {
           );
 
         const text =
-          response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          response.data?.candidates?.[0]
+            ?.content?.parts?.[0]?.text;
 
-        // 🔥 validate response
-        if (!text || text.length < 10) {
-  throw new Error("Empty OCR response");
-}
-
-const validLine =
-  text
-    .split("\n")
-    .some((line) =>
-       /^[^|]+\|\s*\d+\s*\|\s*\d+\s*$/.test(
-        line.trim()
-      )
-    );
-
-if (!validLine) {
-  throw new Error(
-    "Invalid OCR format"
-  );
-}
-
-          if (process.env.NODE_ENV !== "production") {
-            console.log("✅ OCR success");
-       }
-         if (process.env.NODE_ENV !== "production") {
-          console.log("🧾 RAW OCR:\n", text);
+        if (!text || text.length < 5) {
+          throw new Error("Empty OCR");
         }
 
-        return text
-          .replace(/\r/g, "")
-          .replace(/\n{2,}/g, "\n")
-          .replace(/[ ]{2,}/g, " ")
-          .trim();
-
+        return text;
       } catch (error) {
+        const retryable =
+          [429, 500, 502, 503, 504];
+
         const status =
           error.response?.status;
 
-        if (process.env.NODE_ENV !== "production") {
-          console.log("❌ OCR fail:", {
-          model,
-          attempt,
-          status,
-          message: error.message,
-       });
-     }
-
-        // 🔥 retry only for overload / timeout
- const retryable =
-  [429, 500, 502, 503, 504];
-
-if (
-  (retryable.includes(status) ||
-    error.code === "ECONNABORTED") &&
-  attempt < 2
+        if (
+          (retryable.includes(status) ||
+            error.code === "ECONNABORTED") &&
+          attempt < 2
         ) {
-          const wait =
-            2000 * (attempt + 1);
-
-         if (process.env.NODE_ENV !== "production") {
-  console.log(
-    `⏳ retry in ${wait}ms`
-  );
-}
-
-          await delay(wait);
+          await delay(
+            2000 * (attempt + 1)
+          );
           continue;
         }
 
-        // 🔥 try next model
         break;
       }
     }
   }
 
-  throw new Error(
-    "OCR failed after retries (server busy or timeout)"
-  );
+  throw new Error("OCR failed");
 };
 
-// 🔥 public function with concurrency control
+const splitImageIntoChunks = async (
+  buffer
+) => {
+  const meta =
+    await sharp(buffer).metadata();
+
+  const width = meta.width;
+  const height = meta.height;
+
+  const chunkHeight = 1200;
+
+  const chunks = [];
+
+  for (
+    let top = 0;
+    top < height;
+    top += chunkHeight
+  ) {
+    const actualHeight =
+      Math.min(
+        chunkHeight,
+        height - top
+      );
+
+    const chunk =
+      await sharp(buffer)
+        .extract({
+          left: 0,
+          top,
+          width,
+          height: actualHeight,
+        })
+        .jpeg({ quality: 95 })
+        .toBuffer();
+
+    chunks.push(chunk);
+  }
+
+  return chunks;
+};
+
+const normalizeOCR = (text) => {
+  return text
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) =>
+      line.includes("|")
+    );
+};
+
+const dedupeRows = (rows) => {
+  return [...new Set(rows)];
+};
+
+const processOCR = async (file) => {
+  if (!file)
+    throw new Error("No file");
+
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error(
+      "OCR not configured"
+    );
+  }
+
+  let buffer;
+
+  if (file.buffer) {
+    buffer = file.buffer;
+  } else if (file.path) {
+    buffer =
+      await fs.readFile(file.path);
+  } else {
+    throw new Error(
+      "Invalid file"
+    );
+  }
+
+  const chunks =
+    await splitImageIntoChunks(buffer);
+
+  const results =
+    await Promise.all(
+      chunks.map((chunk) =>
+        limit(async () => {
+          const base64 =
+            chunk.toString("base64");
+
+          const text =
+            await callGeminiOCR(
+              base64,
+              "image/jpeg"
+            );
+
+          return normalizeOCR(text);
+        })
+      )
+    );
+
+  const merged =
+    dedupeRows(results.flat());
+
+  if (!merged.length) {
+    throw new Error(
+      "No OCR rows found"
+    );
+  }
+
+  return merged.join("\n");
+};
+
 const readImageText = (file) =>
-  limit(() => processOCR(file));
+  processOCR(file);
 
 module.exports = { readImageText };
