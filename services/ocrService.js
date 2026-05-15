@@ -5,7 +5,7 @@ const pLimit = require("p-limit").default;
 const sharp = require("sharp");
 const fs = require("fs/promises");
 
-const limit = pLimit(5);
+const limit = pLimit(3);
 
 const delay = (ms) =>
   new Promise((res) => setTimeout(res, ms));
@@ -54,6 +54,10 @@ const callGeminiOCR = async (
   for (const model of MODELS) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
+        console.log(
+          `➡️ OCR | model=${model} | attempt=${attempt + 1}`
+        );
+
         const url =
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
@@ -64,7 +68,9 @@ const callGeminiOCR = async (
               contents: [
                 {
                   parts: [
-                    { text: PROMPT },
+                    {
+                      text: PROMPT,
+                    },
                     {
                       inline_data: {
                         mime_type: mimeType,
@@ -76,36 +82,72 @@ const callGeminiOCR = async (
               ],
               generationConfig: {
                 temperature: 0,
-                maxOutputTokens: 4000,
+                maxOutputTokens: 2000,
+                topP: 1,
+                topK: 1,
               },
             },
             {
               headers: {
                 "x-goog-api-key":
                   process.env.GEMINI_API_KEY,
+                "Content-Type":
+                  "application/json",
               },
             }
           );
 
+        const candidate =
+          response.data?.candidates?.[0];
+
+        if (!candidate) {
+          console.log(
+            "❌ No candidates:",
+            response.data
+          );
+          throw new Error(
+            "No candidates returned"
+          );
+        }
+
         const text =
-          response.data?.candidates?.[0]
-            ?.content?.parts?.[0]?.text;
+          candidate.content?.parts
+            ?.map((p) => p.text || "")
+            .join("\n")
+            .trim();
 
         if (!text || text.length < 5) {
           throw new Error("Empty OCR");
         }
 
+        console.log("✅ OCR success");
+
         return text;
       } catch (error) {
-        const retryable =
-          [429, 500, 502, 503, 504];
-
         const status =
           error.response?.status;
 
+        console.log("❌ OCR ERROR:", {
+          model,
+          attempt: attempt + 1,
+          status,
+          code: error.code,
+          message: error.message,
+          data: error.response?.data,
+        });
+
+        const retryable = [
+          429,
+          500,
+          502,
+          503,
+          504,
+        ];
+
         if (
           (retryable.includes(status) ||
-            error.code === "ECONNABORTED") &&
+            error.code ===
+              "ECONNABORTED") &&
           attempt < 2
         ) {
           await delay(
@@ -119,7 +161,9 @@ const callGeminiOCR = async (
     }
   }
 
-  throw new Error("OCR failed");
+  throw new Error(
+    "OCR failed after all retries"
+  );
 };
 
 const splitImageIntoChunks = async (
@@ -131,8 +175,13 @@ const splitImageIntoChunks = async (
   const width = meta.width;
   const height = meta.height;
 
-  const chunkHeight = 1200;
+  if (!width || !height) {
+    throw new Error(
+      "Invalid image metadata"
+    );
+  }
 
+  const chunkHeight = 1200;
   const chunks = [];
 
   for (
@@ -154,11 +203,17 @@ const splitImageIntoChunks = async (
           width,
           height: actualHeight,
         })
-        .jpeg({ quality: 95 })
+        .jpeg({
+          quality: 95,
+        })
         .toBuffer();
 
     chunks.push(chunk);
   }
+
+  console.log(
+    `📦 Image split into ${chunks.length} chunks`
+  );
 
   return chunks;
 };
@@ -179,8 +234,9 @@ const dedupeRows = (rows) => {
 };
 
 const processOCR = async (file) => {
-  if (!file)
+  if (!file) {
     throw new Error("No file");
+  }
 
   if (!process.env.GEMINI_API_KEY) {
     throw new Error(
@@ -201,13 +257,21 @@ const processOCR = async (file) => {
     );
   }
 
+  console.log(
+    `📸 OCR file size: ${buffer.length} bytes`
+  );
+
   const chunks =
     await splitImageIntoChunks(buffer);
 
   const results =
     await Promise.all(
-      chunks.map((chunk) =>
+      chunks.map((chunk, index) =>
         limit(async () => {
+          console.log(
+            `🔍 Processing chunk ${index + 1}/${chunks.length}`
+          );
+
           const base64 =
             chunk.toString("base64");
 
@@ -225,6 +289,10 @@ const processOCR = async (file) => {
   const merged =
     dedupeRows(results.flat());
 
+  console.log(
+    `✅ Final OCR rows: ${merged.length}`
+  );
+
   if (!merged.length) {
     throw new Error(
       "No OCR rows found"
@@ -237,4 +305,6 @@ const processOCR = async (file) => {
 const readImageText = (file) =>
   processOCR(file);
 
-module.exports = { readImageText };
+module.exports = {
+  readImageText,
+};
