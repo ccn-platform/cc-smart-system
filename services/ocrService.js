@@ -1,4 +1,4 @@
-    const axios = require("axios");
+      const axios = require("axios");
 const http = require("http");
 const https = require("https");
  const pLimit = require("p-limit").default;
@@ -30,37 +30,75 @@ const httpClient = axios.create({
   maxBodyLength: 10 * 1024 * 1024,
 });
 
- // 🔥 SMART OCR PROMPT
- const PROMPT = `
-You are an OCR engine for Tanzanian shop invoices and handwritten order sheets.
+ // 🔥 STRICT OCR PROMPT
+const PROMPT = `
+You are a STRICT OCR extraction engine for Tanzanian shop invoices, printed receipts, and handwritten order sheets.
 
-Read ALL visible product rows from the image.
+YOUR JOB:
+Copy visible text EXACTLY from the image.
 
-Return ONLY valid product rows.
-
-FORMAT:
+OUTPUT FORMAT:
 PRODUCT_NAME | QTY | TOTAL
 
-RULES:
-- Keep original product names exactly as seen
-- Quantity must be number only
-- Total must be number only
-- Ignore headers
-- Ignore summaries
-- Ignore grand totals
-- Ignore profit rows
-- Ignore dates
-- Ignore row numbers
-- One product per line
-- Do not explain anything
-- If a row is partially unclear, extract the readable parts only
-- Only skip rows that are completely unreadable
-- Do not invent products or numbers that are not visible
+STRICT RULES:
+- Read EVERY visible product row
+- Preserve original spelling exactly as written
+- Preserve original capitalization exactly as written
+- DO NOT correct spelling mistakes
+- DO NOT guess missing letters
+- DO NOT invent products
+- DO NOT invent quantities
+- DO NOT invent totals
+- DO NOT summarize
+- DO NOT explain anything
+- DO NOT merge multiple rows
+- One product per line only
 
-EXAMPLE:
+FIELD RULES:
+PRODUCT_NAME:
+- Copy exactly as visible
+- Keep abbreviations exactly
+- Keep brand names exactly
+- If partially unclear, keep readable part and use [UNCLEAR] for missing part
+
+QTY:
+- Number only
+- No units
+- No text
+- If unclear, use [UNCLEAR]
+
+TOTAL:
+- Number only
+- No currency symbols
+- No commas
+- If unclear, use [UNCLEAR]
+
+IGNORE COMPLETELY:
+- Invoice headers
+- Shop names
+- Dates
+- Phone numbers
+- Addresses
+- Receipt numbers
+- Grand totals
+- Subtotals
+- Profit rows
+- Footer text
+- Signatures
+- Row numbering if not part of product name
+
+IMPORTANT:
+- Missing a visible product row is a serious error
+- Guessing is a serious error
+- Changing spelling is a serious error
+- Return ALL visible product rows
+
+VALID EXAMPLE:
 MAHARAGE NJANO | 20 | 46000
 DAGAA | 3 | 27000
-MCHELE | 100 | 220000
+MCHELE SUPER | 100 | 220000
+COCA COLA | 24 | 36000
+AZAM [UNCLEAR] | 12 | 18000
 `;
 
 // 🔥 core OCR processor
