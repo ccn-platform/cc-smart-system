@@ -17,6 +17,7 @@ const {
   createDebtLoan,
   receivePayment,
   getLoanHistory,
+  getPaymentHistory,
   getLoanById,
   scanFingerprint,
   getOverdueLoans
@@ -96,5 +97,11 @@ router.get(
   getLoanById
 );
 
+router.get(
+  "/payment-history/:loanId",
+  protect,
+  branchAccess,
+  getPaymentHistory
+);
 module.exports =
   router;
