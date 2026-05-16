@@ -518,6 +518,39 @@ const receivePayment =
     }
   };
 
+  const getPaymentHistory =
+  async (req, res) => {
+    try {
+      const { loanId } =
+        req.params;
+
+      const payments =
+        await DebtPayment.find({
+          owner:
+            req.ownerId,
+          branch:
+            req.branchId,
+          loan: loanId,
+          status: "posted"
+        })
+          .populate(
+            "receivedBy",
+            "name"
+          )
+          .sort({
+            paymentDate: -1
+          });
+
+      return res.status(200).json(
+        payments
+      );
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }
+  };
 module.exports = {
   findOrCreateCustomer,
   checkCredit,
@@ -526,5 +559,6 @@ module.exports = {
   getLoanById,
   receivePayment,
   scanFingerprint,
-  getOverdueLoans
+ getPaymentHistory,
+   getOverdueLoans
 };
