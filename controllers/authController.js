@@ -274,7 +274,7 @@ if (user.role === "staff") {
    
    
   // RESPONSE
- return res.status(200).json({
+  return res.status(200).json({
   token,
   user: {
     id: user._id,
@@ -282,6 +282,8 @@ if (user.role === "staff") {
     businessName:
       user.businessName,
     phone: user.phone,
+    businessCategory:
+      user.businessCategory,
     role: user.role,
     owner: user.owner,
 
