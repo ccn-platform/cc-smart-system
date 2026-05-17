@@ -13,15 +13,15 @@ const registerUser = async (req, res) => {
     session.startTransaction();
 
     let {
-      name,
-      businessName,
-      phone,
-      password,
-      businessCategory,
-      mkoa,
-      wilaya,
-      mtaa
-    } = req.body;
+  name,
+  businessName,
+  phone,
+  password,
+  businessCategory,
+  mkoa = "",
+  wilaya = "",
+  mtaa = ""
+} = req.body;
 
     // NORMALIZE PHONE
     phone = normalizePhone(phone);
@@ -32,10 +32,7 @@ const registerUser = async (req, res) => {
       !businessName ||
       !phone ||
       !password ||
-      !businessCategory ||
-      !mkoa ||
-      !wilaya ||
-      !mtaa
+      !businessCategory
     ) {
       await session.abortTransaction();
       session.endSession();
