@@ -417,7 +417,7 @@ const scanFingerprint =
 
 
 // RECEIVE PAYMENT
-const receivePayment =
+ const receivePayment =
   async (req, res) => {
     try {
       const {
@@ -427,14 +427,18 @@ const receivePayment =
         reference
       } = req.body;
 
+      if (!loanId) {
+        return res.status(400).json({
+          message:
+            "Loan ID required"
+        });
+      }
+
       const loan =
         await DebtLoan.findOne({
-          _id:
-            loanId,
-          owner:
-            req.ownerId,
-          branch:
-            req.branchId
+          _id: loanId,
+          owner: req.ownerId,
+          branch: req.branchId
         });
 
       if (!loan) {
@@ -444,8 +448,59 @@ const receivePayment =
         });
       }
 
+      // LOAN STATUS CHECK
+      if (
+        loan.status === "paid"
+      ) {
+        return res.status(400).json({
+          message:
+            "This loan is already fully paid"
+        });
+      }
+
+      if (
+        loan.status ===
+        "cancelled"
+      ) {
+        return res.status(400).json({
+          message:
+            "Cancelled loan cannot receive payment"
+        });
+      }
+
       const payAmount =
         Number(amount);
+
+      // INVALID NUMBER
+      if (
+        isNaN(payAmount)
+      ) {
+        return res.status(400).json({
+          message:
+            "Invalid payment amount"
+        });
+      }
+
+      // ZERO / NEGATIVE
+      if (
+        payAmount <= 0
+      ) {
+        return res.status(400).json({
+          message:
+            "Payment must be greater than zero"
+        });
+      }
+
+      // OVERPAYMENT
+      if (
+        payAmount >
+        loan.balanceAmount
+      ) {
+        return res.status(400).json({
+          message:
+            `Payment exceeds remaining balance of ${loan.balanceAmount}`
+        });
+      }
 
       await DebtPayment.create({
         owner:
@@ -473,12 +528,12 @@ const receivePayment =
       loan.balanceAmount -=
         payAmount;
 
-      if (
-        loan.balanceAmount <= 0
-      ) {
-        loan.balanceAmount =
-          0;
+      loan.lastPaymentDate =
+        new Date();
 
+      if (
+        loan.balanceAmount === 0
+      ) {
         loan.status =
           "paid";
 
