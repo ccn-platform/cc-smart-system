@@ -1,4 +1,4 @@
- const DebtLoan =
+  const DebtLoan =
 require("../models/DebtLoan");
 
 const CustomerIdentity =
@@ -12,8 +12,7 @@ async () => {
 
     const loans =
       await DebtLoan.find({
-        status:
-          "active",
+        status: "active",
         dueDate: {
           $lt: today
         },
@@ -23,8 +22,21 @@ async () => {
       });
 
     for (const loan of loans) {
+      const diff =
+        today.getTime() -
+        loan.dueDate.getTime();
+
+      const daysLate =
+        Math.ceil(
+          diff /
+          (1000 * 60 * 60 * 24)
+        );
+
       loan.status =
         "overdue";
+
+      loan.daysLate =
+        daysLate;
 
       await loan.save();
 
@@ -42,6 +54,7 @@ async () => {
       "Overdue updated:",
       loans.length
     );
+
   } catch (error) {
     console.log(
       error.message
