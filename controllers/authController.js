@@ -203,12 +203,17 @@ const loginUser = async (req, res) => {
     }
 
     // FIND USER
-    const user = await User.findOne({
-        phone
-         }).populate(
-        "branch",
-         "name"
-       );
+     const user = await User.findOne({
+  phone
+})
+.populate(
+  "branch",
+  "name"
+)
+.populate(
+  "businessCategory",
+  "code name"
+);
     if (!user) {
       return res.status(400).json({
         message:
@@ -283,7 +288,7 @@ if (user.role === "staff") {
       user.businessName,
     phone: user.phone,
     businessCategory:
-      user.businessCategory,
+  user.businessCategory?.code,
     role: user.role,
     owner: user.owner,
 
