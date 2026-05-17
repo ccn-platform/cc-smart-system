@@ -1,4 +1,4 @@
-  const mongoose = require("mongoose");
+    const mongoose = require("mongoose");
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -143,8 +143,7 @@ const mainBranch =
     "name subscription"
   );
 
-// RESPONSE
-return res.status(201).json({
+ return res.status(201).json({
   token,
   user: {
     id: user._id,
@@ -152,6 +151,13 @@ return res.status(201).json({
     businessName:
       user.businessName,
     phone: user.phone,
+
+    businessCategory:
+      businessCategory ===
+      "credit_business"
+        ? "credit_business"
+        : "cash_business",
+
     role: user.role,
     owner: null,
 
@@ -169,7 +175,6 @@ return res.status(201).json({
       null
   }
 });
- 
 
   } catch (error) {
     await session.abortTransaction();
