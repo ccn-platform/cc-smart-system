@@ -1414,6 +1414,30 @@ const getCreditReport = async (req, res) => {
           }
         }
       ]);
+// TODAY EXPENSE
+const todayExpense =
+  await CashEntry.aggregate([
+    {
+      $match: {
+        owner: ownerId,
+        branch: branchId,
+        status: "active",
+        type: "expense",
+        createdAt: {
+          $gte: today,
+          $lt: tomorrow
+        }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        total: {
+          $sum: "$amount"
+        }
+      }
+    }
+  ]);
 
     let overdueCount = 0;
     let activeCount = 0;
@@ -1492,7 +1516,10 @@ const getCreditReport = async (req, res) => {
             ?.issued || 0,
         collected:
           todayPayments[0]
-            ?.collected || 0
+            ?.collected || 0,
+             expense:
+    todayExpense[0]
+      ?.total || 0
       },
 
       old: {
@@ -1538,6 +1565,41 @@ const getCreditReport = async (req, res) => {
       new mongoose.Types.ObjectId(
         req.branchId
       );
+const today = new Date();
+today.setUTCHours(
+  0,0,0,0
+);
+
+const tomorrow =
+  new Date(today);
+
+tomorrow.setUTCDate(
+  today.getUTCDate() + 1
+);
+
+const todayExpense =
+  await CashEntry.aggregate([
+    {
+      $match: {
+        owner: ownerId,
+        branch: branchId,
+        status: "active",
+        type: "expense",
+        createdAt: {
+          $gte: today,
+          $lt: tomorrow
+        }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        total: {
+          $sum: "$amount"
+        }
+      }
+    }
+  ]);
 
     // THIS MONTH
     const now = new Date();
@@ -1596,6 +1658,12 @@ const getCreditReport = async (req, res) => {
       ]);
 
     // TOTAL
+    const totalEntries =
+  expenseAgg.reduce(
+    (sum, x) =>
+      sum + (x.count || 0),
+    0
+  );
     const totalExpense =
       expenseAgg.reduce(
         (sum, x) =>
@@ -1632,8 +1700,7 @@ const getCreditReport = async (req, res) => {
     res.status(200).json({
       summary: {
         totalExpense,
-        entries:
-          recent.length
+         entries: totalEntries
       },
       categories:
         expenseAgg,
