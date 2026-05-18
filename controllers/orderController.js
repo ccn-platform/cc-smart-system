@@ -1,4 +1,4 @@
-   const mongoose = require("mongoose");
+    const mongoose = require("mongoose");
  const Order = require("../models/Order");
 const cleanOCRText = require("../utils/cleanOCRText");
 const parseOrderText = require("../utils/parseOrderText");
@@ -180,6 +180,7 @@ res.status(status).json({
               sellPrice,
               profitEach,
               profitTotal,
+               reason: "manual_sell_price",
             };
           }
 
