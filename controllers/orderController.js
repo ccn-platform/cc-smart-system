@@ -180,6 +180,7 @@ res.status(status).json({
               sellPrice,
               profitEach,
               profitTotal,
+              matched: true,
                reason: "manual_sell_price",
             };
           }
