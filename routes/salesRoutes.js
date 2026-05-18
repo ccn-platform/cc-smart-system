@@ -1,16 +1,30 @@
-  const express = require("express");
-const router = express.Router();
+  const express =
+  require("express");
+
+const router =
+  express.Router();
 
 const {
   protect,
   branchAccess
-} = require("../middleware/authMiddleware");
+} = require(
+  "../middleware/authMiddleware"
+);
 
 const {
   createSale,
   getSales,
-  getTodaySales
-} = require("../controllers/salesController");
+  getTodaySales,
+  getSaleById,
+  searchSales,
+  holdSale,
+  getHeldSales,
+  resumeHeldSale,
+  deleteHeldSale,
+  refundSale
+} = require(
+  "../controllers/salesController"
+);
 
 
 // CREATE SALE
@@ -31,7 +45,7 @@ router.get(
 );
 
 
-// TODAY SUMMARY
+// TODAY SALES
 router.get(
   "/today",
   protect,
@@ -39,4 +53,68 @@ router.get(
   getTodaySales
 );
 
-module.exports = router;
+
+// GET SINGLE SALE
+router.get(
+  "/:id",
+  protect,
+  branchAccess,
+  getSaleById
+);
+
+
+// SEARCH SALES
+router.get(
+  "/search",
+  protect,
+  branchAccess,
+  searchSales
+);
+
+
+// HOLD SALE
+router.post(
+  "/hold",
+  protect,
+  branchAccess,
+  holdSale
+);
+
+
+// GET HELD SALES
+router.get(
+  "/hold",
+  protect,
+  branchAccess,
+  getHeldSales
+);
+
+
+// RESUME HELD SALE
+router.get(
+  "/hold/:id",
+  protect,
+  branchAccess,
+  resumeHeldSale
+);
+
+
+// DELETE HELD SALE
+router.delete(
+  "/hold/:id",
+  protect,
+  branchAccess,
+  deleteHeldSale
+);
+
+
+// REFUND SALE
+router.post(
+  "/:id/refund",
+  protect,
+  branchAccess,
+  refundSale
+);
+
+module.exports =
+  router;
