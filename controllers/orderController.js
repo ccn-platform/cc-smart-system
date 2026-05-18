@@ -32,40 +32,10 @@ const BAD_REQUEST_ERRORS = [
   items
 );
 
-  let order = null;
-
-try {
-
-order = await Order.create({
-  owner: ownerId,
-  branch: branchId,
-    rawText: cleanText.slice(0, 50000),
-
-  items: result.items.map((x) => ({
-    name: x.name || "Unknown",
-    qty: x.qty || 0,
-    buyPrice: x.buyPrice || 0,
-    sellPrice: x.sellPrice || 0,
-    profitEach: x.profitEach || 0,
-    profitTotal: x.profitTotal || 0,
-    matched: x.matched || false
-  })),
-
-  buyTotal: result.buyTotal,
-  sellTotal: result.sellTotal,
-  totalProfit: result.totalProfit
-});
-
-}  
-catch (dbError) {
-   console.error(
-  "ORDER SAVE ERROR:",
-  dbError.message
-);
-  throw dbError;
-}
-
-  return { order, cleanText, result };
+  return {
+  cleanText,
+  result
+};
 };
 
 
@@ -79,19 +49,17 @@ const scanOrder = async (req, res) => {
     message: "Text required"
   });
 }
-    const { order, cleanText, result } =
-      await processOrder(
-        req.ownerId,
-        req.branchId,
-        text
-       );
+    const { cleanText, result } =
+  await processOrder(
+    req.ownerId,
+    req.branchId,
+    text
+  );
 
-    res.status(200).json({
-       orderId: order?._id || null,
-         rawText: cleanText.slice(0, 10000),
-      ...result
-    });
-
+     res.status(200).json({
+  rawText: cleanText.slice(0, 10000),
+  ...result
+});
   } catch (error) {
 
    console.error(
@@ -126,18 +94,17 @@ const scanImage = async (req, res) => {
 
     const text = await readImageText(req.file);
 
-    const { order, cleanText, result } =
-        await processOrder(
-           req.ownerId,
-           req.branchId,
-          text
-         );
+     const { cleanText, result } =
+  await processOrder(
+    req.ownerId,
+    req.branchId,
+    text
+  );
 
     res.status(200).json({
-     orderId: order?._id || null,
-         rawText: cleanText.slice(0, 10000),
-      ...result
-    });
+  rawText: cleanText.slice(0, 10000),
+  ...result
+});
 } catch (error) {
 
    console.error(
@@ -163,6 +130,58 @@ res.status(status).json({
   
 };
 
+const confirmOrder = async (req, res) => {
+  try {
+    const { items, rawText = "" } = req.body;
+
+    if (
+      !Array.isArray(items) ||
+      items.length === 0
+    ) {
+      return res.status(400).json({
+        message: "Items required"
+      });
+    }
+
+    const result = await analyzeProfit(
+      req.ownerId,
+      req.branchId,
+      items
+    );
+
+    const order = await Order.create({
+      owner: req.ownerId,
+      branch: req.branchId,
+      rawText: String(rawText).slice(0, 50000),
+
+      items: result.items.map((x) => ({
+        name: x.name || "Unknown",
+        qty: x.qty || 0,
+        buyPrice: x.buyPrice || 0,
+        sellPrice: x.sellPrice || 0,
+        profitEach: x.profitEach || 0,
+        profitTotal: x.profitTotal || 0,
+        matched: x.matched || false
+      })),
+
+      buyTotal: result.buyTotal,
+      sellTotal: result.sellTotal,
+      totalProfit: result.totalProfit
+    });
+
+    res.status(200).json({
+      message: "Order saved",
+      orderId: order._id,
+      ...result
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message:
+        error.message || "Confirm failed"
+    });
+  }
+};
 
 // GET HISTORY (PAGINATION)
 const getOrderHistory = async (req, res) => {
@@ -349,5 +368,6 @@ module.exports = {
   scanImage,
   getOrderHistory,
   getOrderById,
+  confirmOrder,
    getOrderProfitSummary // 🔥 ADD THIS
 };
