@@ -1,5 +1,11 @@
-  const Sale = require("../models/Sale");
-const Product = require("../models/Product");
+  const Sale =
+  require("../models/Sale");
+
+const HeldSale =
+  require("../models/HeldSale");
+
+const Product =
+  require("../models/Product");
 
 const calculateProfit =
   require("../utils/calculateprofit");
@@ -44,7 +50,7 @@ const createSale = async (
       if (!product) {
         return res.status(404).json({
           message:
-            `${item.name} not found`
+            "Product not found"
         });
       }
 
@@ -84,7 +90,7 @@ const createSale = async (
           item.qty,
         price:
           product.sellPrice,
-          buyPrice:
+        buyPrice:
           product.buyPrice,
         total:
           lineTotal
@@ -123,7 +129,7 @@ const createSale = async (
 };
 
 
-// GET SALES
+// GET ALL SALES
 const getSales = async (
   req,
   res
@@ -150,7 +156,7 @@ const getSales = async (
 };
 
 
-// TODAY SALES SUMMARY
+// GET TODAY SALES
 const getTodaySales =
   async (req, res) => {
     try {
@@ -171,19 +177,306 @@ const getTodaySales =
           createdAt: {
             $gte: start
           }
+        }).sort({
+          createdAt: -1
         });
 
-      let total = 0;
+      return res.status(200).json(
+        sales
+      );
 
-      for (const s of sales) {
-        total +=
-          s.totalAmount;
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }
+  };
+
+
+// GET SINGLE SALE
+const getSaleById =
+  async (req, res) => {
+    try {
+      const sale =
+        await Sale.findOne({
+          _id:
+            req.params.id,
+          owner:
+            req.ownerId,
+          branch:
+            req.branchId
+        });
+
+      if (!sale) {
+        return res.status(404).json({
+          message:
+            "Sale not found"
+        });
       }
 
+      return res.status(200).json(
+        sale
+      );
+
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }
+  };
+
+
+// SEARCH SALES
+const searchSales =
+  async (req, res) => {
+    try {
+      const q =
+        req.query.q || "";
+
+      const sales =
+        await Sale.find({
+          owner:
+            req.ownerId,
+          branch:
+            req.branchId,
+          receiptNo: {
+            $regex: q,
+            $options:
+              "i"
+          }
+        }).sort({
+          createdAt: -1
+        });
+
+      return res.status(200).json(
+        sales
+      );
+
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }
+  };
+
+
+// HOLD SALE
+const holdSale = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      items,
+      totalAmount
+    } = req.body;
+
+    if (
+      !items ||
+      items.length === 0
+    ) {
+      return res.status(400).json({
+        message:
+          "No items to hold"
+      });
+    }
+
+    const heldItems =
+      [];
+
+    for (const item of items) {
+      const product =
+        await Product.findOne({
+          _id:
+            item.productId,
+          owner:
+            req.ownerId,
+          branch:
+            req.branchId
+        });
+
+      if (!product) {
+        continue;
+      }
+
+      heldItems.push({
+        product:
+          product._id,
+        name:
+          product.name,
+        qty:
+          item.qty,
+        price:
+          product.sellPrice,
+        total:
+          product.sellPrice *
+          item.qty
+      });
+    }
+
+    const held =
+      await HeldSale.create({
+        owner:
+          req.ownerId,
+        branch:
+          req.branchId,
+        items:
+          heldItems,
+        totalAmount
+      });
+
+    return res.status(201).json(
+      held
+    );
+
+  } catch (error) {
+    return res.status(500).json({
+      message:
+        error.message
+    });
+  }
+};
+
+
+// GET HELD SALES
+const getHeldSales =
+  async (req, res) => {
+    try {
+      const held =
+        await HeldSale.find({
+          owner:
+            req.ownerId,
+          branch:
+            req.branchId
+        }).sort({
+          createdAt: -1
+        });
+
+      return res.status(200).json(
+        held
+      );
+
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }
+  };
+
+
+// RESUME HELD SALE
+const resumeHeldSale =
+  async (req, res) => {
+    try {
+      const held =
+        await HeldSale.findOne({
+          _id:
+            req.params.id,
+          owner:
+            req.ownerId,
+          branch:
+            req.branchId
+        });
+
+      if (!held) {
+        return res.status(404).json({
+          message:
+            "Held order not found"
+        });
+      }
+
+      return res.status(200).json(
+        held
+      );
+
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }
+  };
+
+
+// DELETE HELD SALE
+const deleteHeldSale =
+  async (req, res) => {
+    try {
+      const held =
+        await HeldSale.findOne({
+          _id:
+            req.params.id,
+          owner:
+            req.ownerId,
+          branch:
+            req.branchId
+        });
+
+      if (!held) {
+        return res.status(404).json({
+          message:
+            "Held order not found"
+        });
+      }
+
+      await held.deleteOne();
+
       return res.status(200).json({
-        count:
-          sales.length,
-        total
+        message:
+          "Held order deleted"
+      });
+
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }
+  };
+
+
+// REFUND SALE
+const refundSale =
+  async (req, res) => {
+    try {
+      const sale =
+        await Sale.findOne({
+          _id:
+            req.params.id,
+          owner:
+            req.ownerId,
+          branch:
+            req.branchId
+        });
+
+      if (!sale) {
+        return res.status(404).json({
+          message:
+            "Sale not found"
+        });
+      }
+
+      for (const item of sale.items) {
+        await Product.findByIdAndUpdate(
+          item.product,
+          {
+            $inc: {
+              stockQty:
+                item.qty
+            }
+          }
+        );
+      }
+
+      await sale.deleteOne();
+
+      return res.status(200).json({
+        message:
+          "Refund completed"
       });
 
     } catch (error) {
@@ -197,5 +490,12 @@ const getTodaySales =
 module.exports = {
   createSale,
   getSales,
-  getTodaySales
+  getTodaySales,
+  getSaleById,
+  searchSales,
+  holdSale,
+  getHeldSales,
+  resumeHeldSale,
+  deleteHeldSale,
+  refundSale
 };
