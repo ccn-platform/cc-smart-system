@@ -1,4 +1,4 @@
-  const express = require("express");
+   const express = require("express");
 const multer = require("multer");
 
 const router = express.Router();
@@ -11,6 +11,7 @@ const {
 const {
   scanOrder,
   scanImage,
+  confirmOrder,
   getOrderHistory,
   getOrderById,
   getOrderProfitSummary
@@ -92,7 +93,12 @@ router.post(
   scanImage
 );
 
-
+router.post(
+  "/confirm",
+  protect,
+  branchAccess,
+  confirmOrder
+);
 // HISTORY
 router.get(
   "/history",
