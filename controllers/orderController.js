@@ -1,4 +1,4 @@
-    const mongoose = require("mongoose");
+   const mongoose = require("mongoose");
  const Order = require("../models/Order");
 const cleanOCRText = require("../utils/cleanOCRText");
 const parseOrderText = require("../utils/parseOrderText");
@@ -130,7 +130,7 @@ res.status(status).json({
   
 };
 
-const confirmOrder = async (req, res) => {
+ const confirmOrder = async (req, res) => {
   try {
     const { items, rawText = "" } = req.body;
 
@@ -149,36 +149,117 @@ const confirmOrder = async (req, res) => {
       items
     );
 
-    const order = await Order.create({
-      owner: req.ownerId,
-      branch: req.branchId,
-      rawText: String(rawText).slice(0, 50000),
+    // APPLY MANUAL SELL PRICE FOR UNMATCHED
+    const finalItems =
+      result.items.map(
+        (item, index) => {
+          const original =
+            items[index];
 
-      items: result.items.map((x) => ({
-        name: x.name || "Unknown",
-        qty: x.qty || 0,
-        buyPrice: x.buyPrice || 0,
-        sellPrice: x.sellPrice || 0,
-        profitEach: x.profitEach || 0,
-        profitTotal: x.profitTotal || 0,
-        matched: x.matched || false
-      })),
+          if (
+            !item.matched &&
+            Number(
+              original?.sellPrice
+            ) > 0
+          ) {
+            const sellPrice =
+              Number(
+                original.sellPrice
+              );
 
-      buyTotal: result.buyTotal,
-      sellTotal: result.sellTotal,
-      totalProfit: result.totalProfit
-    });
+            const profitEach =
+              sellPrice -
+              item.buyPrice;
+
+            const profitTotal =
+              profitEach *
+              item.qty;
+
+            return {
+              ...item,
+              sellPrice,
+              profitEach,
+              profitTotal,
+            };
+          }
+
+          return item;
+        }
+      );
+
+    // RECALCULATE TOTALS
+    const buyTotal =
+      finalItems.reduce(
+        (sum, x) =>
+          sum +
+          (x.buyPrice || 0) *
+            (x.qty || 0),
+        0
+      );
+
+    const sellTotal =
+      finalItems.reduce(
+        (sum, x) =>
+          sum +
+          (x.sellPrice || 0) *
+            (x.qty || 0),
+        0
+      );
+
+    const totalProfit =
+      finalItems.reduce(
+        (sum, x) =>
+          sum +
+          (x.profitTotal || 0),
+        0
+      );
+
+    const order =
+      await Order.create({
+        owner: req.ownerId,
+        branch: req.branchId,
+        rawText: String(rawText)
+          .slice(0, 50000),
+
+        items: finalItems.map(
+          (x) => ({
+            name:
+              x.name ||
+              "Unknown",
+            qty:
+              x.qty || 0,
+            buyPrice:
+              x.buyPrice || 0,
+            sellPrice:
+              x.sellPrice || 0,
+            profitEach:
+              x.profitEach || 0,
+            profitTotal:
+              x.profitTotal || 0,
+            matched:
+              x.matched || false
+          })
+        ),
+
+        buyTotal,
+        sellTotal,
+        totalProfit
+      });
 
     res.status(200).json({
       message: "Order saved",
       orderId: order._id,
-      ...result
+      items: finalItems,
+      buyTotal,
+      sellTotal,
+      totalProfit
     });
 
   } catch (error) {
     res.status(500).json({
       message:
-        error.message || "Confirm failed"
+        error.message ||
+        "Confirm failed"
     });
   }
 };
