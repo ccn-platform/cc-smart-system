@@ -54,15 +54,6 @@ router.get(
 );
 
 
-// GET SINGLE SALE
-router.get(
-  "/:id",
-  protect,
-  branchAccess,
-  getSaleById
-);
-
-
 // SEARCH SALES
 router.get(
   "/search",
@@ -114,6 +105,13 @@ router.post(
   protect,
   branchAccess,
   refundSale
+);
+// GET SINGLE SALE
+router.get(
+  "/:id",
+  protect,
+  branchAccess,
+  getSaleById
 );
 
 module.exports =
