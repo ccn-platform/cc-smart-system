@@ -446,9 +446,55 @@ const getOrderHistory = async (req, res) => {
     });
   }
 };
+
+const deleteOrder = async (
+  req,
+  res
+) => {
+  try {
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        req.params.id
+      )
+    ) {
+      return res.status(400).json({
+        message:
+          "Order ID si sahihi"
+      });
+    }
+
+    const order =
+      await Order.findOne({
+        _id: req.params.id,
+        owner: req.ownerId,
+        branch: req.branchId
+      });
+
+    if (!order) {
+      return res.status(404).json({
+        message:
+          "Order haijapatikana"
+      });
+    }
+
+    await order.deleteOne();
+
+    return res.status(200).json({
+      message:
+        "Order imefutwa"
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message:
+        error.message
+    });
+  }
+};
 module.exports = {
   scanOrder,
   scanImage,
+  deleteOrder,
   getOrderHistory,
   getOrderById,
   confirmOrder,
