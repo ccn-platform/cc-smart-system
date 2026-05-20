@@ -8,6 +8,7 @@ const {
 const {
   getMyShop,
   updateShop,
+    deleteBranch,
   addBranch,
   getBranches
 } = require("../controllers/shopController");
@@ -44,4 +45,9 @@ router.get(
   getBranches
 );
 
+router.delete(
+  "/branch/:branchId",
+  protect,
+  deleteBranch
+);
 module.exports = router;
