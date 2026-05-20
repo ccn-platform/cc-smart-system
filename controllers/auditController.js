@@ -138,7 +138,19 @@ const createManualAudit =
           lossValue,
           gainValue
         });
-      }
+        // UPDATE REAL STOCK
+          product.stockQty =
+          countedQty;
+
+           product.updatedBy =
+           req.user.id;
+
+           await product.save({
+           validateBeforeSave:
+           false
+         });
+        }
+
 
       const audit =
         await Audit.create({
