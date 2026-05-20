@@ -253,7 +253,6 @@ const branch = await Branch.create({
 
 
 // GET BRANCHES
- 
 const getBranches = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
@@ -275,15 +274,6 @@ const getBranches = async (req, res) => {
       createdAt: -1
     });
 
-    console.log(
-      "BRANCHES RESPONSE:",
-      JSON.stringify(
-        branches,
-        null,
-        2
-      )
-    );
-
     return res.status(200).json(branches);
 
   } catch (error) {
@@ -292,8 +282,79 @@ const getBranches = async (req, res) => {
     });
   }
 };
+
+
+const deleteBranch = async (
+  req,
+  res
+) => {
+  try {
+    const ownerId =
+      getOwnerId(req.user);
+
+    const { branchId } =
+      req.params;
+
+    const shop =
+      await Shop.findOne({
+        owner: ownerId
+      });
+
+    if (!shop) {
+      return res.status(404).json({
+        message: "Shop not found"
+      });
+    }
+
+    const branch =
+      await Branch.findOne({
+        _id: branchId,
+        shop: shop._id,
+        isActive: true
+      });
+
+    if (!branch) {
+      return res.status(404).json({
+        message:
+          "Branch not found"
+      });
+    }
+
+    if (branch.isMain) {
+      return res.status(400).json({
+        message:
+          "Main branch cannot be deleted"
+      });
+    }
+
+    branch.isActive = false;
+    await branch.save();
+
+    await User.updateMany(
+      {
+        branch: branch._id,
+        role: "staff"
+      },
+      {
+        isActive: false
+      }
+    );
+
+    return res.status(200).json({
+      message:
+        "Branch deleted successfully"
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message
+    });
+  }
+};
+
 module.exports = {
   createShop,
+    deleteBranch,
   getMyShop,
   updateShop,
   addBranch,
