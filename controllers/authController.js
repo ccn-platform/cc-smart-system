@@ -1,4 +1,4 @@
-    const mongoose = require("mongoose");
+   const mongoose = require("mongoose");
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -208,8 +208,9 @@ const loginUser = async (req, res) => {
     }
 
     // FIND USER
-     const user = await User.findOne({
-  phone
+ const user = await User.findOne({
+  phone,
+  isActive: true
 })
 .populate(
   "branch",
@@ -527,9 +528,210 @@ const addStaff =
       });
     }
   };
+
+  const deleteStaff = async (req, res) => {
+  try {
+    const { staffId } = req.params;
+
+    const staff = await User.findOne({
+      _id: staffId,
+      owner: req.ownerId,
+      role: "staff",
+      isActive: true
+    });
+
+    if (!staff) {
+      return res.status(404).json({
+        message: "Staff not found"
+      });
+    }
+
+    staff.isActive = false;
+    await staff.save();
+
+    return res.status(200).json({
+      message: "Staff deleted successfully"
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message
+    });
+  }
+};
+const deleteAccount = async (req, res) => {
+  const session =
+    await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const ownerId = req.ownerId;
+
+    await User.updateMany(
+      {
+        $or: [
+          { _id: ownerId },
+          { owner: ownerId }
+        ]
+      },
+      {
+        isActive: false,
+        deletedAt: new Date()
+      },
+      { session }
+    );
+
+    const shop =
+      await Shop.findOne({
+        owner: ownerId
+      }).session(session);
+
+    if (shop) {
+      await Branch.updateMany(
+        { shop: shop._id },
+        {
+          isActive: false
+        },
+        { session }
+      );
+    }
+
+    await session.commitTransaction();
+
+    return res.status(200).json({
+      message:
+        "Account deleted successfully"
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+
+    return res.status(500).json({
+      message: error.message
+    });
+  } finally {
+    session.endSession();
+  }
+};
+ 
+const updateProfile = async (req, res) => {
+  try {
+    const {
+      name,
+      phone,
+      businessName,
+      password,
+      mkoa,
+      wilaya,
+      mtaa
+    } = req.body;
+
+    const user =
+      await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found"
+      });
+    }
+
+    if (name) {
+      user.name = name.trim();
+    }
+
+    if (phone) {
+      const normalizedPhone =
+        normalizePhone(phone);
+
+      const exists =
+        await User.findOne({
+          phone: normalizedPhone,
+          _id: {
+            $ne: user._id
+          }
+        });
+
+      if (exists) {
+        return res.status(400).json({
+          message:
+            "Phone already in use"
+        });
+      }
+
+      user.phone =
+        normalizedPhone;
+    }
+
+    if (
+      businessName &&
+      user.role === "owner"
+    ) {
+      user.businessName =
+        businessName.trim();
+
+      await Shop.updateOne(
+        {
+          owner: user._id
+        },
+        {
+          businessName:
+            businessName.trim()
+        }
+      );
+    }
+
+    if (mkoa !== undefined) {
+      user.mkoa = mkoa;
+    }
+
+    if (wilaya !== undefined) {
+      user.wilaya = wilaya;
+    }
+
+    if (mtaa !== undefined) {
+      user.mtaa = mtaa;
+    }
+
+    if (password) {
+      user.password =
+        await bcrypt.hash(
+          password,
+          10
+        );
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      message:
+        "Profile updated successfully",
+
+      user: {
+        id: user._id,
+        name: user.name,
+        businessName:
+          user.businessName,
+        phone: user.phone,
+        role: user.role,
+        mkoa: user.mkoa,
+        wilaya: user.wilaya,
+        mtaa: user.mtaa
+      }
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message
+    });
+  }
+};
 module.exports = {
   registerUser,
   loginUser,
+   updateProfile,
+  deleteAccount,
   getStaff,
-  addStaff
+  addStaff,
+  deleteStaff
 };
