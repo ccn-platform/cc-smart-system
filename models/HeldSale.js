@@ -55,6 +55,12 @@ const heldSaleSchema =
         index: true,
       },
 
+      customerName: {
+         type: String,
+         default: "",
+         trim: true
+       },
+
       notes: {
         type: String,
         default: "",
