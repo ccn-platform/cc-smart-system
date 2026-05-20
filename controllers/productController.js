@@ -63,10 +63,17 @@ const createProduct = async (
       error
     );
 
-    return res.status(500).json({
-      message:
-        error.message
-    });
+    if (error.code === 11000) {
+  return res.status(400).json({
+    message:
+      "Bidhaa yenye jina hili tayari ipo kwenye tawi hili"
+  });
+}
+
+return res.status(500).json({
+  message:
+    error.message
+});
   }
 };
 
@@ -321,10 +328,17 @@ const updateProduct = async (
       error
     );
 
-    return res.status(500).json({
-      message:
-        error.message
-    });
+    if (error.code === 11000) {
+  return res.status(400).json({
+    message:
+      "Bidhaa yenye jina hili tayari ipo kwenye tawi hili"
+  });
+}
+
+return res.status(500).json({
+  message:
+    error.message
+});
   }
 };
 
