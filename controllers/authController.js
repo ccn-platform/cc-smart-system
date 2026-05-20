@@ -559,39 +559,45 @@ const addStaff =
     });
   }
 };
-const deleteAccount = async (req, res) => {
+ const deleteAccount = async (req, res) => {
   const session =
     await mongoose.startSession();
 
   try {
     session.startTransaction();
 
-    const ownerId = req.ownerId;
+    const ownerId =
+      req.ownerId;
 
-    await User.updateMany(
+    // FIND SHOP
+    const shop =
+      await Shop.findOne({
+        owner: ownerId
+      }).session(session);
+
+    // DELETE STAFF + OWNER USERS
+    await User.deleteMany(
       {
         $or: [
           { _id: ownerId },
           { owner: ownerId }
         ]
       },
-      {
-        isActive: false,
-        deletedAt: new Date()
-      },
       { session }
     );
 
-    const shop =
-      await Shop.findOne({
-        owner: ownerId
-      }).session(session);
-
+    // DELETE BRANCHES + SHOP
     if (shop) {
-      await Branch.updateMany(
-        { shop: shop._id },
+      await Branch.deleteMany(
         {
-          isActive: false
+          shop: shop._id
+        },
+        { session }
+      );
+
+      await Shop.deleteOne(
+        {
+          _id: shop._id
         },
         { session }
       );
@@ -601,15 +607,17 @@ const deleteAccount = async (req, res) => {
 
     return res.status(200).json({
       message:
-        "Account deleted successfully"
+        "Account deleted permanently"
     });
 
   } catch (error) {
     await session.abortTransaction();
 
     return res.status(500).json({
-      message: error.message
+      message:
+        error.message
     });
+
   } finally {
     session.endSession();
   }
