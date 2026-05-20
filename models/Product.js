@@ -202,13 +202,19 @@ productSchema.index({
   createdAt: -1
 });
 
-productSchema.index({
-  owner: 1,
-  branch: 1,
-  normalizedName: 1,
-  isActive: 1
-});
-
+ productSchema.index(
+  {
+    owner: 1,
+    branch: 1,
+    normalizedName: 1
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      isActive: true
+    }
+  }
+);
 
  
 module.exports =
