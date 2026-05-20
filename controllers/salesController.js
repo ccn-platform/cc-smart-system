@@ -21,9 +21,10 @@ const createSale = async (
 ) => {
   try {
     const {
-      items,
-      paymentMethod
-    } = req.body;
+  items,
+  paymentMethod,
+  customerName
+} = req.body;
 
     if (
       !items ||
@@ -105,16 +106,18 @@ const createSale = async (
     const receiptNo =
       generateReceipt();
 
-    const sale =
-      await Sale.create({
-        owner: req.ownerId,
-        branch: req.branchId,
-        items: saleItems,
-        totalAmount,
-        totalProfit,
-        paymentMethod,
-        receiptNo
-      });
+  const sale =
+  await Sale.create({
+    owner: req.ownerId,
+    branch: req.branchId,
+    items: saleItems,
+    totalAmount,
+    totalProfit,
+    paymentMethod,
+    customerName:
+      customerName?.trim() || "",
+    receiptNo
+  });
 
     return res.status(201).json(
       sale
@@ -269,10 +272,11 @@ const holdSale = async (
   res
 ) => {
   try {
-    const {
-      items,
-      totalAmount
-    } = req.body;
+     const {
+  items,
+  totalAmount,
+  customerName
+} = req.body;
 
     if (
       !items ||
@@ -317,16 +321,18 @@ const holdSale = async (
       });
     }
 
-    const held =
-      await HeldSale.create({
-        owner:
-          req.ownerId,
-        branch:
-          req.branchId,
-        items:
-          heldItems,
-        totalAmount
-      });
+  const held =
+  await HeldSale.create({
+    owner:
+      req.ownerId,
+    branch:
+      req.branchId,
+    items:
+      heldItems,
+    totalAmount,
+    customerName:
+      customerName?.trim() || ""
+  });
 
     return res.status(201).json(
       held
