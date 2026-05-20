@@ -50,6 +50,10 @@ const userSchema =
         type: String,
         default: ""
       },
+      deletedAt: {
+        type: Date,
+         default: null
+       },
 
       isActive: {
         type: Boolean,
