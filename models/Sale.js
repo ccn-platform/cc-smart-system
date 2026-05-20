@@ -52,6 +52,12 @@ const saleSchema =
         index: true
       },
 
+      customerName: {
+        type: String,
+        default: "",
+        trim: true,
+        maxlength: 150
+       },
       receiptNo: {
         type: String
       }
