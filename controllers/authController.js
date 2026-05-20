@@ -1,4 +1,4 @@
-   const mongoose = require("mongoose");
+    const mongoose = require("mongoose");
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -726,9 +726,33 @@ const updateProfile = async (req, res) => {
     });
   }
 };
+const getProfile = async (
+  req,
+  res
+) => {
+  try {
+    const user =
+      await User.findById(
+        req.user._id
+      ).populate(
+        "businessCategory"
+      );
+
+    res.json({
+      user
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message:
+        error.message
+    });
+  }
+};
 module.exports = {
   registerUser,
   loginUser,
+  getProfile,
    updateProfile,
   deleteAccount,
   getStaff,
