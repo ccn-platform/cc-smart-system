@@ -1,9 +1,9 @@
-  const Product = require("../models/Product");
+ const Product = require("../models/Product");
 const normalizeProductName =
   require("../utils/normalizeProductName");
 
 
-// CREATE PRODUCT
+ // CREATE PRODUCT
 const createProduct = async (
   req,
   res
@@ -25,33 +25,53 @@ const createProduct = async (
     if (!name?.trim()) {
       return res.status(400).json({
         message:
-          "Product name required"
+          "Jina la bidhaa linahitajika"
+      });
+    }
+
+    const normalizedName =
+      normalizeProductName(
+        name
+      );
+
+    const existingProduct =
+      await Product.findOne({
+        owner: req.ownerId,
+        branch: req.branchId,
+        normalizedName,
+        isActive: true
+      });
+
+    if (existingProduct) {
+      return res.status(400).json({
+        message:
+          "Bidhaa yenye jina hili tayari ipo kwenye tawi hili"
       });
     }
 
     const product =
-  await Product.create({
-    owner: req.ownerId,
-    branch: req.branchId,
+      await Product.create({
+        owner: req.ownerId,
+        branch: req.branchId,
 
-    name: name.trim(),
+        name: name.trim(),
 
-    barcode:
-      barcode?.trim()
-        ? barcode.trim()
-        : null,
+        barcode:
+          barcode?.trim()
+            ? barcode.trim()
+            : null,
 
-    category,
-    unit,
-    description,
-    image,
-    buyPrice,
-    sellPrice,
-    stockQty,
-    lowStockAlert,
+        category,
+        unit,
+        description,
+        image,
+        buyPrice,
+        sellPrice,
+        stockQty,
+        lowStockAlert,
 
-    createdBy: req.user.id
-  });
+        createdBy: req.user.id
+      });
 
     return res.status(201).json(
       product
@@ -63,17 +83,32 @@ const createProduct = async (
       error
     );
 
-    if (error.code === 11000) {
-  return res.status(400).json({
-    message:
-      "Bidhaa yenye jina hili tayari ipo kwenye tawi hili"
-  });
-}
+    if (
+      error.code === 11000 &&
+      error.keyPattern
+        ?.normalizedName
+    ) {
+      return res.status(400).json({
+        message:
+          "Bidhaa yenye jina hili tayari ipo kwenye tawi hili"
+      });
+    }
 
-return res.status(500).json({
-  message:
-    error.message
-});
+    if (
+      error.code === 11000 &&
+      error.keyPattern
+        ?.barcode
+    ) {
+      return res.status(400).json({
+        message:
+          "Barcode hii tayari inatumika"
+      });
+    }
+
+    return res.status(500).json({
+      message:
+        error.message
+    });
   }
 };
 
@@ -216,8 +251,7 @@ const searchProducts = async (
   }
 };
 
-
-// UPDATE PRODUCT
+ // UPDATE PRODUCT
 const updateProduct = async (
   req,
   res
@@ -244,7 +278,7 @@ const updateProduct = async (
     if (!product) {
       return res.status(404).json({
         message:
-          "Product not found"
+          "Bidhaa haijapatikana"
       });
     }
 
@@ -261,10 +295,34 @@ const updateProduct = async (
       if (
         req.body.name
       ) {
-        updateData.normalizedName =
+        const normalizedName =
           normalizeProductName(
             req.body.name
           );
+
+        const existingProduct =
+          await Product.findOne({
+            _id: {
+              $ne:
+                req.params.id
+            },
+            owner:
+              req.ownerId,
+            branch:
+              req.branchId,
+            normalizedName,
+            isActive: true
+          });
+
+        if (existingProduct) {
+          return res.status(400).json({
+            message:
+              "Bidhaa yenye jina hili tayari ipo kwenye tawi hili"
+          });
+        }
+
+        updateData.normalizedName =
+          normalizedName;
       }
     }
 
@@ -281,7 +339,7 @@ const updateProduct = async (
       } else {
         return res.status(403).json({
           message:
-            "Staff can only update price"
+            "Mfanyakazi anaweza kubadili bei tu"
         });
       }
     }
@@ -293,7 +351,7 @@ const updateProduct = async (
     ) {
       return res.status(400).json({
         message:
-          "No valid fields to update"
+          "Hakuna taarifa za kubadilisha"
       });
     }
 
@@ -328,17 +386,32 @@ const updateProduct = async (
       error
     );
 
-    if (error.code === 11000) {
-  return res.status(400).json({
-    message:
-      "Bidhaa yenye jina hili tayari ipo kwenye tawi hili"
-  });
-}
+    if (
+      error.code === 11000 &&
+      error.keyPattern
+        ?.normalizedName
+    ) {
+      return res.status(400).json({
+        message:
+          "Bidhaa yenye jina hili tayari ipo kwenye tawi hili"
+      });
+    }
 
-return res.status(500).json({
-  message:
-    error.message
-});
+    if (
+      error.code === 11000 &&
+      error.keyPattern
+        ?.barcode
+    ) {
+      return res.status(400).json({
+        message:
+          "Barcode hii tayari inatumika"
+      });
+    }
+
+    return res.status(500).json({
+      message:
+        error.message
+    });
   }
 };
 
