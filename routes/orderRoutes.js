@@ -11,6 +11,7 @@ const {
 const {
   scanOrder,
   scanImage,
+  deleteOrder,
   confirmOrder,
   getOrderHistory,
   getOrderById,
@@ -125,4 +126,10 @@ router.get(
   getOrderById
 );
 
+router.delete(
+  "/:id",
+  protect,
+  branchAccess,
+  deleteOrder
+);
 module.exports = router;
