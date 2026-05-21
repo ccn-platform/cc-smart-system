@@ -188,6 +188,20 @@ customerIdentitySchema.index(
   }
 );
 
+customerIdentitySchema.index({
+  owner: 1,
+  status: 1
+});
+
+customerIdentitySchema.index({
+  owner: 1,
+  riskScore: -1
+});
+
+customerIdentitySchema.index({
+  owner: 1,
+  createdAt: -1
+});
 module.exports =
   mongoose.model(
     "CustomerIdentity",
