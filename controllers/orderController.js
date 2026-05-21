@@ -1,5 +1,5 @@
-    const mongoose = require("mongoose");
- const Order = require("../models/Order");
+  const mongoose = require("mongoose");
+const Order = require("../models/Order");
 const cleanOCRText = require("../utils/cleanOCRText");
 const parseOrderText = require("../utils/parseOrderText");
 const { analyzeProfit } = require("../services/profitService");
@@ -13,146 +13,187 @@ const BAD_REQUEST_ERRORS = [
   "Image too large (max 5MB)",
   "Invalid file (no buffer/path)"
 ];
-// 🔥 HELPER (avoid duplicate logic)
- const processOrder = async (
+
+const SUMMARY_CACHE_TTL = 30000;
+const summaryCache = new Map();
+
+const processOrder = async (
   ownerId,
   branchId,
   text
 ) => {
-  const cleanText = cleanOCRText(text);
-  const items = parseOrderText(cleanText);
+  const cleanText =
+    cleanOCRText(text);
+
+  const items =
+    parseOrderText(cleanText);
 
   if (!items.length) {
-    throw new Error("No items detected");
+    throw new Error(
+      "No items detected"
+    );
   }
 
-   const result = await analyzeProfit(
-  ownerId,
-  branchId,
-  items
-);
+  const result =
+    await analyzeProfit(
+      ownerId,
+      branchId,
+      items
+    );
 
   return {
-  cleanText,
-  result
+    cleanText,
+    result
+  };
 };
+
+const invalidateSummaryCache = (
+  ownerId,
+  branchId
+) => {
+  const key =
+    `${ownerId}:${branchId}`;
+
+  summaryCache.delete(key);
 };
 
 
 // SCAN ORDER TEXT
-const scanOrder = async (req, res) => {
+const scanOrder = async (
+  req,
+  res
+) => {
   try {
     const { text } = req.body;
 
-   if (!text?.trim()) {
-  return res.status(400).json({
-    message: "Text required"
-  });
-}
-    const { cleanText, result } =
-  await processOrder(
-    req.ownerId,
-    req.branchId,
-    text
-  );
+    if (!text?.trim()) {
+      return res.status(400).json({
+        message:
+          "Text required"
+      });
+    }
 
-     res.status(200).json({
-  rawText: cleanText.slice(0, 10000),
-  ...result
-});
+    const {
+      cleanText,
+      result
+    } = await processOrder(
+      req.ownerId,
+      req.branchId,
+      text
+    );
+
+    res.status(200).json({
+      rawText:
+        cleanText.slice(
+          0,
+          10000
+        ),
+      ...result
+    });
+
   } catch (error) {
+    const status =
+      BAD_REQUEST_ERRORS.includes(
+        error.message
+      )
+        ? 400
+        : 500;
 
-   console.error(
-  "SCAN ORDER ERROR:",
-  error.message
-);
-
- const status =
-  BAD_REQUEST_ERRORS.includes(
-    error.message
-  )
-    ? 400
-    : 500;
- 
-res.status(status).json({
-  message:
-    error.message ||
-    "Scan failed"
-});
-}
+    res.status(status).json({
+      message:
+        error.message ||
+        "Scan failed"
+    });
+  }
 };
 
 
 // SCAN IMAGE
-const scanImage = async (req, res) => {
+const scanImage = async (
+  req,
+  res
+) => {
   try {
     if (!req.file) {
       return res.status(400).json({
-        message: "Image required"
+        message:
+          "Image required"
       });
     }
 
-    const text = await readImageText(req.file);
+    const text =
+      await readImageText(
+        req.file
+      );
 
-     const { cleanText, result } =
-  await processOrder(
-    req.ownerId,
-    req.branchId,
-    text
-  );
+    const {
+      cleanText,
+      result
+    } = await processOrder(
+      req.ownerId,
+      req.branchId,
+      text
+    );
 
     res.status(200).json({
-  rawText: cleanText.slice(0, 10000),
-  ...result
-});
-} catch (error) {
+      rawText:
+        cleanText.slice(
+          0,
+          10000
+        ),
+      ...result
+    });
 
-   console.error(
-  "SCAN IMAGE ERROR:",
-  error.message
-);
+  } catch (error) {
+    const status =
+      BAD_REQUEST_ERRORS.includes(
+        error.message
+      )
+        ? 400
+        : 500;
 
- 
-
- const status =
-  BAD_REQUEST_ERRORS.includes(
-    error.message
-  )
-    ? 400
-    : 500;
-
-res.status(status).json({
-  message:
-    error.message ||
-    "Scan failed"
-});
-}
-  
+    res.status(status).json({
+      message:
+        error.message ||
+        "Scan failed"
+    });
+  }
 };
 
- const confirmOrder = async (req, res) => {
+
+const confirmOrder = async (
+  req,
+  res
+) => {
   try {
-    const { items, rawText = "" } = req.body;
+    const {
+      items,
+      rawText = ""
+    } = req.body;
 
     if (
       !Array.isArray(items) ||
       items.length === 0
     ) {
       return res.status(400).json({
-        message: "Items required"
+        message:
+          "Items required"
       });
     }
 
-    const result = await analyzeProfit(
-      req.ownerId,
-      req.branchId,
-      items
-    );
+    const result =
+      await analyzeProfit(
+        req.ownerId,
+        req.branchId,
+        items
+      );
 
-    // APPLY MANUAL SELL PRICE FOR UNMATCHED
     const finalItems =
       result.items.map(
-        (item, index) => {
+        (
+          item,
+          index
+        ) => {
           const original =
             items[index];
 
@@ -181,7 +222,8 @@ res.status(status).json({
               profitEach,
               profitTotal,
               matched: true,
-               reason: "manual_sell_price",
+              reason:
+                "manual_sell_price"
             };
           }
 
@@ -189,10 +231,12 @@ res.status(status).json({
         }
       );
 
-    // RECALCULATE TOTALS
     const buyTotal =
       finalItems.reduce(
-        (sum, x) =>
+        (
+          sum,
+          x
+        ) =>
           sum +
           (x.buyPrice || 0) *
             (x.qty || 0),
@@ -201,7 +245,10 @@ res.status(status).json({
 
     const sellTotal =
       finalItems.reduce(
-        (sum, x) =>
+        (
+          sum,
+          x
+        ) =>
           sum +
           (x.sellPrice || 0) *
             (x.qty || 0),
@@ -210,7 +257,10 @@ res.status(status).json({
 
     const totalProfit =
       finalItems.reduce(
-        (sum, x) =>
+        (
+          sum,
+          x
+        ) =>
           sum +
           (x.profitTotal || 0),
         0
@@ -219,39 +269,59 @@ res.status(status).json({
     const order =
       await Order.create({
         owner: req.ownerId,
-        branch: req.branchId,
-        rawText: String(rawText)
-          .slice(0, 50000),
+        branch:
+          req.branchId,
+        rawText:
+          String(
+            rawText
+          ).slice(
+            0,
+            50000
+          ),
 
-        items: finalItems.map(
-          (x) => ({
-            name:
-              x.name ||
-              "Unknown",
-            qty:
-              x.qty || 0,
-            buyPrice:
-              x.buyPrice || 0,
-            sellPrice:
-              x.sellPrice || 0,
-            profitEach:
-              x.profitEach || 0,
-            profitTotal:
-              x.profitTotal || 0,
-            matched:
-              x.matched || false
-          })
-        ),
+        items:
+          finalItems.map(
+            (x) => ({
+              name:
+                x.name ||
+                "Unknown",
+              qty:
+                x.qty || 0,
+              buyPrice:
+                x.buyPrice ||
+                0,
+              sellPrice:
+                x.sellPrice ||
+                0,
+              profitEach:
+                x.profitEach ||
+                0,
+              profitTotal:
+                x.profitTotal ||
+                0,
+              matched:
+                x.matched ||
+                false
+            })
+          ),
 
         buyTotal,
         sellTotal,
         totalProfit
       });
 
+    invalidateSummaryCache(
+      req.ownerId,
+      req.branchId
+    );
+
     res.status(200).json({
-      message: "Order saved",
-      orderId: order._id,
-      items: finalItems,
+      message:
+        "Order saved",
+      orderId:
+        order._id,
+      items:
+        finalItems,
       buyTotal,
       sellTotal,
       totalProfit
@@ -266,178 +336,73 @@ res.status(status).json({
   }
 };
 
-// GET HISTORY (PAGINATION)
-const getOrderHistory = async (req, res) => {
+
+// HISTORY
+ const getOrderHistory = async (
+  req,
+  res
+) => {
   try {
-     const page = Math.min(
-  1000,
-  Math.max(
-    0,
-    Number(req.query.page) || 0
-  )
-);
     const limit = 20;
-    const skip = page * limit;
 
-    const orders = await Order.find({
-        owner: req.ownerId,
-        branch: req.branchId
-      })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .select("_id buyTotal sellTotal totalProfit createdAt")
-      .lean(); // 🔥 performance boost
+    const cursor =
+      req.query.cursor;
 
-    res.status(200).json(orders);
-
-  } catch (error) {
-    res.status(500).json({
-      message: error.message
-    });
-  }
-};
-
-
-// GET SINGLE ORDER
- const getOrderById = async (req, res) => {
-  try {
-
-    if (
-      !mongoose.Types.ObjectId.isValid(
-        req.params.id
+    const page = Math.min(
+      1000,
+      Math.max(
+        0,
+        Number(req.query.page) || 0
       )
-    ) {
-      return res.status(400).json({
-        message: "Invalid order id"
-      });
-    }
+    );
 
-    const order = await Order.findOne({
-      _id: req.params.id,
+    const query = {
       owner: req.ownerId,
       branch: req.branchId
-    }).lean();
+    };
 
-    if (!order) {
-      return res.status(404).json({
-        message: "Order not found"
-      });
+    let dbQuery =
+      Order.find(query)
+        .select(
+          "_id buyTotal sellTotal totalProfit createdAt"
+        )
+        .lean();
+
+    // NEW scalable cursor pagination
+    if (
+      cursor &&
+      mongoose.Types.ObjectId.isValid(
+        cursor
+      )
+    ) {
+      dbQuery = dbQuery
+        .find({
+          _id: {
+            $lt: cursor
+          }
+        })
+        .sort({
+          _id: -1
+        })
+        .limit(limit);
     }
 
-    res.status(200).json(order);
+    // OLD frontend compatibility
+    else {
+      dbQuery = dbQuery
+        .sort({
+          createdAt: -1
+        })
+        .skip(page * limit)
+        .limit(limit);
+    }
 
-  } catch (error) {
-    res.status(500).json({
-      message: error.message
-    });
-  }
-};
+    const orders =
+      await dbQuery;
 
-// 🔥 ORDER PROFIT SUMMARY
- 
- const getOrderProfitSummary = async (req, res) => {
-  try {
-    const ownerId =
-      new mongoose.Types.ObjectId(
-        req.ownerId
-      );
-
-    const branchId =
-      new mongoose.Types.ObjectId(
-        req.branchId
-      );
-
-    const today = new Date();
-    today.setHours(
-      0,
-      0,
-      0,
-      0
+    res.status(200).json(
+      orders
     );
-
-    const tomorrow =
-      new Date(today);
-
-    tomorrow.setDate(
-      tomorrow.getDate() + 1
-    );
-
-    const result =
-      await Order.aggregate([
-        {
-          $match: {
-            owner: ownerId,
-            branch: branchId
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalOrderProfit: {
-              $sum:
-                "$totalProfit"
-            },
-            totalBuy: {
-              $sum:
-                "$buyTotal"
-            },
-            totalSell: {
-              $sum:
-                "$sellTotal"
-            },
-            count: {
-              $sum: 1
-            }
-          }
-        }
-      ]);
-
-    const todayAgg =
-      await Order.aggregate([
-        {
-          $match: {
-            owner: ownerId,
-            branch: branchId,
-            createdAt: {
-              $gte: today,
-              $lt:
-                tomorrow
-            }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            todayOrderProfit:
-              {
-                $sum:
-                  "$totalProfit"
-              }
-          }
-        }
-      ]);
-
-    const data =
-      result[0] || {
-        totalOrderProfit:
-          0,
-        totalBuy: 0,
-        totalSell: 0,
-        count: 0
-      };
-
-    const todayData =
-      todayAgg[0] || {
-        todayOrderProfit:
-          0
-      };
-
-    res.status(200).json({
-      ...data,
-      todayOrderProfit:
-        todayData.todayOrderProfit
-    });
 
   } catch (error) {
     res.status(500).json({
@@ -446,6 +411,212 @@ const getOrderHistory = async (req, res) => {
     });
   }
 };
+
+// SINGLE ORDER
+const getOrderById =
+  async (
+    req,
+    res
+  ) => {
+    try {
+      if (
+        !mongoose.Types.ObjectId.isValid(
+          req.params.id
+        )
+      ) {
+        return res.status(400).json({
+          message:
+            "Invalid order id"
+        });
+      }
+
+      const order =
+        await Order.findOne({
+          _id:
+            req.params.id,
+          owner:
+            req.ownerId,
+          branch:
+            req.branchId
+        }).lean();
+
+      if (!order) {
+        return res.status(404).json({
+          message:
+            "Order not found"
+        });
+      }
+
+      res.status(200).json(
+        order
+      );
+
+    } catch (error) {
+      res.status(500).json({
+        message:
+          error.message
+      });
+    }
+  };
+
+
+// PROFIT SUMMARY
+const getOrderProfitSummary =
+  async (
+    req,
+    res
+  ) => {
+    try {
+      const cacheKey =
+        `${req.ownerId}:${req.branchId}`;
+
+      const cached =
+        summaryCache.get(
+          cacheKey
+        );
+
+      if (
+        cached &&
+        Date.now() -
+          cached.timestamp <
+          SUMMARY_CACHE_TTL
+      ) {
+        return res.status(200).json(
+          cached.data
+        );
+      }
+
+      const ownerId =
+        new mongoose.Types.ObjectId(
+          req.ownerId
+        );
+
+      const branchId =
+        new mongoose.Types.ObjectId(
+          req.branchId
+        );
+
+      const today =
+        new Date();
+
+      today.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const tomorrow =
+        new Date(today);
+
+      tomorrow.setDate(
+        tomorrow.getDate() +
+          1
+      );
+
+      const [
+        result,
+        todayAgg
+      ] =
+        await Promise.all([
+          Order.aggregate([
+            {
+              $match: {
+                owner:
+                  ownerId,
+                branch:
+                  branchId
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                totalOrderProfit:
+                  {
+                    $sum:
+                      "$totalProfit"
+                  },
+                totalBuy:
+                  {
+                    $sum:
+                      "$buyTotal"
+                  },
+                totalSell:
+                  {
+                    $sum:
+                      "$sellTotal"
+                  },
+                count: {
+                  $sum: 1
+                }
+              }
+            }
+          ]),
+
+          Order.aggregate([
+            {
+              $match: {
+                owner:
+                  ownerId,
+                branch:
+                  branchId,
+                createdAt:
+                  {
+                    $gte:
+                      today,
+                    $lt:
+                      tomorrow
+                  }
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                todayOrderProfit:
+                  {
+                    $sum:
+                      "$totalProfit"
+                  }
+              }
+            }
+          ])
+        ]);
+
+      const data =
+        {
+          ...(result[0] || {
+            totalOrderProfit: 0,
+            totalBuy: 0,
+            totalSell: 0,
+            count: 0
+          }),
+          todayOrderProfit:
+            todayAgg[0]
+              ?.todayOrderProfit ||
+            0
+        };
+
+      summaryCache.set(
+        cacheKey,
+        {
+          data,
+          timestamp:
+            Date.now()
+        }
+      );
+
+      res.status(200).json(
+        data
+      );
+
+    } catch (error) {
+      res.status(500).json({
+        message:
+          error.message
+      });
+    }
+  };
+
 
 const deleteOrder = async (
   req,
@@ -465,9 +636,12 @@ const deleteOrder = async (
 
     const order =
       await Order.findOne({
-        _id: req.params.id,
-        owner: req.ownerId,
-        branch: req.branchId
+        _id:
+          req.params.id,
+        owner:
+          req.ownerId,
+        branch:
+          req.branchId
       });
 
     if (!order) {
@@ -478,6 +652,11 @@ const deleteOrder = async (
     }
 
     await order.deleteOne();
+
+    invalidateSummaryCache(
+      req.ownerId,
+      req.branchId
+    );
 
     return res.status(200).json({
       message:
@@ -491,6 +670,7 @@ const deleteOrder = async (
     });
   }
 };
+
 module.exports = {
   scanOrder,
   scanImage,
@@ -498,5 +678,5 @@ module.exports = {
   getOrderHistory,
   getOrderById,
   confirmOrder,
-   getOrderProfitSummary // 🔥 ADD THIS
+  getOrderProfitSummary
 };
