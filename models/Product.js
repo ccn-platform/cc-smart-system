@@ -1,76 +1,76 @@
-  const mongoose = require("mongoose");
+const mongoose = require("mongoose");
 const normalizeProductName =
   require("../utils/normalizeProductName");
 
 const productSchema =
   new mongoose.Schema(
     {
-     owner: {
-       type:
-         mongoose.Schema.Types.ObjectId,
-       ref: "User",
-      required: true
-    },
+      owner: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true
+      },
 
       branch: {
         type:
           mongoose.Schema.Types.ObjectId,
         ref: "Branch",
         required: true
-         
       },
 
-     name: {
-      type: String,
+      name: {
+        type: String,
         required: true,
-       trim: true,
-       maxlength: 200
+        trim: true,
+        maxlength: 200
       },
-      
+
       normalizedName: {
-         type: String,
-          trim: true,
-         maxlength: 200
-     },
+        type: String,
+        trim: true,
+        maxlength: 200
+      },
+
       aliases: [
         {
-           type: String,
-           trim: true,
-           maxlength: 100
-         }
-       ],
+          type: String,
+          trim: true,
+          maxlength: 100
+        }
+      ],
 
-     barcode: {
-       type: String,
-       default: null,
-       trim: true,
-         maxlength: 100
-       },
+      barcode: {
+        type: String,
+        default: null,
+        trim: true,
+        maxlength: 100
+      },
 
       category: {
-       type: String,
+        type: String,
         default: "General",
-       trim: true,
-       maxlength: 100
-     },
+        trim: true,
+        maxlength: 100
+      },
 
       unit: {
-       type: String,
-       default: "pcs",
+        type: String,
+        default: "pcs",
         trim: true,
         maxlength: 20
       },
 
       description: {
         type: String,
-         default: "",
-         maxlength: 1000
-        },
+        default: "",
+        maxlength: 1000
+      },
 
-     image: {
-       type: String,
-       default: "",
-       maxlength: 1000
+      image: {
+        type: String,
+        default: "",
+        maxlength: 1000
       },
 
       buyPrice: {
@@ -83,11 +83,11 @@ const productSchema =
         default: 0
       },
 
-       stockQty: {
-         type: Number,
-          default: 0,
-          min: 0
-       },
+      stockQty: {
+        type: Number,
+        default: 0,
+        min: 0
+      },
 
       lowStockAlert: {
         type: Number,
@@ -95,9 +95,9 @@ const productSchema =
       },
 
       isActive: {
-       type: Boolean,
+        type: Boolean,
         default: true
-       },
+      },
 
       createdBy: {
         type:
@@ -131,56 +131,88 @@ const productSchema =
     }
   );
 
- productSchema.pre("save", function () {
-  if (this.name) {
-    this.normalizedName =
-      normalizeProductName(this.name);
-  }
-});
-
-productSchema.pre("findOneAndUpdate", function () {
-  const update = this.getUpdate();
-
-  const newName =
-    update?.name ||
-    update?.$set?.name;
-
-  if (newName) {
-    if (update.$set) {
-      update.$set.normalizedName =
-        normalizeProductName(newName);
-    } else {
-      update.normalizedName =
-        normalizeProductName(newName);
+productSchema.pre(
+  "save",
+  function () {
+    if (this.name) {
+      this.normalizedName =
+        normalizeProductName(
+          this.name
+        );
     }
   }
-});
+);
 
-productSchema.pre("updateOne", function () {
-  const update = this.getUpdate();
+productSchema.pre(
+  "findOneAndUpdate",
+  function () {
+    const update =
+      this.getUpdate();
 
-  const newName =
-    update?.name ||
-    update?.$set?.name;
+    const newName =
+      update?.name ||
+      update?.$set?.name;
 
-  if (newName) {
-    if (update.$set) {
-      update.$set.normalizedName =
-        normalizeProductName(newName);
-    } else {
-      update.normalizedName =
-        normalizeProductName(newName);
+    if (newName) {
+      if (update.$set) {
+        update.$set.normalizedName =
+          normalizeProductName(
+            newName
+          );
+      } else {
+        update.normalizedName =
+          normalizeProductName(
+            newName
+          );
+      }
     }
   }
-});
-// MULTI-BRANCH INDEXES
+);
+
+productSchema.pre(
+  "updateOne",
+  function () {
+    const update =
+      this.getUpdate();
+
+    const newName =
+      update?.name ||
+      update?.$set?.name;
+
+    if (newName) {
+      if (update.$set) {
+        update.$set.normalizedName =
+          normalizeProductName(
+            newName
+          );
+      } else {
+        update.normalizedName =
+          normalizeProductName(
+            newName
+          );
+      }
+    }
+  }
+);
+
+
+// NAME LOOKUPS
 productSchema.index({
   owner: 1,
   branch: 1,
   name: 1
 });
 
- productSchema.index(
+// OCR / MATCHING FAST LOOKUP
+productSchema.index({
+  owner: 1,
+  branch: 1,
+  isActive: 1,
+  normalizedName: 1
+});
+
+// BARCODE
+productSchema.index(
   {
     owner: 1,
     branch: 1,
@@ -196,13 +228,15 @@ productSchema.index({
   }
 );
 
+// PRODUCT LISTS
 productSchema.index({
   owner: 1,
   branch: 1,
   createdAt: -1
 });
 
- productSchema.index(
+// UNIQUE ACTIVE PRODUCT NAME
+productSchema.index(
   {
     owner: 1,
     branch: 1,
@@ -216,7 +250,6 @@ productSchema.index({
   }
 );
 
- 
 module.exports =
   mongoose.model(
     "Product",
