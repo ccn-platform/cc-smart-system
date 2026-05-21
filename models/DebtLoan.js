@@ -158,6 +158,26 @@ debtLoanSchema.index(
   }
 );
 
+debtLoanSchema.index({
+  owner: 1,
+  branch: 1,
+  createdAt: -1
+});
+
+debtLoanSchema.index({
+  owner: 1,
+  branch: 1,
+  status: 1,
+  createdAt: -1
+});
+
+debtLoanSchema.index({
+  owner: 1,
+  branch: 1,
+  customer: 1,
+  status: 1
+});
+
 module.exports =
   mongoose.model(
     "DebtLoan",
