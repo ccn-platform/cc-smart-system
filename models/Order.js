@@ -1,4 +1,4 @@
-  const mongoose = require("mongoose");
+ const mongoose = require("mongoose");
 
 const orderItemSchema =
   new mongoose.Schema(
@@ -50,21 +50,20 @@ const orderSchema =
         type:
           mongoose.Schema.Types.ObjectId,
         ref: "User",
-        required: true,
-        index: true
+        required: true
       },
 
       branch: {
         type:
           mongoose.Schema.Types.ObjectId,
         ref: "Branch",
-        required: true,
-        index: true
+        required: true
       },
 
       rawText: {
         type: String,
-        default: ""
+        default: "",
+        maxlength: 50000
       },
 
       items: [
@@ -88,8 +87,7 @@ const orderSchema =
 
       status: {
         type: String,
-        default: "completed",
-        index: true
+        default: "completed"
       }
     },
     {
@@ -99,17 +97,31 @@ const orderSchema =
   );
 
 
-// MULTI BRANCH INDEXES
+// HISTORY + CURSOR PAGINATION
+orderSchema.index({
+  owner: 1,
+  branch: 1,
+  _id: -1
+});
+
+// DATE SORT / TODAY SUMMARY
 orderSchema.index({
   owner: 1,
   branch: 1,
   createdAt: -1
 });
 
+// STATUS FILTERS
 orderSchema.index({
   owner: 1,
   branch: 1,
   status: 1
+});
+
+// SUMMARY FAST MATCH
+orderSchema.index({
+  owner: 1,
+  branch: 1
 });
 
 module.exports =
