@@ -38,13 +38,12 @@ const findOrCreateCustomer =
         fingerprintId &&
         fingerprintId.trim()
       ) {
-        customer =
-          await CustomerIdentity.findOne({
-            owner:
-              req.ownerId,
-            fingerprintId:
-              fingerprintId.trim()
-          });
+       customer =
+  await CustomerIdentity.findOne({
+    owner: req.ownerId,
+    fingerprintId:
+      fingerprintId.trim()
+  });
       }
 
       if (
@@ -52,13 +51,11 @@ const findOrCreateCustomer =
         phone &&
         phone.trim()
       ) {
-        customer =
-          await CustomerIdentity.findOne({
-            owner:
-              req.ownerId,
-            phone:
-              phone.trim()
-          });
+      customer =
+  await CustomerIdentity.findOne({
+    owner: req.ownerId,
+    phone: phone.trim()
+  });
       }
 
       if (!customer) {
@@ -211,7 +208,11 @@ const createDebtLoan =
             customerId,
           businessCategory,
           loanNumber:
-            "LN" + Date.now(),
+            "LN" +
+             Date.now() +
+             Math.floor(
+                Math.random() * 10000
+             ),
           principalAmount:
             cleanAmount,
           balanceAmount:
@@ -255,20 +256,20 @@ const createDebtLoan =
 const getLoanHistory =
   async (req, res) => {
     try {
-      const loans =
-        await DebtLoan.find({
-          owner:
-            req.ownerId,
-          branch:
-            req.branchId
-        })
-          .populate(
-            "customer",
-            "fullName phone"
-          )
-          .sort({
-            createdAt: -1
-          });
+     const loans =
+  await DebtLoan.find({
+    owner: req.ownerId,
+    branch: req.branchId
+  })
+    .populate(
+      "customer",
+      "fullName phone"
+    )
+    .sort({
+      createdAt: -1
+    })
+    .limit(100)
+    .lean();
 
       return res.status(200).json(
         loans
@@ -324,22 +325,21 @@ const getLoanById =
 const getOverdueLoans =
   async (req, res) => {
     try {
-      const loans =
-        await DebtLoan.find({
-          owner:
-            req.ownerId,
-          branch:
-            req.branchId,
-          status:
-            "overdue"
-        })
-          .populate(
-            "customer",
-            "fullName phone"
-          )
-          .sort({
-            dueDate: 1
-          });
+    const loans =
+  await DebtLoan.find({
+    owner: req.ownerId,
+    branch: req.branchId,
+    status: "overdue"
+  })
+    .populate(
+      "customer",
+      "fullName phone"
+    )
+    .sort({
+      dueDate: 1
+    })
+    .limit(100)
+    .lean();
 
       return res.status(200).json(
         loans
@@ -369,12 +369,11 @@ const scanFingerprint =
         });
       }
 
-      const customer =
-        await CustomerIdentity.findOne({
-          owner:
-            req.ownerId,
-          fingerprintId
-        });
+       const customer =
+  await CustomerIdentity.findOne({
+    owner: req.ownerId,
+    fingerprintId
+  }).lean();
 
       if (!customer) {
         return res.status(200).json({
@@ -384,21 +383,18 @@ const scanFingerprint =
         });
       }
 
-      const activeLoans =
-        await DebtLoan.find({
-          owner:
-            req.ownerId,
-          branch:
-            req.branchId,
-          customer:
-            customer._id,
-          status: {
-            $in: [
-              "active",
-              "overdue"
-            ]
-          }
-        });
+     const activeLoans =
+  await DebtLoan.find({
+    owner: req.ownerId,
+    branch: req.branchId,
+    customer: customer._id,
+    status: {
+      $in: [
+        "active",
+        "overdue"
+      ]
+    }
+  }).lean();
 
       return res.status(200).json({
         found: true,
@@ -435,38 +431,37 @@ const scanFingerprint =
       }
 
       const loan =
-        await DebtLoan.findOne({
-          _id: loanId,
-          owner: req.ownerId,
-          branch: req.branchId
-        });
+  await DebtLoan.findOne({
+    _id: loanId,
+    owner: req.ownerId,
+    branch: req.branchId
+  }).lean();
 
-      if (!loan) {
-        return res.status(404).json({
-          message:
-            "Loan not found"
-        });
-      }
+if (!loan) {
+  return res.status(404).json({
+    message:
+      "Loan not found"
+  });
+}
 
-      // LOAN STATUS CHECK
-      if (
-        loan.status === "paid"
-      ) {
-        return res.status(400).json({
-          message:
-            "This loan is already fully paid"
-        });
-      }
+if (
+  loan.status === "paid"
+) {
+  return res.status(400).json({
+    message:
+      "This loan is already fully paid"
+  });
+}
 
-      if (
-        loan.status ===
-        "cancelled"
-      ) {
-        return res.status(400).json({
-          message:
-            "Cancelled loan cannot receive payment"
-        });
-      }
+if (
+  loan.status ===
+  "cancelled"
+) {
+  return res.status(400).json({
+    message:
+      "Cancelled loan cannot receive payment"
+  });
+}
 
       const payAmount =
         Number(amount);
@@ -502,67 +497,107 @@ const scanFingerprint =
         });
       }
 
-      await DebtPayment.create({
-        owner:
-          req.ownerId,
-        branch:
-          req.branchId,
-        loan:
-          loan._id,
-        customer:
-          loan.customer,
-        amount:
-          payAmount,
-        paymentMethod:
-          paymentMethod ||
-          "cash",
-        reference:
-          reference || "",
-        receivedBy:
-          req.user.id
-      });
+      
 
-      loan.paidAmount +=
-        payAmount;
+      const newBalance =
+  loan.balanceAmount -
+  payAmount;
 
-      loan.balanceAmount -=
-        payAmount;
+const newStatus =
+  newBalance === 0
+    ? "paid"
+    : loan.status;
 
-      loan.lastPaymentDate =
-        new Date();
-
-      if (
-        loan.balanceAmount === 0
-      ) {
-        loan.status =
-          "paid";
-
-        await CustomerIdentity.findByIdAndUpdate(
-          loan.customer,
-          {
-            $inc: {
-              activeLoans:
-                -1,
-              paidLoans: 1
-            }
-          }
-        );
+ const updateResult =
+  await DebtLoan.updateOne(
+    {
+      _id: loanId,
+      owner: req.ownerId,
+      branch: req.branchId,
+      balanceAmount: {
+        $gte: payAmount
+      },
+      status: {
+        $nin: [
+          "paid",
+          "cancelled"
+        ]
       }
+    },
+    {
+      $inc: {
+        paidAmount:
+          payAmount,
+        balanceAmount:
+          -payAmount
+      },
+      $set: {
+        lastPaymentDate:
+          new Date(),
+        status:
+          newStatus
+      }
+    }
+  );
 
-      await CustomerIdentity.findByIdAndUpdate(
-        loan.customer,
-        {
-          $inc: {
-            totalPaid:
-              payAmount
-          }
-        }
-      );
+if (
+  updateResult.modifiedCount === 0
+) {
+  return res.status(400).json({
+    message:
+      "Payment could not be processed. Balance may have changed."
+  });
+}
 
-      await loan.save();
+await DebtPayment.create({
+  owner:
+    req.ownerId,
+  branch:
+    req.branchId,
+  loan:
+    loan._id,
+  customer:
+    loan.customer,
+  amount:
+    payAmount,
+  paymentMethod:
+    paymentMethod ||
+    "cash",
+  reference:
+    reference || "",
+  receivedBy:
+    req.user.id
+});
+if (newStatus === "paid") {
+  await CustomerIdentity.findByIdAndUpdate(
+    loan.customer,
+    {
+      $inc: {
+        activeLoans: -1,
+        paidLoans: 1,
+        totalPaid:
+          payAmount
+      }
+    }
+  );
+} else {
+  await CustomerIdentity.findByIdAndUpdate(
+    loan.customer,
+    {
+      $inc: {
+        totalPaid:
+          payAmount
+      }
+    }
+  );
+}
+const updatedLoan =
+  await DebtLoan.findById(
+    loanId
+  ).lean();
 
       return res.status(200).json(
-        loan
+         updatedLoan
       );
 
     } catch (error) {
@@ -580,21 +615,21 @@ const scanFingerprint =
         req.params;
 
       const payments =
-        await DebtPayment.find({
-          owner:
-            req.ownerId,
-          branch:
-            req.branchId,
-          loan: loanId,
-          status: "posted"
-        })
-          .populate(
-            "receivedBy",
-            "name"
-          )
-          .sort({
-            paymentDate: -1
-          });
+  await DebtPayment.find({
+    owner: req.ownerId,
+    branch: req.branchId,
+    loan: loanId,
+    status: "posted"
+  })
+    .populate(
+      "receivedBy",
+      "name"
+    )
+    .sort({
+      paymentDate: -1
+    })
+    .limit(100)
+    .lean();
 
       return res.status(200).json(
         payments
