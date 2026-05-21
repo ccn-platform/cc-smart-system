@@ -1,4 +1,7 @@
-  const CustomerIdentity =
+  
+ const mongoose =
+  require("mongoose");
+ const CustomerIdentity =
   require("../models/CustomerIdentity");
 
 const DebtLoan =
@@ -59,48 +62,80 @@ const findOrCreateCustomer =
       }
 
       if (!customer) {
-        const data = {
+  const data = {
+    owner:
+      req.ownerId,
+    createdBy:
+      req.user.id,
+    fullName:
+      fullName.trim()
+  };
+
+  if (
+    phone &&
+    phone.trim()
+  ) {
+    data.phone =
+      phone.trim();
+  }
+
+  if (
+    fingerprintId &&
+    fingerprintId.trim()
+  ) {
+    data.fingerprintId =
+      fingerprintId.trim();
+  }
+
+  try {
+    customer =
+      await CustomerIdentity.create(
+        data
+      );
+
+  } catch (err) {
+    if (
+      err.code === 11000
+    ) {
+      customer =
+        await CustomerIdentity.findOne({
           owner:
             req.ownerId,
-          createdBy:
-            req.user.id,
-          fullName:
-            fullName.trim()
-        };
+          $or: [
+            phone &&
+            phone.trim()
+              ? {
+                  phone:
+                    phone.trim()
+                }
+              : null,
 
-        if (
-          phone &&
-          phone.trim()
-        ) {
-          data.phone =
-            phone.trim();
-        }
+            fingerprintId &&
+            fingerprintId.trim()
+              ? {
+                  fingerprintId:
+                    fingerprintId.trim()
+                }
+              : null
+          ].filter(Boolean)
+        });
+    } else {
+      throw err;
+    }
+  }
 
-        if (
-          fingerprintId &&
-          fingerprintId.trim()
-        ) {
-          data.fingerprintId =
-            fingerprintId.trim();
-        }
+} else {
+  if (
+    fingerprintId &&
+    fingerprintId.trim() &&
+    !customer.fingerprintId
+  ) {
+    customer.fingerprintId =
+      fingerprintId.trim();
 
-        customer =
-          await CustomerIdentity.create(
-            data
-          );
-
-      } else {
-        if (
-          fingerprintId &&
-          fingerprintId.trim() &&
-          !customer.fingerprintId
-        ) {
-          customer.fingerprintId =
-            fingerprintId.trim();
-
-          await customer.save();
-        }
-      }
+    await customer.save();
+  }
+}
 
       return res.status(200).json(
         customer
@@ -196,8 +231,16 @@ const createDebtLoan =
         });
       }
 
-      const loan =
-        await DebtLoan.create({
+       const session =
+  await mongoose.startSession();
+
+try {
+  session.startTransaction();
+
+  const loan =
+    await DebtLoan.create(
+      [
+        {
           owner:
             req.ownerId,
           branch:
@@ -209,10 +252,11 @@ const createDebtLoan =
           businessCategory,
           loanNumber:
             "LN" +
-             Date.now() +
-             Math.floor(
-                Math.random() * 10000
-             ),
+            Date.now() +
+            Math.floor(
+              Math.random() *
+              10000
+            ),
           principalAmount:
             cleanAmount,
           balanceAmount:
@@ -225,23 +269,44 @@ const createDebtLoan =
             note || "",
           approvedBy:
             req.user.id
-        });
-
-      await CustomerIdentity.findByIdAndUpdate(
-        customerId,
-        {
-          $inc: {
-            totalLoans: 1,
-            activeLoans: 1,
-            totalBorrowed:
-              cleanAmount
-          }
         }
-      );
+      ],
+      {
+        session
+      }
+    );
 
-      return res.status(201).json(
-        loan
-      );
+  await CustomerIdentity.findByIdAndUpdate(
+    customerId,
+    {
+      $inc: {
+        totalLoans: 1,
+        activeLoans: 1,
+        totalBorrowed:
+          cleanAmount
+      }
+    },
+    {
+      session
+    }
+  );
+ await session.commitTransaction();
+  return res.status(201).json(
+    loan[0]
+  );
+
+ } catch (err) {
+  if (
+    session.inTransaction()
+  ) {
+    await session.abortTransaction();
+  }
+
+  throw err;
+
+} finally {
+  await session.endSession();
+}
 
     } catch (error) {
       return res.status(500).json({
@@ -289,17 +354,19 @@ const getLoanById =
   async (req, res) => {
     try {
       const loan =
-        await DebtLoan.findOne({
-          _id:
-            req.params.id,
-          owner:
-            req.ownerId,
-          branch:
-            req.branchId
-        }).populate(
-          "customer",
-          "fullName phone"
-        );
+  await DebtLoan.findOne({
+    _id:
+      req.params.id,
+    owner:
+      req.ownerId,
+    branch:
+      req.branchId
+  })
+    .populate(
+      "customer",
+      "fullName phone"
+    )
+    .lean();
 
       if (!loan) {
         return res.status(404).json({
@@ -498,107 +565,148 @@ if (
       }
 
       
+const session =
+  await mongoose.startSession();
 
-      const newBalance =
-  loan.balanceAmount -
-  payAmount;
+try {
+  session.startTransaction();
 
-const newStatus =
-  newBalance === 0
-    ? "paid"
-    : loan.status;
+  const newBalance =
+    loan.balanceAmount -
+    payAmount;
 
- const updateResult =
-  await DebtLoan.updateOne(
-    {
-      _id: loanId,
-      owner: req.ownerId,
-      branch: req.branchId,
-      balanceAmount: {
-        $gte: payAmount
+  const newStatus =
+    newBalance === 0
+      ? "paid"
+      : loan.status;
+
+  const updateResult =
+    await DebtLoan.updateOne(
+      {
+        _id: loanId,
+        owner: req.ownerId,
+        branch: req.branchId,
+        balanceAmount: {
+          $gte: payAmount
+        },
+        status: {
+          $nin: [
+            "paid",
+            "cancelled"
+          ]
+        }
       },
-      status: {
-        $nin: [
-          "paid",
-          "cancelled"
-        ]
+      {
+        $inc: {
+          paidAmount:
+            payAmount,
+          balanceAmount:
+            -payAmount
+        },
+        $set: {
+          lastPaymentDate:
+            new Date(),
+          status:
+            newStatus
+        }
+      },
+      {
+        session
       }
-    },
-    {
-      $inc: {
-        paidAmount:
+    );
+
+  if (
+    updateResult.modifiedCount === 0
+  ) {
+    await session.abortTransaction();
+
+    return res.status(400).json({
+      message:
+        "Payment could not be processed. Balance may have changed."
+    });
+  }
+
+  await DebtPayment.create(
+    [
+      {
+        owner:
+          req.ownerId,
+        branch:
+          req.branchId,
+        loan:
+          loan._id,
+        customer:
+          loan.customer,
+        amount:
           payAmount,
-        balanceAmount:
-          -payAmount
+        paymentMethod:
+          paymentMethod ||
+          "cash",
+        reference:
+          reference || "",
+        receivedBy:
+          req.user.id
+      }
+    ],
+    {
+      session
+    }
+  );
+
+  if (newStatus === "paid") {
+    await CustomerIdentity.findByIdAndUpdate(
+      loan.customer,
+      {
+        $inc: {
+          activeLoans: -1,
+          paidLoans: 1,
+          totalPaid:
+            payAmount
+        }
       },
-      $set: {
-        lastPaymentDate:
-          new Date(),
-        status:
-          newStatus
+      {
+        session
       }
-    }
+    );
+  } else {
+    await CustomerIdentity.findByIdAndUpdate(
+      loan.customer,
+      {
+        $inc: {
+          totalPaid:
+            payAmount
+        }
+      },
+      {
+        session
+      }
+    );
+  }
+
+  await session.commitTransaction();
+
+  const updatedLoan =
+    await DebtLoan.findById(
+      loanId
+    ).lean();
+
+  return res.status(200).json(
+    updatedLoan
   );
 
-if (
-  updateResult.modifiedCount === 0
-) {
-  return res.status(400).json({
-    message:
-      "Payment could not be processed. Balance may have changed."
-  });
+ } catch (err) {
+  if (
+    session.inTransaction()
+  ) {
+    await session.abortTransaction();
+  }
+
+  throw err;
+
+} finally {
+  await session.endSession();
 }
-
-await DebtPayment.create({
-  owner:
-    req.ownerId,
-  branch:
-    req.branchId,
-  loan:
-    loan._id,
-  customer:
-    loan.customer,
-  amount:
-    payAmount,
-  paymentMethod:
-    paymentMethod ||
-    "cash",
-  reference:
-    reference || "",
-  receivedBy:
-    req.user.id
-});
-if (newStatus === "paid") {
-  await CustomerIdentity.findByIdAndUpdate(
-    loan.customer,
-    {
-      $inc: {
-        activeLoans: -1,
-        paidLoans: 1,
-        totalPaid:
-          payAmount
-      }
-    }
-  );
-} else {
-  await CustomerIdentity.findByIdAndUpdate(
-    loan.customer,
-    {
-      $inc: {
-        totalPaid:
-          payAmount
-      }
-    }
-  );
-}
-const updatedLoan =
-  await DebtLoan.findById(
-    loanId
-  ).lean();
-
-      return res.status(200).json(
-         updatedLoan
-      );
+    
 
     } catch (error) {
       return res.status(500).json({
