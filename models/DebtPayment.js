@@ -137,6 +137,20 @@ debtPaymentSchema.index({
   paymentMethod: 1
 });
 
+debtPaymentSchema.index({
+  owner: 1,
+  branch: 1,
+  loan: 1,
+  status: 1,
+  paymentDate: -1
+});
+
+debtPaymentSchema.index({
+  owner: 1,
+  branch: 1,
+  customer: 1,
+  status: 1
+});
 module.exports =
   mongoose.model(
     "DebtPayment",
