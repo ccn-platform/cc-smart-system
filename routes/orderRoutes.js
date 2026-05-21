@@ -1,5 +1,7 @@
-   const express = require("express");
+  const express = require("express");
 const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
 const router = express.Router();
 
@@ -19,10 +21,52 @@ const {
 } = require("../controllers/orderController");
 
 
-// MEMORY STORAGE
+// TEMP UPLOAD DIR
+const uploadDir = path.join(
+  __dirname,
+  "../uploads/temp"
+);
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, {
+    recursive: true
+  });
+}
+
+
+// DISK STORAGE (PRODUCTION SAFE)
+const storage = multer.diskStorage({
+  destination: (
+    req,
+    file,
+    cb
+  ) => {
+    cb(null, uploadDir);
+  },
+
+  filename: (
+    req,
+    file,
+    cb
+  ) => {
+    const ext =
+      path.extname(
+        file.originalname || ".jpg"
+      );
+
+    const fileName =
+      `${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}${ext}`;
+
+    cb(null, fileName);
+  }
+});
+
+
+// UPLOAD CONFIG
 const upload = multer({
-  storage:
-    multer.memoryStorage(),
+  storage,
 
   limits: {
     fileSize:
@@ -35,6 +79,7 @@ const upload = multer({
     cb
   ) => {
     if (
+      file.mimetype &&
       file.mimetype.startsWith(
         "image/"
       )
@@ -85,8 +130,10 @@ router.post(
 
     console.log(
       "✅ File received:",
-      req.file.size,
-      "bytes"
+      {
+        size: req.file.size,
+        path: req.file.path
+      }
     );
 
     next();
@@ -94,12 +141,15 @@ router.post(
   scanImage
 );
 
+
 router.post(
   "/confirm",
   protect,
   branchAccess,
   confirmOrder
 );
+
+
 // HISTORY
 router.get(
   "/history",
@@ -126,10 +176,12 @@ router.get(
   getOrderById
 );
 
+
 router.delete(
   "/:id",
   protect,
   branchAccess,
   deleteOrder
 );
+
 module.exports = router;
