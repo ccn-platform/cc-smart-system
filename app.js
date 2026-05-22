@@ -1,6 +1,6 @@
  const express =
 require("express");
-
+const path = require("path");
 const cors = require("cors");
 const {
   markOverdueLoans
@@ -31,7 +31,19 @@ app.use((req, res, next) => {
 app.get("/", (req, res) => {
   res.send("CCN Backend Running");
 });
- 
+ app.get(
+  "/privacy-policy",
+  (req, res) => {
+    res.sendFile(
+      path.join(
+        __dirname,
+        "views",
+        "privacy-policy.html"
+      )
+    );
+  }
+);
+
 app.use("/api/reports",reportRoutes);
 app.use("/api/audit",auditRoutes);
 app.use("/api/shop", shopRoutes);
