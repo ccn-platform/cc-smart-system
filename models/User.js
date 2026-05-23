@@ -50,6 +50,30 @@ const userSchema =
         type: String,
         default: ""
       },
+resetPinCode: {
+  type: String,
+  select: false,
+  default: null
+},
+
+resetPinExpiresAt: {
+  type: Date,
+  select: false,
+  default: null
+},
+
+resetPinAttempts: {
+  type: Number,
+  select: false,
+  default: 0
+},
+
+resetPinBlockedUntil: {
+  type: Date,
+  select: false,
+  default: null
+},
+
       deletedAt: {
         type: Date,
          default: null
