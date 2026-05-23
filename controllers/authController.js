@@ -770,8 +770,7 @@ const getProfile = async (
 
     if (!phone) {
       return res.status(400).json({
-        message:
-          "Phone required"
+        message: "Phone required"
       });
     }
 
@@ -782,7 +781,9 @@ const getProfile = async (
       await User.findOne({
         phone: normalized,
         isActive: true
-      });
+      }).select(
+        "+resetPinRequestCount +resetPinRequestWindow +resetPinRequestBlockedUntil"
+      );
 
     if (!user) {
       return res.status(200).json({
@@ -791,14 +792,64 @@ const getProfile = async (
       });
     }
 
+    // BLOCK CHECK
+    if (
+      user.resetPinRequestBlockedUntil &&
+      new Date() <
+        user.resetPinRequestBlockedUntil
+    ) {
+      return res.status(429).json({
+        message:
+          "Umeomba code mara nyingi. Jaribu tena baada ya dakika 30."
+      });
+    }
+
+    // ACTIVE CODE CHECK
     if (
       user.resetPinExpiresAt &&
-      user.resetPinExpiresAt >
+      user.resetPinExpiresAt.getTime() >
         Date.now()
     ) {
       return res.status(400).json({
         message:
           "Subiri kidogo kabla ya kuomba code nyingine."
+      });
+    }
+
+    // RESET WINDOW
+    if (
+      !user.resetPinRequestWindow ||
+      user.resetPinRequestWindow.getTime() <
+        Date.now()
+    ) {
+      user.resetPinRequestCount = 0;
+
+      user.resetPinRequestWindow =
+        new Date(
+          Date.now() +
+          30 * 60 * 1000
+        );
+    }
+
+    // COUNT REQUEST
+    user.resetPinRequestCount =
+      (user.resetPinRequestCount || 0) + 1;
+
+    // BLOCK AFTER 3
+    if (
+      user.resetPinRequestCount > 3
+    ) {
+      user.resetPinRequestBlockedUntil =
+        new Date(
+          Date.now() +
+          30 * 60 * 1000
+        );
+
+      await user.save();
+
+      return res.status(429).json({
+        message:
+          "Umeomba code mara nyingi. Jaribu tena baada ya dakika 30."
       });
     }
 
@@ -815,10 +866,10 @@ const getProfile = async (
         .digest("hex");
 
     user.resetPinExpiresAt =
-      Date.now() +
-      5 *
-        60 *
-        1000;
+      new Date(
+        Date.now() +
+        5 * 60 * 1000
+      );
 
     user.resetPinAttempts = 0;
     user.resetPinBlockedUntil =
@@ -830,12 +881,10 @@ const getProfile = async (
       await pushService.sendToUser(
         user._id,
         {
-          title:
-            "Reset Password",
+          title: "Reset PIN",
           body:
             `Code yako ni ${code}`,
-          type:
-            "PIN_RESET"
+          type: "PIN_RESET"
         }
       );
     } catch {}
@@ -843,7 +892,7 @@ const getProfile = async (
     try {
       await smsService.sendSMS(
         normalized,
-        `CCN: Biashara plus Code yako ya kurekebisha PIN ni ${code}. Itatumika kwa dakika 5.`
+        `CCN: Biashara Plus code yako ya kurekebisha PIN ni ${code}. Itatumika kwa dakika 5.`
       );
     } catch (err) {
       console.log(
@@ -853,17 +902,16 @@ const getProfile = async (
     }
 
     return res.status(200).json({
-      message:
-        "Code imetumwa."
+      message: "Code imetumwa."
     });
 
   } catch (error) {
     return res.status(500).json({
-      message:
-        error.message
+      message: error.message
     });
   }
 };
+
 const resetPin = async (
   req,
   res
