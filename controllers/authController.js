@@ -930,43 +930,33 @@ const resetPin = async (
         .update(code)
         .digest("hex");
 
-    if (
-      user.resetPinCode !==
-        hashedCode ||
-      !user.resetPinExpiresAt ||
-      user.resetPinExpiresAt <
-        Date.now()
-    ) {
-      user.resetPinAttempts =
-        (
-          user.resetPinAttempts ||
-          0
-        ) + 1;
+   if (
+  user.resetPinCode !== hashedCode ||
+  !user.resetPinExpiresAt ||
+  user.resetPinExpiresAt.getTime() < Date.now()
+) {
+  user.resetPinAttempts =
+    (user.resetPinAttempts || 0) + 1;
 
-      if (
-        user.resetPinAttempts >=
-        5
-      ) {
-        user.resetPinBlockedUntil =
-          new Date(
-            Date.now() +
-              10 *
-                60 *
-                1000
-          );
+  if (
+    user.resetPinAttempts >= 5
+  ) {
+    user.resetPinBlockedUntil =
+      new Date(
+        Date.now() +
+        10 * 60 * 1000
+      );
 
-        user.resetPinAttempts =
-          0;
-      }
+    user.resetPinAttempts = 0;
+  }
 
-      await user.save();
+  await user.save();
 
-      return res.status(400).json({
-        message:
-          "Code si sahihi au ime-expire"
-      });
-    }
-
+  return res.status(400).json({
+    message:
+      "Code si sahihi au ime-expire"
+  });
+}
     const hashedPassword =
       await bcrypt.hash(
         newPin,
