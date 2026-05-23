@@ -6,6 +6,8 @@ const {
   loginUser,
   addStaff,
    getStaff,
+   resetPin,
+   sendResetPinCode,
     getProfile,
    deleteAccount,
     updateProfile,
@@ -21,7 +23,8 @@ const {
 // 🔥 ROUTES
 router.post("/register", registerUser);
 router.post("/login", loginUser);
-
+router.post("/send-reset-code",sendResetPinCode);
+router.post("/reset-pin", resetPin);
 // 🔥 OWNER ONLY
 router.post("/add-staff", protect, onlyOwner, addStaff);
 
@@ -30,4 +33,5 @@ router.delete("/staff/:staffId",protect,onlyOwner,deleteStaff);
 router.put("/profile",protect,updateProfile);
 router.delete("/account", protect, onlyOwner, deleteAccount);
 router.get("/me", protect,getProfile);
+
 module.exports = router;
