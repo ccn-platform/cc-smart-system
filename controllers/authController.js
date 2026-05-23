@@ -777,75 +777,86 @@ const getProfile = async (
     const normalized =
       normalizePhone(phone);
 
-    const user =
+    const existingUser =
       await User.findOne({
         phone: normalized,
         isActive: true
       }).select(
-        "+resetPinRequestCount +resetPinRequestWindow +resetPinRequestBlockedUntil"
+        "+resetPinExpiresAt"
       );
 
-    if (!user) {
+    if (!existingUser) {
       return res.status(200).json({
         message:
           "Ikiwa account ipo, code itatumwa."
       });
     }
 
-    // BLOCK CHECK
+    // ACTIVE OTP BLOCK
     if (
-      user.resetPinRequestBlockedUntil &&
-      new Date() <
-        user.resetPinRequestBlockedUntil
+      existingUser.resetPinExpiresAt &&
+      existingUser.resetPinExpiresAt.getTime() >
+        Date.now()
     ) {
+      return res.status(400).json({
+        message:
+          "Code tayari imetumwa. Subiri dakika 5."
+      });
+    }
+
+    // ATOMIC LOCK
+    const user =
+      await User.findOneAndUpdate(
+        {
+          _id: existingUser._id,
+          $or: [
+            {
+              resetPinRequestBlockedUntil:
+                null
+            },
+            {
+              resetPinRequestBlockedUntil:
+                {
+                  $lt:
+                    new Date()
+                }
+            }
+          ]
+        },
+        {
+          $inc: {
+            resetPinRequestCount: 1
+          }
+        },
+        {
+          new: true
+        }
+      ).select(
+        "+resetPinRequestCount +resetPinRequestBlockedUntil"
+      );
+
+    if (!user) {
       return res.status(429).json({
         message:
           "Umeomba code mara nyingi. Jaribu tena baada ya dakika 30."
       });
     }
 
-    // ACTIVE CODE CHECK
-    if (
-      user.resetPinExpiresAt &&
-      user.resetPinExpiresAt.getTime() >
-        Date.now()
-    ) {
-      return res.status(400).json({
-        message:
-          "Subiri kidogo kabla ya kuomba code nyingine."
-      });
-    }
-
-    // RESET WINDOW
-    if (
-      !user.resetPinRequestWindow ||
-      user.resetPinRequestWindow.getTime() <
-        Date.now()
-    ) {
-      user.resetPinRequestCount = 0;
-
-      user.resetPinRequestWindow =
-        new Date(
-          Date.now() +
-          30 * 60 * 1000
-        );
-    }
-
-    // COUNT REQUEST
-    user.resetPinRequestCount =
-      (user.resetPinRequestCount || 0) + 1;
-
-    // BLOCK AFTER 3
     if (
       user.resetPinRequestCount > 3
     ) {
-      user.resetPinRequestBlockedUntil =
-        new Date(
-          Date.now() +
-          30 * 60 * 1000
-        );
-
-      await user.save();
+      await User.updateOne(
+        { _id: user._id },
+        {
+          resetPinRequestBlockedUntil:
+            new Date(
+              Date.now() +
+              30 *
+                60 *
+                1000
+            )
+        }
+      );
 
       return res.status(429).json({
         message:
@@ -859,35 +870,30 @@ const getProfile = async (
         999999
       ).toString();
 
-    user.resetPinCode =
-      crypto
-        .createHash("sha256")
-        .update(code)
-        .digest("hex");
+    await User.updateOne(
+      { _id: user._id },
+      {
+        resetPinCode:
+          crypto
+            .createHash(
+              "sha256"
+            )
+            .update(code)
+            .digest("hex"),
 
-    user.resetPinExpiresAt =
-      new Date(
-        Date.now() +
-        5 * 60 * 1000
-      );
+        resetPinExpiresAt:
+          new Date(
+            Date.now() +
+            5 *
+              60 *
+              1000
+          ),
 
-    user.resetPinAttempts = 0;
-    user.resetPinBlockedUntil =
-      null;
-
-    await user.save();
-
-    try {
-      await pushService.sendToUser(
-        user._id,
-        {
-          title: "Reset PIN",
-          body:
-            `Code yako ni ${code}`,
-          type: "PIN_RESET"
-        }
-      );
-    } catch {}
+        resetPinAttempts: 0,
+        resetPinBlockedUntil:
+          null
+      }
+    );
 
     try {
       await smsService.sendSMS(
