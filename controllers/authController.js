@@ -843,7 +843,7 @@ const getProfile = async (
     try {
       await smsService.sendSMS(
         normalized,
-        `CCN: Code yako ya kurekebisha PIN ni ${code}. Itatumika kwa dakika 5.`
+        `CCN: Biashara plus Code yako ya kurekebisha PIN ni ${code}. Itatumika kwa dakika 5.`
       );
     } catch (err) {
       console.log(
