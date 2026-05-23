@@ -1,4 +1,4 @@
-    const mongoose = require("mongoose");
+   const mongoose = require("mongoose");
 
 const crypto = require("crypto");
 const pushService = require("../services/pushService");
@@ -761,7 +761,8 @@ const getProfile = async (
     });
   }
 };
- const sendResetPinCode = async (
+ 
+const sendResetPinCode = async (
   req,
   res
 ) => {
@@ -782,7 +783,7 @@ const getProfile = async (
         phone: normalized,
         isActive: true
       }).select(
-        "+resetPinExpiresAt"
+        "+resetPinExpiresAt +resetPinRequestCount +resetPinRequestBlockedUntil"
       );
 
     if (!existingUser) {
@@ -792,7 +793,7 @@ const getProfile = async (
       });
     }
 
-    // ACTIVE OTP BLOCK
+    // OTP ACTIVE
     if (
       existingUser.resetPinExpiresAt &&
       existingUser.resetPinExpiresAt.getTime() >
@@ -804,24 +805,38 @@ const getProfile = async (
       });
     }
 
-    // ATOMIC LOCK
+    // BLOCK ACTIVE
+    if (
+      existingUser.resetPinRequestBlockedUntil &&
+      existingUser.resetPinRequestBlockedUntil.getTime() >
+        Date.now()
+    ) {
+      return res.status(429).json({
+        message:
+          "Umeomba code mara nyingi. Jaribu tena baada ya dakika 30."
+      });
+    }
+
+    // RESET AFTER BLOCK EXPIRES
+    if (
+      existingUser.resetPinRequestBlockedUntil &&
+      existingUser.resetPinRequestBlockedUntil.getTime() <=
+        Date.now()
+    ) {
+      await User.updateOne(
+        { _id: existingUser._id },
+        {
+          resetPinRequestCount: 0,
+          resetPinRequestBlockedUntil: null
+        }
+      );
+    }
+
+    // SAFE INCREMENT
     const user =
       await User.findOneAndUpdate(
         {
-          _id: existingUser._id,
-          $or: [
-            {
-              resetPinRequestBlockedUntil:
-                null
-            },
-            {
-              resetPinRequestBlockedUntil:
-                {
-                  $lt:
-                    new Date()
-                }
-            }
-          ]
+          _id: existingUser._id
         },
         {
           $inc: {
@@ -829,18 +844,11 @@ const getProfile = async (
           }
         },
         {
-          new: true
+          returnDocument: "after"
         }
       ).select(
-        "+resetPinRequestCount +resetPinRequestBlockedUntil"
+        "+resetPinRequestCount"
       );
-
-    if (!user) {
-      return res.status(429).json({
-        message:
-          "Umeomba code mara nyingi. Jaribu tena baada ya dakika 30."
-      });
-    }
 
     if (
       user.resetPinRequestCount > 3
@@ -875,9 +883,7 @@ const getProfile = async (
       {
         resetPinCode:
           crypto
-            .createHash(
-              "sha256"
-            )
+            .createHash("sha256")
             .update(code)
             .digest("hex"),
 
@@ -890,22 +896,14 @@ const getProfile = async (
           ),
 
         resetPinAttempts: 0,
-        resetPinBlockedUntil:
-          null
+        resetPinBlockedUntil: null
       }
     );
 
-    try {
-      await smsService.sendSMS(
-        normalized,
-        `CCN: Biashara Plus code yako ya kurekebisha PIN ni ${code}. Itatumika kwa dakika 5.`
-      );
-    } catch (err) {
-      console.log(
-        "SMS ERROR:",
-        err.message
-      );
-    }
+    await smsService.sendSMS(
+      normalized,
+      `CCN: Biashara Plus code yako ya kurekebisha PIN ni ${code}. Itatumika kwa dakika 5.`
+    );
 
     return res.status(200).json({
       message: "Code imetumwa."
@@ -917,7 +915,6 @@ const getProfile = async (
     });
   }
 };
-
 const resetPin = async (
   req,
   res
