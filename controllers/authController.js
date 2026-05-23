@@ -1,5 +1,9 @@
     const mongoose = require("mongoose");
-const User = require("../models/User");
+
+const crypto = require("crypto");
+const pushService = require("../services/pushService");
+const smsService = require("../services/smsService");
+   const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Shop = require("../models/Shop");
@@ -757,6 +761,261 @@ const getProfile = async (
     });
   }
 };
+ const sendResetPinCode = async (
+  req,
+  res
+) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({
+        message:
+          "Phone required"
+      });
+    }
+
+    const normalized =
+      normalizePhone(phone);
+
+    const user =
+      await User.findOne({
+        phone: normalized,
+        isActive: true
+      });
+
+    if (!user) {
+      return res.status(200).json({
+        message:
+          "Ikiwa account ipo, code itatumwa."
+      });
+    }
+
+    if (
+      user.resetPinExpiresAt &&
+      user.resetPinExpiresAt >
+        Date.now()
+    ) {
+      return res.status(400).json({
+        message:
+          "Subiri kidogo kabla ya kuomba code nyingine."
+      });
+    }
+
+    const code =
+      crypto.randomInt(
+        100000,
+        999999
+      ).toString();
+
+    user.resetPinCode =
+      crypto
+        .createHash("sha256")
+        .update(code)
+        .digest("hex");
+
+    user.resetPinExpiresAt =
+      Date.now() +
+      5 *
+        60 *
+        1000;
+
+    user.resetPinAttempts = 0;
+    user.resetPinBlockedUntil =
+      null;
+
+    await user.save();
+
+    try {
+      await pushService.sendToUser(
+        user._id,
+        {
+          title:
+            "Reset Password",
+          body:
+            `Code yako ni ${code}`,
+          type:
+            "PIN_RESET"
+        }
+      );
+    } catch {}
+
+    try {
+      await smsService.sendSMS(
+        normalized,
+        `CCN: Code yako ya kurekebisha PIN ni ${code}. Itatumika kwa dakika 5.`
+      );
+    } catch (err) {
+      console.log(
+        "SMS ERROR:",
+        err.message
+      );
+    }
+
+    return res.status(200).json({
+      message:
+        "Code imetumwa."
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message:
+        error.message
+    });
+  }
+};
+const resetPin = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      phone,
+      code,
+      newPin
+    } = req.body;
+
+    if (
+      !phone ||
+      !code ||
+      !newPin
+    ) {
+      return res.status(400).json({
+        message:
+          "Phone, code and new PIN required"
+      });
+    }
+
+    if (
+      String(newPin).length < 4
+    ) {
+      return res.status(400).json({
+        message:
+          "PIN lazima iwe angalau digits 4"
+      });
+    }
+
+    const normalized =
+      normalizePhone(phone);
+
+    const user =
+      await User.findOne({
+        phone: normalized,
+        isActive: true
+      }).select(
+        "+resetPinCode +resetPinExpiresAt +resetPinAttempts +resetPinBlockedUntil +password"
+      );
+
+    if (!user) {
+      return res.status(400).json({
+        message:
+          "Invalid request"
+      });
+    }
+
+    if (
+      user.resetPinBlockedUntil &&
+      new Date() <
+        user.resetPinBlockedUntil
+    ) {
+      return res.status(400).json({
+        message:
+          "Jaribu tena baada ya dakika 10"
+      });
+    }
+
+    const hashedCode =
+      crypto
+        .createHash("sha256")
+        .update(code)
+        .digest("hex");
+
+    if (
+      user.resetPinCode !==
+        hashedCode ||
+      !user.resetPinExpiresAt ||
+      user.resetPinExpiresAt <
+        Date.now()
+    ) {
+      user.resetPinAttempts =
+        (
+          user.resetPinAttempts ||
+          0
+        ) + 1;
+
+      if (
+        user.resetPinAttempts >=
+        5
+      ) {
+        user.resetPinBlockedUntil =
+          new Date(
+            Date.now() +
+              10 *
+                60 *
+                1000
+          );
+
+        user.resetPinAttempts =
+          0;
+      }
+
+      await user.save();
+
+      return res.status(400).json({
+        message:
+          "Code si sahihi au ime-expire"
+      });
+    }
+
+    const hashedPassword =
+      await bcrypt.hash(
+        newPin,
+        10
+      );
+
+    user.password =
+      hashedPassword;
+
+    user.resetPinCode =
+      null;
+
+    user.resetPinExpiresAt =
+      null;
+
+    user.resetPinAttempts =
+      0;
+
+    user.resetPinBlockedUntil =
+      null;
+
+    await user.save();
+
+    try {
+      await pushService.sendToUser(
+        user._id,
+        {
+          title:
+            "PIN Imebadilishwa",
+          body:
+            "PIN yako imebadilishwa kikamilifu.",
+          type:
+            "PIN_CHANGED"
+        }
+      );
+    } catch {}
+
+    return res.status(200).json({
+      message:
+        "PIN imebadilishwa"
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message:
+        error.message
+    });
+  }
+};
 module.exports = {
   registerUser,
   loginUser,
@@ -765,5 +1024,7 @@ module.exports = {
   deleteAccount,
   getStaff,
   addStaff,
+  sendResetPinCode,
+  resetPin,
   deleteStaff
 };
