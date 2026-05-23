@@ -1,4 +1,4 @@
- const AfricasTalking = require("africastalking");
+  const AfricasTalking = require("africastalking");
 
 if (
   !process.env.AT_API_KEY ||
@@ -74,7 +74,7 @@ const sendOTP =
     otp
   ) => {
     const message =
-      `CCN: Code yako ya kurekebisha PIN ni ${otp}. Itatumika kwa dakika 5.`;
+      `CCN: Code yako ya kurekebisha PIN biashara plus ni ${otp}. Itatumika kwa dakika 5.`;
 
     return await sendSMS(
       phone,
