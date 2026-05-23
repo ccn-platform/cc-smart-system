@@ -50,7 +50,8 @@ const userSchema =
         type: String,
         default: ""
       },
-resetPinCode: {
+ 
+      resetPinCode: {
   type: String,
   select: false,
   default: null
@@ -74,6 +75,23 @@ resetPinBlockedUntil: {
   default: null
 },
 
+resetPinRequestCount: {
+  type: Number,
+  select: false,
+  default: 0
+},
+
+resetPinRequestWindow: {
+  type: Date,
+  select: false,
+  default: null
+},
+
+resetPinRequestBlockedUntil: {
+  type: Date,
+  select: false,
+  default: null
+},
       deletedAt: {
         type: Date,
          default: null
