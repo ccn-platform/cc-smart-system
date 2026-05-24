@@ -1215,7 +1215,7 @@ const getTopProductsReport = async (req, res) => {
   }
 };
    
-const getCreditReport = async (req, res) => {
+ const getCreditReport = async (req, res) => {
   try {
     // SECURITY
     if (!req.ownerId || !req.branchId) {
@@ -1234,42 +1234,73 @@ const getCreditReport = async (req, res) => {
         req.branchId
       );
 
-    // CURRENT MONTH
-    const now = new Date();
+    // PERIOD FILTER
+    const period =
+      req.query.period || "today";
 
-    const start = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        1
-      )
-    );
+    let start = new Date();
+    let end = new Date();
 
-    const end = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth() + 1,
-        1
-      )
-    );
+    if (period === "today") {
+      start = new Date();
+      start.setUTCHours(
+        0,
+        0,
+        0,
+        0
+      );
+    }
 
-    // TODAY
-    const today = new Date();
-    today.setUTCHours(
-      0,
-      0,
-      0,
-      0
-    );
+    if (period === "week") {
+  start = new Date();
+  start.setUTCHours(0,0,0,0);
 
-    const tomorrow =
-      new Date(today);
+  const day =
+    start.getUTCDay();
 
-    tomorrow.setUTCDate(
-      today.getUTCDate() + 1
-    );
+  const diff =
+    day === 0 ? 6 : day - 1;
 
-    // MONTH LOANS
+  start.setUTCDate(
+    start.getUTCDate() - diff
+  );
+}
+
+if (period === "month") {
+  start = new Date(
+    Date.UTC(
+      end.getUTCFullYear(),
+      end.getUTCMonth(),
+      1
+    )
+  );
+}
+
+const outstandingAgg =
+  await DebtLoan.aggregate([
+    {
+      $match: {
+        owner: ownerId,
+        branch: branchId,
+        status: {
+          $in: [
+            "active",
+            "overdue"
+          ]
+        }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        total: {
+          $sum:
+            "$balanceAmount"
+        }
+      }
+    }
+  ]);
+    // LOAN SUMMARY
     const loanAgg =
       await DebtLoan.aggregate([
         {
@@ -1278,29 +1309,26 @@ const getCreditReport = async (req, res) => {
             branch: branchId,
             createdAt: {
               $gte: start,
-              $lt: end
+              $lte: end
             }
           }
         },
-        {
-          $group: {
-            _id: "$status",
-            count: {
-              $sum: 1
-            },
-            totalIssued: {
-              $sum:
-                "$principalAmount"
-            },
-            outstanding: {
-              $sum:
-                "$balanceAmount"
-            }
-          }
-        }
+        
+       {
+  $group: {
+    _id: "$status",
+    count: {
+      $sum: 1
+    },
+    totalIssued: {
+      $sum:
+        "$principalAmount"
+    }
+  }
+}
       ]);
 
-    // MONTH PAYMENTS
+    // PAYMENTS
     const paymentAgg =
       await DebtPayment.aggregate([
         {
@@ -1309,7 +1337,7 @@ const getCreditReport = async (req, res) => {
             branch: branchId,
             createdAt: {
               $gte: start,
-              $lt: end
+              $lte: end
             }
           }
         },
@@ -1323,121 +1351,32 @@ const getCreditReport = async (req, res) => {
         }
       ]);
 
-    // TODAY LOANS
-    const todayLoans =
-      await DebtLoan.aggregate([
+    // EXPENSES
+    const expenseAgg =
+      await CashEntry.aggregate([
         {
           $match: {
             owner: ownerId,
             branch: branchId,
+            status: "active",
+            type: "expense",
             createdAt: {
-              $gte: today,
-              $lt: tomorrow
+              $gte: start,
+              $lte: end
             }
           }
         },
         {
           $group: {
             _id: null,
-            issued: {
-              $sum:
-                "$principalAmount"
-            }
-          }
-        }
-      ]);
-
-    // TODAY PAYMENTS
-    const todayPayments =
-      await DebtPayment.aggregate([
-        {
-          $match: {
-            owner: ownerId,
-            branch: branchId,
-            createdAt: {
-              $gte: today,
-              $lt: tomorrow
-            }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            collected: {
+            totalExpense: {
               $sum: "$amount"
             }
           }
         }
       ]);
-
-    // OLD LOANS
-    const oldLoans =
-      await DebtLoan.aggregate([
-        {
-          $match: {
-            owner: ownerId,
-            branch: branchId,
-            createdAt: {
-              $lt: today
-            }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            issued: {
-              $sum:
-                "$principalAmount"
-            }
-          }
-        }
-      ]);
-
-    // OLD PAYMENTS
-    const oldPayments =
-      await DebtPayment.aggregate([
-        {
-          $match: {
-            owner: ownerId,
-            branch: branchId,
-            createdAt: {
-              $lt: today
-            }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            collected: {
-              $sum: "$amount"
-            }
-          }
-        }
-      ]);
-// TODAY EXPENSE
-const todayExpense =
-  await CashEntry.aggregate([
-    {
-      $match: {
-        owner: ownerId,
-        branch: branchId,
-        status: "active",
-        type: "expense",
-        createdAt: {
-          $gte: today,
-          $lt: tomorrow
-        }
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        total: {
-          $sum: "$amount"
-        }
-      }
-    }
-  ]);
+const outstanding =
+  outstandingAgg[0]?.total || 0;
 
     let overdueCount = 0;
     let activeCount = 0;
@@ -1445,7 +1384,7 @@ const todayExpense =
 
     let totalLoans = 0;
     let totalIssued = 0;
-    let outstanding = 0;
+    
 
     loanAgg.forEach((l) => {
       totalLoans +=
@@ -1454,34 +1393,41 @@ const todayExpense =
       totalIssued +=
         l.totalIssued || 0;
 
-      outstanding +=
-        l.outstanding || 0;
+      
 
       if (
         l._id === "overdue"
       ) {
         overdueCount =
-          l.count;
+          l.count || 0;
       }
 
       if (
         l._id === "active"
       ) {
         activeCount =
-          l.count;
+          l.count || 0;
       }
 
       if (
         l._id === "paid"
       ) {
         paidCount =
-          l.count;
+          l.count || 0;
       }
     });
 
     const totalCollected =
       paymentAgg[0]
         ?.totalCollected || 0;
+
+    const totalExpense =
+      expenseAgg[0]
+        ?.totalExpense || 0;
+
+    const netCash =
+      totalCollected -
+      totalExpense;
 
     // RISKY CUSTOMERS
     const riskyCustomers =
@@ -1510,28 +1456,27 @@ const todayExpense =
         paidCount
       },
 
-      today: {
-        issued:
-          todayLoans[0]
-            ?.issued || 0,
+      cashFlow: {
+        issued: totalIssued,
         collected:
-          todayPayments[0]
-            ?.collected || 0,
-             expense:
-    todayExpense[0]
-      ?.total || 0
+          totalCollected,
+        expense:
+          totalExpense,
+        net: netCash
       },
 
-      old: {
-        issued:
-          oldLoans[0]
-            ?.issued || 0,
-        collected:
-          oldPayments[0]
-            ?.collected || 0
+      loanHealth: {
+        active:
+          activeCount,
+        overdue:
+          overdueCount,
+        paid:
+          paidCount
       },
 
-      riskyCustomers
+      riskyCustomers,
+
+      period
     });
 
   } catch (error) {
