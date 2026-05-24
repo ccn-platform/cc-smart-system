@@ -1,4 +1,4 @@
-  const mongoose = require("mongoose");
+ const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const cleanOCRText = require("../utils/cleanOCRText");
 const parseOrderText = require("../utils/parseOrderText");
@@ -356,9 +356,78 @@ const confirmOrder = async (
       )
     );
 
+    const period =
+      req.query.period ||
+      "today";
+
+    let start =
+      new Date();
+
+    let end =
+      new Date();
+
+    if (
+      period ===
+      "today"
+    ) {
+      start =
+        new Date();
+
+      start.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+    }
+
+    if (
+      period ===
+      "week"
+    ) {
+      start =
+        new Date();
+
+      start.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const day =
+        start.getDay();
+
+      const diff =
+        day === 0
+          ? 6
+          : day - 1;
+
+      start.setDate(
+        start.getDate() -
+          diff
+      );
+    }
+
+    if (
+      period ===
+      "month"
+    ) {
+      start =
+        new Date(
+          end.getFullYear(),
+          end.getMonth(),
+          1
+        );
+    }
+
     const query = {
       owner: req.ownerId,
-      branch: req.branchId
+      branch: req.branchId,
+      createdAt: {
+        $gte: start,
+        $lte: end
+      }
     };
 
     let dbQuery =
@@ -368,7 +437,6 @@ const confirmOrder = async (
         )
         .lean();
 
-    // NEW scalable cursor pagination
     if (
       cursor &&
       mongoose.Types.ObjectId.isValid(
@@ -385,10 +453,7 @@ const confirmOrder = async (
           _id: -1
         })
         .limit(limit);
-    }
-
-    // OLD frontend compatibility
-    else {
+    } else {
       dbQuery = dbQuery
         .sort({
           createdAt: -1
