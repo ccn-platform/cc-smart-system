@@ -386,6 +386,9 @@ require("../models/Product");
       debtCollected -
       totalExpense -
       totalBuy;
+const remainingPurchaseProfit =
+  totalOrderProfit -
+  totalExpense;
 
     const totalBusinessProfit =
       totalSalesProfit +
@@ -419,10 +422,11 @@ require("../models/Product");
 
       purchases: {
         totalBuy,
-        totalSellValue,
-        totalOrderProfit,
-        count: orderCount
-      },
+       totalSellValue,
+       totalOrderProfit,
+       remainingPurchaseProfit,
+       count: orderCount
+     },
 
       cash: {
         cashIncome,
@@ -687,6 +691,10 @@ const getMonthlyReport = async (req, res) => {
       totalExpense -
       totalBuy;
 
+const remainingPurchaseProfit =
+  totalOrderProfit -
+  totalExpense;
+
     const totalBusinessProfit =
       totalProfit +
       totalOrderProfit;
@@ -721,10 +729,11 @@ const getMonthlyReport = async (req, res) => {
         count: salesCount
       },
 
-      purchases: {
+       purchases: {
         totalBuy,
         totalSellValue,
         totalOrderProfit,
+        remainingPurchaseProfit,
         count: orderCount
       },
 
@@ -997,6 +1006,10 @@ const getWeeklyReport = async (req, res) => {
       totalExpense -
       totalBuy;
 
+      const remainingPurchaseProfit =
+        totalOrderProfit -
+        totalExpense;
+
     const totalBusinessProfit =
       totalProfit +
       totalOrderProfit;
@@ -1032,6 +1045,7 @@ const getWeeklyReport = async (req, res) => {
         totalBuy,
         totalSellValue,
         totalOrderProfit,
+        remainingPurchaseProfit,
         count: orderCount
       },
 
