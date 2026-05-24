@@ -133,15 +133,89 @@ const createSale = async (
 
 
 // GET ALL SALES
+ 
 const getSales = async (
   req,
   res
 ) => {
   try {
+    const period =
+      req.query.period ||
+      "today";
+
+    let start =
+      new Date();
+
+    let end =
+      new Date();
+
+    if (
+      period ===
+      "today"
+    ) {
+      start =
+        new Date();
+
+      start.setUTCHours(
+        0,
+        0,
+        0,
+        0
+      );
+    }
+
+    if (
+      period ===
+      "week"
+    ) {
+      start =
+        new Date();
+
+      start.setUTCHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const day =
+        start.getUTCDay();
+
+      const diff =
+        day === 0
+          ? 6
+          : day - 1;
+
+      start.setUTCDate(
+        start.getUTCDate() -
+          diff
+      );
+    }
+
+    if (
+      period ===
+      "month"
+    ) {
+      start =
+        new Date(
+          Date.UTC(
+            end.getUTCFullYear(),
+            end.getUTCMonth(),
+            1
+          )
+        );
+    }
+
     const sales =
       await Sale.find({
-        owner: req.ownerId,
-        branch: req.branchId
+        owner:
+          req.ownerId,
+        branch:
+          req.branchId,
+        createdAt: {
+          $gte: start,
+          $lte: end
+        }
       }).sort({
         createdAt: -1
       });
@@ -157,7 +231,6 @@ const getSales = async (
     });
   }
 };
-
 
 // GET TODAY SALES
 const getTodaySales =
