@@ -477,6 +477,56 @@ const confirmOrder = async (
   }
 };
 
+const deleteOrder = async (
+  req,
+  res
+) => {
+  try {
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        req.params.id
+      )
+    ) {
+      return res.status(400).json({
+        message:
+          "Invalid order id"
+      });
+    }
+
+    const order =
+      await Order.findOne({
+        _id:
+          req.params.id,
+        owner:
+          req.ownerId,
+        branch:
+          req.branchId
+      });
+
+    if (!order) {
+      return res.status(404).json({
+        message:
+          "Order not found"
+      });
+    }
+
+    await order.deleteOne();
+
+    summaryCache.clear();
+
+    res.status(200).json({
+      message:
+        "Order deleted"
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message:
+        error.message
+    });
+  }
+};
+
 // SINGLE ORDER
 const getOrderById =
   async (
