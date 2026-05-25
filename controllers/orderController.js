@@ -525,7 +525,6 @@ const getOrderById =
   };
 
 
-// PROFIT SUMMARY
  const getOrderProfitSummary =
   async (
     req,
@@ -568,7 +567,7 @@ const getOrderById =
       let start =
         new Date();
 
-      let end =
+      const end =
         new Date();
 
       if (
@@ -578,7 +577,7 @@ const getOrderById =
         start =
           new Date();
 
-        start.setUTCHours(
+        start.setHours(
           0,
           0,
           0,
@@ -593,7 +592,7 @@ const getOrderById =
         start =
           new Date();
 
-        start.setUTCHours(
+        start.setHours(
           0,
           0,
           0,
@@ -601,15 +600,15 @@ const getOrderById =
         );
 
         const day =
-          start.getUTCDay();
+          start.getDay();
 
         const diff =
           day === 0
             ? 6
             : day - 1;
 
-        start.setUTCDate(
-          start.getUTCDate() -
+        start.setDate(
+          start.getDate() -
             diff
         );
       }
@@ -620,11 +619,9 @@ const getOrderById =
       ) {
         start =
           new Date(
-            Date.UTC(
-              end.getUTCFullYear(),
-              end.getUTCMonth(),
-              1
-            )
+            end.getFullYear(),
+            end.getMonth(),
+            1
           );
       }
 
