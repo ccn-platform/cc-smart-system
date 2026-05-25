@@ -1,4 +1,4 @@
- const mongoose = require("mongoose");
+  const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const cleanOCRText = require("../utils/cleanOCRText");
 const parseOrderText = require("../utils/parseOrderText");
@@ -526,14 +526,18 @@ const getOrderById =
 
 
 // PROFIT SUMMARY
-const getOrderProfitSummary =
+ const getOrderProfitSummary =
   async (
     req,
     res
   ) => {
     try {
+      const period =
+        req.query.period ||
+        "today";
+
       const cacheKey =
-        `${req.ownerId}:${req.branchId}`;
+        `${req.ownerId}:${req.branchId}:${period}`;
 
       const cached =
         summaryCache.get(
@@ -561,104 +565,112 @@ const getOrderProfitSummary =
           req.branchId
         );
 
-      const today =
+      let start =
         new Date();
 
-      today.setHours(
-        0,
-        0,
-        0,
-        0
-      );
+      let end =
+        new Date();
 
-      const tomorrow =
-        new Date(today);
+      if (
+        period ===
+        "today"
+      ) {
+        start =
+          new Date();
 
-      tomorrow.setDate(
-        tomorrow.getDate() +
-          1
-      );
+        start.setUTCHours(
+          0,
+          0,
+          0,
+          0
+        );
+      }
 
-      const [
-        result,
-        todayAgg
-      ] =
-        await Promise.all([
-          Order.aggregate([
-            {
-              $match: {
-                owner:
-                  ownerId,
-                branch:
-                  branchId
-              }
-            },
-            {
-              $group: {
-                _id: null,
-                totalOrderProfit:
-                  {
-                    $sum:
-                      "$totalProfit"
-                  },
-                totalBuy:
-                  {
-                    $sum:
-                      "$buyTotal"
-                  },
-                totalSell:
-                  {
-                    $sum:
-                      "$sellTotal"
-                  },
-                count: {
-                  $sum: 1
-                }
-              }
-            }
-          ]),
+      if (
+        period ===
+        "week"
+      ) {
+        start =
+          new Date();
 
-          Order.aggregate([
-            {
-              $match: {
-                owner:
-                  ownerId,
-                branch:
-                  branchId,
-                createdAt:
-                  {
-                    $gte:
-                      today,
-                    $lt:
-                      tomorrow
-                  }
-              }
-            },
-            {
-              $group: {
-                _id: null,
-                todayOrderProfit:
-                  {
-                    $sum:
-                      "$totalProfit"
-                  }
+        start.setUTCHours(
+          0,
+          0,
+          0,
+          0
+        );
+
+        const day =
+          start.getUTCDay();
+
+        const diff =
+          day === 0
+            ? 6
+            : day - 1;
+
+        start.setUTCDate(
+          start.getUTCDate() -
+            diff
+        );
+      }
+
+      if (
+        period ===
+        "month"
+      ) {
+        start =
+          new Date(
+            Date.UTC(
+              end.getUTCFullYear(),
+              end.getUTCMonth(),
+              1
+            )
+          );
+      }
+
+      const result =
+        await Order.aggregate([
+          {
+            $match: {
+              owner:
+                ownerId,
+              branch:
+                branchId,
+              createdAt: {
+                $gte: start,
+                $lte: end
               }
             }
-          ])
+          },
+          {
+            $group: {
+              _id: null,
+              totalOrderProfit:
+                {
+                  $sum:
+                    "$totalProfit"
+                },
+              totalBuy: {
+                $sum:
+                  "$buyTotal"
+              },
+              totalSell: {
+                $sum:
+                  "$sellTotal"
+              },
+              count: {
+                $sum: 1
+              }
+            }
+          }
         ]);
 
       const data =
-        {
-          ...(result[0] || {
-            totalOrderProfit: 0,
-            totalBuy: 0,
-            totalSell: 0,
-            count: 0
-          }),
-          todayOrderProfit:
-            todayAgg[0]
-              ?.todayOrderProfit ||
-            0
+        result[0] || {
+          totalOrderProfit: 0,
+          totalBuy: 0,
+          totalSell: 0,
+          count: 0
         };
 
       summaryCache.set(
@@ -681,60 +693,6 @@ const getOrderProfitSummary =
       });
     }
   };
-
-
-const deleteOrder = async (
-  req,
-  res
-) => {
-  try {
-    if (
-      !mongoose.Types.ObjectId.isValid(
-        req.params.id
-      )
-    ) {
-      return res.status(400).json({
-        message:
-          "Order ID si sahihi"
-      });
-    }
-
-    const order =
-      await Order.findOne({
-        _id:
-          req.params.id,
-        owner:
-          req.ownerId,
-        branch:
-          req.branchId
-      });
-
-    if (!order) {
-      return res.status(404).json({
-        message:
-          "Order haijapatikana"
-      });
-    }
-
-    await order.deleteOne();
-
-    invalidateSummaryCache(
-      req.ownerId,
-      req.branchId
-    );
-
-    return res.status(200).json({
-      message:
-        "Order imefutwa"
-    });
-
-  } catch (error) {
-    return res.status(500).json({
-      message:
-        error.message
-    });
-  }
-};
 
 module.exports = {
   scanOrder,
