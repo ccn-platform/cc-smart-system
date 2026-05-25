@@ -89,7 +89,7 @@ const createCashEntry =
       let start =
         new Date();
 
-      let end =
+      const end =
         new Date();
 
       if (
@@ -99,7 +99,7 @@ const createCashEntry =
         start =
           new Date();
 
-        start.setHours(
+        start.setUTCHours(
           0,
           0,
           0,
@@ -114,7 +114,7 @@ const createCashEntry =
         start =
           new Date();
 
-        start.setHours(
+        start.setUTCHours(
           0,
           0,
           0,
@@ -122,15 +122,15 @@ const createCashEntry =
         );
 
         const day =
-          start.getDay();
+          start.getUTCDay();
 
         const diff =
           day === 0
             ? 6
             : day - 1;
 
-        start.setDate(
-          start.getDate() -
+        start.setUTCDate(
+          start.getUTCDate() -
             diff
         );
       }
@@ -141,9 +141,11 @@ const createCashEntry =
       ) {
         start =
           new Date(
-            end.getFullYear(),
-            end.getMonth(),
-            1
+            Date.UTC(
+              end.getUTCFullYear(),
+              end.getUTCMonth(),
+              1
+            )
           );
       }
 
