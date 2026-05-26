@@ -1,4 +1,4 @@
- const mongoose =
+  const mongoose =
   require("mongoose");
 
 const subscriptionSchema =
@@ -109,10 +109,15 @@ const branchSchema =
         index: true
       },
 
-      pendingExpiresAt: {
-        type: Date,
-        default: null
-      }
+     pendingExpiresAt: {
+  type: Date,
+  default: null
+},
+
+paymentProcessing: {
+  type: Boolean,
+  default: false
+}
     },
     {
       timestamps: true
