@@ -6,272 +6,51 @@ const {
   branchAccess
 } = require("../middleware/authMiddleware");
 
-const Branch =
-  require("../models/Branch");
-
-const clickpesa =
-  require("../services/clickpesaService");
-
 const {
-  activatePlan
-} = require("../services/subscriptionService");
+  createProduct,
+  getProducts,
+  searchProducts,
+  updateProduct,
+  deleteProduct
+} = require("../controllers/productController");
 
 
-// 🔥 PLAN PRICES
-const plans = {
-  weekly: 2000,
-  monthly: 5200,
-  six_months: 30000,
-  yearly: 60000
-};
+// CREATE + GET PRODUCTS
+router
+  .route("/")
+  .post(
+    protect,
+    branchAccess,
+    createProduct
+  )
+  .get(
+    protect,
+    branchAccess,
+    getProducts
+  );
 
 
-// 🔥 INITIATE PAYMENT
-router.post(
-  "/pay",
+// SEARCH PRODUCTS
+router.get(
+  "/search",
   protect,
   branchAccess,
-  async (req, res) => {
-  let paymentInitiated = false;
-
-  try {
-    const { plan } = req.body;
-
-      if (!plan || !plans[plan]) {
-        return res.status(400).json({
-          message: "Invalid plan"
-        });
-      }
-
-      const branch =
-        await Branch.findById(
-          req.branchId
-        );
-
-      if (!branch) {
-        return res.status(404).json({
-          message: "Branch not found"
-        });
-      }
-
-      if (
-        branch.pendingPlan &&
-        branch.pendingExpiresAt &&
-        branch.pendingExpiresAt >
-          new Date()
-      ) {
-        return res.status(400).json({
-          message:
-            "You have a pending payment"
-        });
-      }
-
-      if (
-        branch.pendingExpiresAt &&
-        branch.pendingExpiresAt <=
-          new Date()
-      ) {
-        branch.pendingPlan = null;
-        branch.paymentReference =
-          null;
-        branch.pendingExpiresAt =
-          null;
-      }
-
-      const amount =
-        plans[plan];
-
-      const reference =
-        `CCN${Date.now()}${Math.floor(
-          Math.random() * 1000
-        )}`;
-
-      branch.pendingPlan =
-        plan;
-
-      branch.paymentReference =
-        reference;
-
-    branch.pendingExpiresAt =
-  new Date(
-    Date.now() +
-      60 *
-        60 *
-        1000
-  );
-      await branch.save();
- await clickpesa.mobilePush(
-  branch.phone ||
-    req.user.phone,
-  amount,
-  reference
+  searchProducts
 );
 
-paymentInitiated = true;
 
-return res.json({
-        message:
-          "Payment initiated",
-        reference
-      });
-
-  } catch (e) {
-  console.error(e);
-
- if (!paymentInitiated && req.branchId) {
-    await Branch.findByIdAndUpdate(
-      req.branchId,
-      {
-        pendingPlan: null,
-        paymentReference: null,
-        pendingExpiresAt: null
-      }
-    );
-  }
-
-  return res.status(400).json({
-    message: e.message
-  });
-}
-  }
-);
-
-router.post(
-  "/callback",
-   async (req, res) => {
-  let branch;
-
-  try {
-      const reference =
-        req.body.reference ||
-        req.body.transaction_reference ||
-        req.body.merchant_reference;
-
-      const status =
-        req.body.status ||
-        req.body.payment_status ||
-        req.body.result;
-
-      const normalizedStatus =
-        String(status || "")
-          .toUpperCase();
-
-      console.log(
-        "CALLBACK:",
-        req.body
-      );
-
-      if (
-        ![
-          "SUCCESS",
-          "SUCCESSFUL",
-          "PAID"
-        ].includes(normalizedStatus)
-      ) {
-        return res.sendStatus(200);
-      }
- branch =
-  await Branch.findOneAndUpdate(
-    {
-      paymentReference: reference,
-      pendingPlan: { $ne: null },
-      paymentProcessing: false
-    },
-    {
-      $set: {
-        paymentProcessing: true
-      }
-    },
-    { new: true }
+// UPDATE + DELETE
+router
+  .route("/:id")
+  .put(
+    protect,
+    branchAccess,
+    updateProduct
+  )
+  .delete(
+    protect,
+    branchAccess,
+    deleteProduct
   );
 
-if (!branch) {
-  console.log(
-    "NO MATCHING PENDING PAYMENT:",
-    reference
-  );
-
-  return res.sendStatus(200);
-}
-
-const planToActivate =
-  branch.pendingPlan;
-
-await activatePlan(
-  branch,
-  planToActivate
-);
-
-branch.pendingPlan = null;
-branch.paymentReference = null;
-branch.pendingExpiresAt = null;
-branch.paymentProcessing = false;
-
-await branch.save();
-      console.log(
-        "SUBSCRIPTION ACTIVATED"
-      );
-
-      return res.sendStatus(200);
-
-  } catch (e) {
-  console.error(
-    "CALLBACK ERROR:",
-    e
-  );
-
-  if (branch) {
-    branch.paymentProcessing = false;
-    await branch.save();
-  }
-
-  return res.sendStatus(500);
-}
-  }
-);
- 
-// 🔥 TEST
- router.post(
-  "/activate",
-  protect,
-  branchAccess,
-  async (req, res) => {
-    try {
-      const { plan } = req.body;
-
-      const branch =
-        await Branch.findById(
-          req.branchId
-        );
-
-      if (!branch) {
-        return res.status(404).json({
-          message:
-            "Branch not found"
-        });
-      }
-
-      const subscription =
-        await activatePlan(
-          branch,
-          plan
-        );
-
-      res.json({
-        message:
-          "Activated (TEST MODE)",
-        subscription
-      });
-
-   } catch (e) {
-  console.error(e);
-
-  return res.status(400).json({
-    message: e.message
-  });
-}
-  }
-);
-
-module.exports =
-  router;
+module.exports = router;
