@@ -1,4 +1,4 @@
-  const express = require("express");
+ const express = require("express");
 const router = express.Router();
 
 const {
@@ -136,7 +136,7 @@ return res.json({
   }
 );
 
- router.all(
+ router.post(
   "/callback",
    async (req, res) => {
   let branch;
@@ -186,9 +186,10 @@ const status =
         paymentProcessing: true
       }
     },
-    { new: true }
+    {
+      returnDocument: "after"
+    }
   );
-
 if (!branch) {
   console.log(
     "NO MATCHING PENDING PAYMENT:",
