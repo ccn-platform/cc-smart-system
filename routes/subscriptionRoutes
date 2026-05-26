@@ -1,4 +1,4 @@
-  const express = require("express");
+ const express = require("express");
 const router = express.Router();
 
 const {
@@ -32,8 +32,10 @@ router.post(
   protect,
   branchAccess,
   async (req, res) => {
-    try {
-      const { plan } = req.body;
+  let paymentInitiated = false;
+
+  try {
+    const { plan } = req.body;
 
       if (!plan || !plans[plan]) {
         return res.status(400).json({
@@ -90,119 +92,152 @@ router.post(
       branch.paymentReference =
         reference;
 
-      branch.pendingExpiresAt =
-        new Date(
-          Date.now() +
-            5 *
-              60 *
-              1000
-        );
-
+    branch.pendingExpiresAt =
+  new Date(
+    Date.now() +
+      60 *
+        60 *
+        1000
+  );
       await branch.save();
+ await clickpesa.mobilePush(
+  branch.phone ||
+    req.user.phone,
+  amount,
+  reference
+);
 
-      await clickpesa.mobilePush(
-        branch.phone ||
-          req.user.phone,
-        amount,
-        reference
-      );
+paymentInitiated = true;
 
-      res.json({
+return res.json({
         message:
           "Payment initiated",
         reference
       });
 
-    } catch (e) {
-      console.error(e);
+  } catch (e) {
+  console.error(e);
 
-      res.status(400).json({
-        message: e.message
-      });
-    }
+ if (!paymentInitiated && req.branchId) {
+    await Branch.findByIdAndUpdate(
+      req.branchId,
+      {
+        pendingPlan: null,
+        paymentReference: null,
+        pendingExpiresAt: null
+      }
+    );
+  }
+
+  return res.status(400).json({
+    message: e.message
+  });
+}
   }
 );
 
-
-// 🔥 CALLBACK
-router.post(
+ router.all(
   "/callback",
-  async (req, res) => {
-    try {
-      const {
-        reference,
-        status
-      } = req.body;
+   async (req, res) => {
+  let branch;
+
+  try {
+      const reference =
+        req.body.reference ||
+        req.body.transaction_reference ||
+        req.body.merchant_reference;
+
+      const status =
+        req.body.status ||
+        req.body.payment_status ||
+        req.body.result;
+
+      const normalizedStatus =
+        String(status || "")
+          .toUpperCase();
 
       console.log(
         "CALLBACK:",
         req.body
       );
 
-      if (status !== "SUCCESS") {
-        return res.sendStatus(200);
-      }
-
-      const branch =
-        await Branch.findOne({
-          paymentReference:
-            reference
-        });
-
-      if (!branch) {
-        return res.sendStatus(404);
-      }
-
       if (
-        branch.pendingExpiresAt &&
-        branch.pendingExpiresAt <=
-          new Date()
+        ![
+          "SUCCESS",
+          "SUCCESSFUL",
+          "PAID"
+        ].includes(normalizedStatus)
       ) {
-        console.log(
-          "Payment expired"
-        );
-
         return res.sendStatus(200);
       }
-
-      if (!branch.pendingPlan) {
-        return res.sendStatus(200);
+ branch =
+  await Branch.findOneAndUpdate(
+    {
+      paymentReference: reference,
+      pendingPlan: { $ne: null },
+      paymentProcessing: false
+    },
+    {
+      $set: {
+        paymentProcessing: true
       }
+    },
+    { new: true }
+  );
 
-      const subscription =
-        await activatePlan(
-          branch,
-          branch.pendingPlan
-        );
+if (!branch) {
+  console.log(
+    "NO MATCHING PENDING PAYMENT:",
+    reference
+  );
 
-      console.log(
-        "SUBSCRIPTION ACTIVATED:",
-        subscription
-      );
+  return res.sendStatus(200);
+}
 
-      res.sendStatus(200);
+const planToActivate =
+  branch.pendingPlan;
 
-    } catch (e) {
-      console.error(
-        "CALLBACK ERROR:",
-        e
-      );
-
-      res.sendStatus(500);
-    }
-  }
+await activatePlan(
+  branch,
+  planToActivate
 );
 
+branch.pendingPlan = null;
+branch.paymentReference = null;
+branch.pendingExpiresAt = null;
+branch.paymentProcessing = false;
 
+await branch.save();
+      console.log(
+        "SUBSCRIPTION ACTIVATED"
+      );
+
+      return res.sendStatus(200);
+
+  } catch (e) {
+  console.error(
+    "CALLBACK ERROR:",
+    e
+  );
+
+  if (branch) {
+    branch.paymentProcessing = false;
+    await branch.save();
+  }
+
+  return res.sendStatus(500);
+}
+  }
+);
+ 
 // 🔥 TEST
-router.post(
+ router.post(
   "/activate",
   protect,
   branchAccess,
   async (req, res) => {
     try {
-      const { plan } =
-        req.body;
+      const { plan } = req.body;
 
       const branch =
         await Branch.findById(
@@ -228,11 +263,13 @@ router.post(
         subscription
       });
 
-    } catch (e) {
-      res.status(400).json({
-        message: e.message
-      });
-    }
+   } catch (e) {
+  console.error(e);
+
+  return res.status(400).json({
+    message: e.message
+  });
+}
   }
 );
 
