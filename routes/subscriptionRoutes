@@ -1,4 +1,4 @@
- const express = require("express");
+  const express = require("express");
 const router = express.Router();
 
 const {
@@ -95,7 +95,7 @@ router.post(
     branch.pendingExpiresAt =
   new Date(
     Date.now() +
-      6 *
+      60 *
         60 *
         1000
   );
@@ -142,15 +142,19 @@ return res.json({
   let branch;
 
   try {
-      const reference =
-        req.body.reference ||
-        req.body.transaction_reference ||
-        req.body.merchant_reference;
+     const payload =
+  req.body.data || req.body;
 
-      const status =
-        req.body.status ||
-        req.body.payment_status ||
-        req.body.result;
+const reference =
+  payload.orderReference ||
+  payload.reference ||
+  payload.transaction_reference ||
+  payload.merchant_reference;
+
+const status =
+  payload.status ||
+  payload.payment_status ||
+  payload.result;
 
       const normalizedStatus =
         String(status || "")
