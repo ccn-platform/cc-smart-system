@@ -1,4 +1,4 @@
-  
+ 
  const mongoose =
   require("mongoose");
  const CustomerIdentity =
@@ -749,7 +749,152 @@ try {
       });
     }
   };
+const syncOfflineCustomer =
+  async (req, res) => {
+    try {
+
+      const {
+        syncId,
+        fullName,
+        phone,
+        fingerprintId,
+        nationalId,
+        deviceId
+      } = req.body;
+
+      if (
+        !syncId ||
+        !fullName
+      ) {
+        return res.status(400).json({
+          message:
+            "syncId and fullName required"
+        });
+      }
+
+      // EXISTING SYNC
+      const existingSync =
+        await CustomerIdentity.findOne({
+          owner: req.ownerId,
+          syncId
+        });
+
+      if (existingSync) {
+        return res.status(200).json({
+          synced: true,
+          customer:
+            existingSync
+        });
+      }
+
+      // DUPLICATE SEARCH
+      let existingCustomer =
+        null;
+
+      if (
+        fingerprintId
+      ) {
+        existingCustomer =
+          await CustomerIdentity.findOne({
+            owner:
+              req.ownerId,
+            fingerprintId
+          });
+      }
+
+      if (
+        !existingCustomer &&
+        phone
+      ) {
+        existingCustomer =
+          await CustomerIdentity.findOne({
+            owner:
+              req.ownerId,
+            normalizedPhone:
+              phone
+                .replace(/[^\d]/g, "")
+          });
+      }
+
+      if (
+        !existingCustomer &&
+        nationalId
+      ) {
+        existingCustomer =
+          await CustomerIdentity.findOne({
+            owner:
+              req.ownerId,
+            nationalId
+          });
+      }
+
+      // MERGE EXISTING
+      if (
+        existingCustomer
+      ) {
+
+        existingCustomer.syncId =
+          syncId;
+
+        existingCustomer.syncStatus =
+          "synced";
+
+        existingCustomer.lastSyncedAt =
+          new Date();
+
+        await existingCustomer.save();
+
+        return res.status(200).json({
+          merged: true,
+          customer:
+            existingCustomer
+        });
+      }
+
+      // CREATE NEW
+      const customer =
+        await CustomerIdentity.create({
+          owner:
+            req.ownerId,
+          createdBy:
+            req.user.id,
+
+          fullName,
+          phone,
+          fingerprintId,
+          nationalId,
+
+          source:
+            "offline",
+
+          syncStatus:
+            "synced",
+
+          syncId,
+
+          deviceId,
+
+          lastSyncedAt:
+            new Date()
+        });
+
+      return res.status(201).json({
+        created: true,
+        customer
+      });
+
+    } catch (error) {
+
+      return res.status(500).json({
+        message:
+          error.message
+      });
+
+    }
+  };
+
 module.exports = {
+  syncOfflineCustomer,
   findOrCreateCustomer,
   checkCredit,
   createDebtLoan,
