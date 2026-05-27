@@ -192,6 +192,20 @@ lastSyncedAt: {
   type: Date,
   default: null
 },
+lastSyncedAt: {
+  type: Date,
+  default: null
+},
+
+syncError: {
+  type: String,
+  default: ""
+},
+
+queuedAt: {
+  type: Date,
+  default: null
+},
 queuedAt: {
   type: Date,
   default: null
