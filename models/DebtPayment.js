@@ -66,7 +66,8 @@ const debtPaymentSchema =
           "app",
           "staff",
           "import",
-          "system"
+          "system",
+          "offline_sync"
         ],
         default:
           "staff"
@@ -95,7 +96,45 @@ const debtPaymentSchema =
         ref: "User",
         required: true
       },
+syncId: {
+  type: String,
+  default: null,
+  index: true
+},
 
+syncStatus: {
+  type: String,
+  enum: [
+    "synced",
+    "pending",
+    "conflict"
+  ],
+  default: "synced"
+},
+
+source: {
+  type: String,
+  enum: [
+    "online",
+    "offline"
+  ],
+  default: "online"
+},
+
+deviceId: {
+  type: String,
+  default: null
+},
+
+lastSyncedAt: {
+  type: Date,
+  default: null
+},
+
+queuedAt: {
+  type: Date,
+  default: null
+},
       status: {
         type: String,
         enum: [
@@ -119,6 +158,28 @@ debtPaymentSchema.index({
   createdAt: -1
 });
 
+ debtPaymentSchema.index({
+  owner: 1,
+  branch: 1,
+  syncStatus: 1,
+  createdAt: -1
+});
+
+ debtPaymentSchema.index(
+  {
+    owner: 1,
+    branch: 1,
+    syncId: 1
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      syncId: {
+        $type: "string"
+      }
+    }
+  }
+);
 debtPaymentSchema.index({
   owner: 1,
   branch: 1,
