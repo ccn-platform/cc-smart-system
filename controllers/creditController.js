@@ -1,4 +1,4 @@
- 
+  
  const mongoose =
   require("mongoose");
  const CustomerIdentity =
@@ -137,9 +137,10 @@ const findOrCreateCustomer =
   }
 }
 
-      return res.status(200).json(
-        customer
-      );
+       return res.status(200).json({
+  success: true,
+  customer
+});
 
     } catch (error) {
       return res.status(500).json({
@@ -291,10 +292,10 @@ try {
     }
   );
  await session.commitTransaction();
-  return res.status(201).json(
-    loan[0]
-  );
-
+ return res.status(201).json({
+  success: true,
+  loan: loan[0]
+});
  } catch (err) {
   if (
     session.inTransaction()
@@ -690,9 +691,10 @@ try {
       loanId
     ).lean();
 
-  return res.status(200).json(
-    updatedLoan
-  );
+  return res.status(200).json({
+  success: true,
+  loan: updatedLoan
+});
 
  } catch (err) {
   if (
@@ -893,7 +895,510 @@ const syncOfflineCustomer =
     }
   };
 
+  const syncOfflinePayment =
+  async (req, res) => {
+
+    try {
+
+      const {
+        syncId,
+        loanId,
+        amount,
+        paymentMethod,
+        reference,
+        deviceId
+      } = req.body;
+
+      if (
+        !syncId ||
+        !loanId ||
+        !amount
+      ) {
+        return res.status(400).json({
+          message:
+            "syncId, loanId and amount required"
+        });
+      }
+
+      // EXISTING
+      const existingPayment =
+        await DebtPayment.findOne({
+          owner: req.ownerId,
+          syncId
+        });
+
+      if (existingPayment) {
+        return res.status(200).json({
+          synced: true,
+          payment:
+            existingPayment
+        });
+      }
+
+      const loan =
+        await DebtLoan.findOne({
+          _id: loanId,
+          owner: req.ownerId,
+          branch: req.branchId
+        });
+
+      if (!loan) {
+        return res.status(404).json({
+          message:
+            "Loan not found"
+        });
+      }
+
+      if (
+        loan.status === "paid"
+      ) {
+        return res.status(400).json({
+          message:
+            "Loan already paid"
+        });
+      }
+
+      const payAmount =
+        Number(amount);
+
+      if (
+        payAmount <= 0
+      ) {
+        return res.status(400).json({
+          message:
+            "Invalid amount"
+        });
+      }
+
+      if (
+        payAmount >
+        loan.balanceAmount
+      ) {
+        return res.status(400).json({
+          message:
+            "Amount exceeds balance"
+        });
+      }
+ const session =
+  await mongoose.startSession();
+
+try {
+
+  session.startTransaction();
+
+  const payment =
+    await DebtPayment.create(
+      [{
+        owner:
+          req.ownerId,
+
+        branch:
+          req.branchId,
+
+        loan:
+          loan._id,
+
+        customer:
+          loan.customer,
+
+        amount:
+          payAmount,
+
+        paymentMethod:
+          paymentMethod ||
+          "cash",
+
+        reference:
+          reference || "",
+
+        receivedBy:
+          req.user.id,
+
+        channel:
+          "offline_sync",
+
+        source:
+          "offline",
+
+        syncStatus:
+          "synced",
+
+        syncId,
+
+        deviceId,
+
+        lastSyncedAt:
+          new Date()
+      }],
+      {
+        session
+      }
+    );
+
+  loan.paidAmount +=
+    payAmount;
+
+  loan.balanceAmount -=
+    payAmount;
+
+  loan.lastPaymentDate =
+    new Date();
+
+  if (
+    loan.balanceAmount <= 0
+  ) {
+
+    loan.balanceAmount = 0;
+
+    loan.status = "paid";
+  }
+
+  await loan.save({
+    session
+  });
+
+  await CustomerIdentity.findByIdAndUpdate(
+    loan.customer,
+    {
+      $inc: {
+        totalPaid:
+          payAmount
+      }
+    },
+    {
+      session
+    }
+  );
+
+  await session.commitTransaction();
+
+  return res.status(201).json({
+    synced: true,
+    payment:
+      payment[0]
+  });
+
+} catch (err) {
+
+  if (
+    session.inTransaction()
+  ) {
+
+    await session.abortTransaction();
+  }
+
+  return res.status(500).json({
+    message:
+      err.message
+  });
+
+} finally {
+
+  await session.endSession();
+}
+
+      } catch (error) {
+
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }   
+
+    
+  }
+ 
+  const syncOfflineLoan =
+  async (req, res) => {
+
+    try {
+
+      const {
+        syncId,
+        customerId,
+        amount,
+        dueDate,
+        items,
+        note,
+        businessCategory,
+        deviceId
+      } = req.body;
+
+      if (
+        !syncId ||
+        !customerId ||
+        !amount ||
+        !dueDate
+      ) {
+        return res.status(400).json({
+          message:
+            "Missing required fields"
+        });
+      }
+
+      // EXISTING
+      const existingLoan =
+        await DebtLoan.findOne({
+          owner: req.ownerId,
+          syncId
+        });
+
+      if (existingLoan) {
+        return res.status(200).json({
+          synced: true,
+          loan:
+            existingLoan
+        });
+      }
+
+      // CUSTOMER
+      const customer =
+        await CustomerIdentity.findOne({
+          _id: customerId,
+          owner: req.ownerId
+        });
+
+      if (!customer) {
+        return res.status(404).json({
+          message:
+            "Customer not found"
+        });
+      }
+
+      // CREDIT CHECK
+      const check =
+        await checkCreditEligibility({
+          customerId,
+          businessCategory
+        });
+
+      // FAILED CREDIT
+      if (!check.approved) {
+
+        const rejectedLoan =
+          await DebtLoan.create({
+            owner:
+              req.ownerId,
+
+            branch:
+              req.branchId,
+
+            createdBy:
+              req.user.id,
+
+            customer:
+              customerId,
+
+            businessCategory,
+
+            loanNumber:
+              "OFF-" +
+              Date.now(),
+
+            principalAmount:
+              Number(amount),
+
+            balanceAmount:
+              Number(amount),
+
+            dueDate,
+
+            items:
+              items || [],
+
+            note:
+              note || "",
+
+            status:
+              "cancelled",
+
+            approvalMethod:
+              "offline_pending",
+
+            source:
+              "offline",
+
+            syncStatus:
+              "conflict",
+
+            syncId,
+
+            deviceId,
+
+            lastSyncedAt:
+              new Date()
+          });
+
+        return res.status(409).json({
+          approved: false,
+          reason:
+            check.reason,
+          loan:
+            rejectedLoan
+        });
+      }
+
+      // CREATE LOAN
+      const loan =
+        await DebtLoan.create({
+          owner:
+            req.ownerId,
+
+          branch:
+            req.branchId,
+
+          createdBy:
+            req.user.id,
+
+          customer:
+            customerId,
+
+          businessCategory,
+
+          loanNumber:
+            "LN" +
+            Date.now() +
+            Math.floor(
+              Math.random() *
+              10000
+            ),
+
+          principalAmount:
+            Number(amount),
+
+          balanceAmount:
+            Number(amount),
+
+          paidAmount: 0,
+
+          dueDate,
+
+          items:
+            items || [],
+
+          note:
+            note || "",
+
+          approvedBy:
+            req.user.id,
+
+          status:
+            "active",
+
+          approvalMethod:
+            "offline_pending",
+
+          source:
+            "offline",
+
+          syncStatus:
+            "synced",
+
+          syncId,
+
+          deviceId,
+
+          lastSyncedAt:
+            new Date()
+        });
+
+      // UPDATE CUSTOMER
+      await CustomerIdentity.findByIdAndUpdate(
+        customerId,
+        {
+          $inc: {
+            totalLoans: 1,
+            activeLoans: 1,
+            totalBorrowed:
+              Number(amount)
+          }
+        }
+      );
+
+      return res.status(201).json({
+        synced: true,
+        loan
+      });
+
+    } catch (error) {
+
+      return res.status(500).json({
+        message:
+          error.message
+      });
+
+    }
+  };
+  const searchCustomers =
+  async (req, res) => {
+
+    try {
+
+      const keyword =
+        (
+          req.query.keyword ||
+          ""
+        )
+          .trim()
+          .toLowerCase();
+
+      if (!keyword) {
+        return res.status(400).json({
+          message:
+            "Keyword required"
+        });
+      }
+
+      const customers =
+        await CustomerIdentity.find({
+          owner:
+            req.ownerId,
+
+          mergeParent: null,
+
+          $or: [
+            {
+              normalizedName: {
+                $regex: keyword,
+                $options: "i"
+              }
+            },
+            {
+              normalizedPhone: {
+                $regex: keyword,
+                $options: "i"
+              }
+            },
+            {
+              fingerprintId: {
+                $regex: keyword,
+                $options: "i"
+              }
+            }
+          ]
+        })
+          .sort({
+            createdAt: -1
+          })
+          .limit(30);
+
+      return res.json({
+        customers
+      });
+
+    } catch (error) {
+
+      return res.status(500).json({
+        message:
+          error.message
+      });
+
+    }
+  };
 module.exports = {
+  syncOfflineLoan,
+  searchCustomers,
+  syncOfflinePayment,
   syncOfflineCustomer,
   findOrCreateCustomer,
   checkCredit,
