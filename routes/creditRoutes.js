@@ -12,6 +12,7 @@ const {
 );
 
 const {
+  syncOfflineCustomer,
   findOrCreateCustomer,
   checkCredit,
   createDebtLoan,
@@ -33,7 +34,13 @@ router.post(
   branchAccess,
   scanFingerprint
 );
-
+// SYNC OFFLINE CUSTOMER
+router.post(
+  "/sync-customer",
+  protect,
+  branchAccess,
+  syncOfflineCustomer
+);
 
 // FIND OR CREATE CUSTOMER
 router.post(
