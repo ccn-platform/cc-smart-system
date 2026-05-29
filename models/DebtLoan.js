@@ -83,7 +83,6 @@ const debtLoanSchema =
       status: {
         type: String,
         enum: [
-          "pending_approval",
           "active",
           "paid",
           "overdue",
@@ -149,30 +148,11 @@ lastSyncedAt: {
   default: null
 },
 
-lastSyncedAt: {
-  type: Date,
-  default: null
-},
-
-syncError: {
-  type: String,
-  default: ""
-},
-
-queuedAt: {
-  type: Date,
-  default: null
-},
-queuedAt: {
-  type: Date,
-  default: null
-},
       approvalMethod: {
         type: String,
         enum: [
           "auto",
-          "manual", 
-          "offline_pending"
+          "manual"
         ],
         default: "auto"
       }
@@ -238,21 +218,11 @@ debtLoanSchema.index({
   syncStatus: 1
 });
 
- debtLoanSchema.index(
-  {
-    owner: 1,
-    branch: 1,
-    syncId: 1
-  },
-  {
-    unique: true,
-    partialFilterExpression: {
-      syncId: {
-        $type: "string"
-      }
-    }
-  }
-);
+debtLoanSchema.index({
+  owner: 1,
+  branch: 1,
+  syncId: 1
+});
 
 module.exports =
   mongoose.model(
