@@ -1,4 +1,4 @@
- const express =
+const express =
   require("express");
 
 const router =
@@ -12,15 +12,11 @@ const {
 );
 
 const {
-  syncOfflineLoan,
-  syncOfflinePayment,
-  syncOfflineCustomer,
   findOrCreateCustomer,
   checkCredit,
   createDebtLoan,
   receivePayment,
   getLoanHistory,
-  searchCustomers,
   getPaymentHistory,
   getLoanById,
   scanFingerprint,
@@ -37,13 +33,7 @@ router.post(
   branchAccess,
   scanFingerprint
 );
-// SYNC OFFLINE CUSTOMER
-router.post(
-  "/sync-customer",
-  protect,
-  branchAccess,
-  syncOfflineCustomer
-);
+
 
 // FIND OR CREATE CUSTOMER
 router.post(
@@ -70,18 +60,8 @@ router.post(
   branchAccess,
   createDebtLoan
 );
-router.post(
-  "/sync-loan",
-  protect,
-  branchAccess,
-  syncOfflineLoan
-);
-router.post(
-  "/sync-payment",
-  protect,
-  branchAccess,
-  syncOfflinePayment
-);
+
+
 // RECEIVE PAYMENT
 router.post(
   "/payment",
@@ -108,12 +88,7 @@ router.get(
   getOverdueLoans
 );
 
-router.get(
-  "/search",
-  protect,
-  branchAccess,
-  searchCustomers
-);
+
 // SINGLE LOAN
 router.get(
   "/:id",
