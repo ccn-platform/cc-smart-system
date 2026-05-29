@@ -181,6 +181,10 @@ const checkCredit =
  const createDebtLoan =
   async (req, res) => {
     try {
+       console.log(
+    "CREATE LOAN STARTED",
+    req.body
+  );
       const {
         customerId,
         amount,
@@ -226,6 +230,10 @@ const checkCredit =
           businessCategory
         });
 
+        console.log(
+  "AFTER CREDIT CHECK",
+  check
+);
       if (!check.approved) {
         return res.status(400).json({
           message:
@@ -233,12 +241,19 @@ const checkCredit =
         });
       }
 
+      console.log(
+  "AFTER CREDIT CHECK",
+  check
+);
        const session =
   await mongoose.startSession();
 
 try {
   session.startTransaction();
 
+  console.log(
+  "BEFORE LOAN CREATE"
+);
   const loan =
     await DebtLoan.create(
       [
@@ -277,6 +292,10 @@ try {
         session
       }
     );
+console.log(
+  "LOAN CREATED",
+  loan[0]?._id
+);
 
   await CustomerIdentity.findByIdAndUpdate(
     customerId,
@@ -292,6 +311,10 @@ try {
       session
     }
   );
+  console.log(
+  "LOAN CREATED",
+  loan[0]?._id
+);
  await session.commitTransaction();
   return res.status(201).json(
     loan[0]
@@ -311,11 +334,17 @@ try {
 }
 
     } catch (error) {
-      return res.status(500).json({
-        message:
-          error.message
-      });
-    }
+
+  console.log(
+    "CREATE LOAN ERROR",
+    error
+  );
+
+  return res.status(500).json({
+    message:
+      error.message
+  });
+}
   };
 // GET LOAN HISTORY
 const getLoanHistory =
