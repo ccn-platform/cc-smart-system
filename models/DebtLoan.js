@@ -1,4 +1,4 @@
-  const mongoose =
+    const mongoose =
   require("mongoose");
 
 const debtLoanSchema =
@@ -112,41 +112,6 @@ const debtLoanSchema =
         ref: "User",
         default: null
       },
-syncId: {
-  type: String,
-  default: null,
-  index: true
-},
-
-syncStatus: {
-  type: String,
-  enum: [
-    "synced",
-    "pending",
-    "conflict"
-  ],
-  default: "synced",
-  index: true
-},
-
-source: {
-  type: String,
-  enum: [
-    "online",
-    "offline"
-  ],
-  default: "online"
-},
-
-deviceId: {
-  type: String,
-  default: null
-},
-
-lastSyncedAt: {
-  type: Date,
-  default: null
-},
 
       approvalMethod: {
         type: String,
@@ -211,17 +176,6 @@ debtLoanSchema.index({
   branch: 1,
   customer: 1,
   status: 1
-});
-debtLoanSchema.index({
-  owner: 1,
-  branch: 1,
-  syncStatus: 1
-});
-
-debtLoanSchema.index({
-  owner: 1,
-  branch: 1,
-  syncId: 1
 });
 
 module.exports =
