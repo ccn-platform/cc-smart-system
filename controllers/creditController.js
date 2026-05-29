@@ -1,4 +1,4 @@
-   const mongoose =
+  const mongoose =
   require("mongoose");
  const CustomerIdentity =
   require("../models/CustomerIdentity");
@@ -788,4 +788,4 @@ module.exports = {
   scanFingerprint,
  getPaymentHistory,
    getOverdueLoans
-};
+}; 
