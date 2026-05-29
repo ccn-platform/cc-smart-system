@@ -105,12 +105,7 @@ const protect =
         "owner"
           ? user._id
           : user.owner;
-      req.deviceId =
-       req.headers["x-device-id"] || null;
 
-       req.syncSource =
-  req.headers["x-sync-source"] ||
-  "online";
       next();
 
     } catch (error) {
@@ -228,9 +223,6 @@ if (
       req.branchId =
         branch._id;
 
-req.branchCode =
-  branch.code || null;
-  
       console.log(
         "REQ BRANCH ID SET:",
         req.branchId
