@@ -1,4 +1,4 @@
-  const mongoose =
+    const mongoose =
   require("mongoose");
 
 const debtPaymentSchema =
@@ -95,40 +95,6 @@ const debtPaymentSchema =
         ref: "User",
         required: true
       },
-syncId: {
-  type: String,
-  default: null,
-  index: true
-},
-
-syncStatus: {
-  type: String,
-  enum: [
-    "synced",
-    "pending",
-    "conflict"
-  ],
-  default: "synced"
-},
-
-source: {
-  type: String,
-  enum: [
-    "online",
-    "offline"
-  ],
-  default: "online"
-},
-
-deviceId: {
-  type: String,
-  default: null
-},
-
-lastSyncedAt: {
-  type: Date,
-  default: null
-},
 
       status: {
         type: String,
@@ -153,17 +119,6 @@ debtPaymentSchema.index({
   createdAt: -1
 });
 
-debtPaymentSchema.index({
-  owner: 1,
-  branch: 1,
-  syncStatus: 1
-});
-
-debtPaymentSchema.index({
-  owner: 1,
-  branch: 1,
-  syncId: 1
-});
 debtPaymentSchema.index({
   owner: 1,
   branch: 1,
