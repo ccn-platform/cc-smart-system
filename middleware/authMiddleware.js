@@ -1,4 +1,4 @@
-  const jwt =
+   const jwt =
   require("jsonwebtoken");
 
 const User =
