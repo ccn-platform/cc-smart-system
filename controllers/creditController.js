@@ -1,4 +1,4 @@
-  const mongoose =
+   const mongoose =
   require("mongoose");
  const CustomerIdentity =
   require("../models/CustomerIdentity");
@@ -178,7 +178,7 @@ const checkCredit =
 
 
 // CREATE LOAN
-const createDebtLoan =
+ const createDebtLoan =
   async (req, res) => {
     try {
       const {
@@ -217,6 +217,9 @@ const createDebtLoan =
         });
       }
 
+      console.log(
+  "BEFORE CREDIT CHECK"
+);
       const check =
         await checkCreditEligibility({
           customerId,
@@ -314,8 +317,6 @@ try {
       });
     }
   };
-
-
 // GET LOAN HISTORY
 const getLoanHistory =
   async (req, res) => {
