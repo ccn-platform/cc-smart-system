@@ -1,4 +1,4 @@
-    
+   
  const mongoose =
   require("mongoose");
  const CustomerIdentity =
@@ -316,34 +316,33 @@ try {
     }
   };
 
-
-// GET LOAN HISTORY
- const getLoanHistory =
+const getLoanHistory =
   async (req, res) => {
     try {
 
-      console.log(
-        "OWNER:",
-        req.ownerId
-      );
+      const page =
+        Number(
+          req.query.page || 1
+        );
 
-      console.log(
-        "BRANCH:",
-        req.branchId
-      );
+      const limit = 50;
 
       const loans =
-  await DebtLoan.find({
-    owner: req.ownerId
-  })
-    .populate(
-      "customer",
-      "fullName phone"
-    )
-    .sort({
-      createdAt: -1
-    })
-    .lean();
+        await DebtLoan.find({
+          owner: req.ownerId
+        })
+          .populate(
+            "customer",
+            "fullName phone"
+          )
+          .sort({
+            createdAt: -1
+          })
+          .skip(
+            (page - 1) * limit
+          )
+          .limit(limit)
+          .lean();
 
       return res.status(200).json(
         loans
@@ -351,18 +350,13 @@ try {
 
     } catch (error) {
 
-      console.log(
-        "GET LOAN HISTORY ERROR:",
-        error
-      );
-
       return res.status(500).json({
         message:
           error.message
       });
     }
   };
-
+ 
 // GET SINGLE LOAN
 const getLoanById =
   async (req, res) => {
