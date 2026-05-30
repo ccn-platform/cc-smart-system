@@ -325,7 +325,7 @@ const getLoanHistory =
           req.query.page || 1
         );
 
-      const limit = 50;
+      const limit = 5000;
 
       const loans =
         await DebtLoan.find({
