@@ -333,23 +333,17 @@ try {
       );
 
       const loans =
-        await DebtLoan.find({
-          owner: req.ownerId
-        })
-          .populate(
-            "customer",
-            "fullName phone"
-          )
-          .sort({
-            createdAt: -1
-          })
-          .limit(100)
-          .lean();
-
-      console.log(
-        "LOANS FOUND:",
-        loans.length
-      );
+  await DebtLoan.find({
+    owner: req.ownerId
+  })
+    .populate(
+      "customer",
+      "fullName phone"
+    )
+    .sort({
+      createdAt: -1
+    })
+    .lean();
 
       return res.status(200).json(
         loans
