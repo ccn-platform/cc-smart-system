@@ -1,4 +1,4 @@
-    const mongoose =
+  const mongoose =
   require("mongoose");
 
 const customerIdentitySchema =
@@ -19,11 +19,10 @@ const customerIdentitySchema =
         index: true
       },
 
-      phone: {
-        type: String,
-        trim: true,
-        sparse: true
-      },
+       phone: {
+  type: String,
+  trim: true
+},
 
       nationalId: {
         type: String,
@@ -79,12 +78,17 @@ const customerIdentitySchema =
         default: ""
       },
 
-      fingerprintId: {
-        type: String,
-        trim: true,
-        sparse: true
-      },
+       fingerprintId: {
+  type: String,
+  trim: true
+},
 
+      mergeParent: {
+  type:
+    mongoose.Schema.Types.ObjectId,
+  ref: "CustomerIdentity",
+  default: null
+},
       status: {
         type: String,
         enum: [
@@ -142,6 +146,70 @@ const customerIdentitySchema =
         type: String,
         default: ""
       },
+      normalizedPhone: {
+  type: String,
+  default: "",
+  index: true
+},
+
+normalizedName: {
+  type: String,
+  default: "",
+  index: true
+},
+syncId: {
+  type: String,
+  default: null,
+  index: true
+},
+
+syncStatus: {
+  type: String,
+  enum: [
+    "synced",
+    "pending",
+    "conflict"
+  ],
+  default: "synced",
+  index: true
+},
+
+source: {
+  type: String,
+  enum: [
+    "online",
+    "offline"
+  ],
+  default: "online"
+},
+
+deviceId: {
+  type: String,
+  default: null
+},
+
+lastSyncedAt: {
+  type: Date,
+  default: null
+},
+lastSyncedAt: {
+  type: Date,
+  default: null
+},
+
+syncError: {
+  type: String,
+  default: ""
+},
+
+queuedAt: {
+  type: Date,
+  default: null
+},
+queuedAt: {
+  type: Date,
+  default: null
+},
 
       createdBy: {
         type:
@@ -156,35 +224,79 @@ const customerIdentitySchema =
 
 
 // BUSINESS-SCOPED UNIQUE
-customerIdentitySchema.index(
+ customerIdentitySchema.index(
   {
     owner: 1,
     phone: 1
   },
   {
     unique: true,
-    sparse: true
+    partialFilterExpression: {
+      phone: {
+        $type: "string",
+        $ne: ""
+      }
+    }
   }
 );
 
-customerIdentitySchema.index(
+customerIdentitySchema.index({
+  owner: 1,
+  normalizedPhone: 1
+});
+
+customerIdentitySchema.index({
+  owner: 1,
+  normalizedName: 1
+});
+customerIdentitySchema.index({
+  owner: 1,
+  syncStatus: 1
+});
+
+ customerIdentitySchema.index(
+  {
+    owner: 1,
+    syncId: 1
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      syncId: {
+        $type: "string"
+      }
+    }
+  }
+);
+ customerIdentitySchema.index(
   {
     owner: 1,
     nationalId: 1
   },
   {
-    sparse: true
+    unique: true,
+    sparse: true,
+    partialFilterExpression: {
+      nationalId: {
+        $type: "string",
+        $ne: ""
+      }
+    }
   }
 );
-
-customerIdentitySchema.index(
+ customerIdentitySchema.index(
   {
     owner: 1,
     fingerprintId: 1
   },
   {
     unique: true,
-    sparse: true
+    partialFilterExpression: {
+      fingerprintId: {
+        $type: "string",
+        $ne: ""
+      }
+    }
   }
 );
 
@@ -202,6 +314,56 @@ customerIdentitySchema.index({
   owner: 1,
   createdAt: -1
 });
+customerIdentitySchema.pre(
+  "save",
+  function (next) {
+
+    // NORMALIZE PHONE
+     if (this.phone) {
+
+  let phone =
+    this.phone
+      .replace(/[^\d]/g, "");
+  if (
+    phone.startsWith("0")
+  ) {
+    phone =
+      "255" +
+      phone.substring(1);
+  }
+
+  if (
+    phone.startsWith("+")
+  ) {
+    phone =
+      phone.substring(1);
+  }
+
+  this.normalizedPhone =
+    phone;
+
+} else {
+
+  this.normalizedPhone = "";
+}
+
+    // NORMALIZE NAME
+if (this.fullName) {
+
+  this.normalizedName =
+    this.fullName
+      .trim()
+      .toLowerCase();
+
+} else {
+
+  this.normalizedName = "";
+}
+
+next();
+   
+  }
+);
 module.exports =
   mongoose.model(
     "CustomerIdentity",
