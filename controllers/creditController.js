@@ -318,36 +318,56 @@ try {
 
 
 // GET LOAN HISTORY
-const getLoanHistory =
+ const getLoanHistory =
   async (req, res) => {
     try {
-     const loans =
-  await DebtLoan.find({
-    owner: req.ownerId,
-    branch: req.branchId
-  })
-    .populate(
-      "customer",
-      "fullName phone"
-    )
-    .sort({
-      createdAt: -1
-    })
-    .limit(100)
-    .lean();
+
+      console.log(
+        "OWNER:",
+        req.ownerId
+      );
+
+      console.log(
+        "BRANCH:",
+        req.branchId
+      );
+
+      const loans =
+        await DebtLoan.find({
+          owner: req.ownerId
+        })
+          .populate(
+            "customer",
+            "fullName phone"
+          )
+          .sort({
+            createdAt: -1
+          })
+          .limit(100)
+          .lean();
+
+      console.log(
+        "LOANS FOUND:",
+        loans.length
+      );
 
       return res.status(200).json(
         loans
       );
 
     } catch (error) {
+
+      console.log(
+        "GET LOAN HISTORY ERROR:",
+        error
+      );
+
       return res.status(500).json({
         message:
           error.message
       });
     }
   };
-
 
 // GET SINGLE LOAN
 const getLoanById =
