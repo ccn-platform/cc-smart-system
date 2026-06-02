@@ -1252,68 +1252,108 @@ const getTopProductsReport = async (req, res) => {
     const period =
       req.query.period || "today";
 
-    let start = new Date();
-    let end = new Date();
+    const now =
+      new Date();
 
-    if (period === "today") {
-      start = new Date();
-      start.setUTCHours(
-        0,
-        0,
-        0,
-        0
-      );
+    let start = null;
+
+    let end =
+      new Date(now);
+
+    end.setHours(
+      23,
+      59,
+      59,
+      999
+    );
+
+    switch (period) {
+      case "today":
+        start =
+          new Date(now);
+
+        start.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+        break;
+
+      case "week":
+        start =
+          new Date(now);
+
+        start.setDate(
+          start.getDate() - 7
+        );
+
+        start.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+        break;
+
+      case "month":
+        start =
+          new Date(now);
+
+        start.setDate(
+          start.getDate() - 30
+        );
+
+        start.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+        break;
+
+      case "all":
+        start = null;
+        break;
+
+      default:
+        start =
+          new Date(now);
+
+        start.setHours(
+          0,
+          0,
+          0,
+          0
+        );
     }
 
-    if (period === "week") {
-  start = new Date();
-  start.setUTCHours(0,0,0,0);
-
-  const day =
-    start.getUTCDay();
-
-  const diff =
-    day === 0 ? 6 : day - 1;
-
-  start.setUTCDate(
-    start.getUTCDate() - diff
-  );
-}
-
-if (period === "month") {
-  start = new Date(
-    Date.UTC(
-      end.getUTCFullYear(),
-      end.getUTCMonth(),
-      1
-    )
-  );
-}
-
-const outstandingAgg =
-  await DebtLoan.aggregate([
-    {
-      $match: {
-        owner: ownerId,
-        branch: branchId,
-        status: {
-          $in: [
-            "active",
-            "overdue"
-          ]
+    // OUTSTANDING LOANS
+    const outstandingAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            status: {
+              $in: [
+                "active",
+                "overdue"
+              ]
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: {
+              $sum:
+                "$balanceAmount"
+            }
+          }
         }
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        total: {
-          $sum:
-            "$balanceAmount"
-        }
-      }
-    }
-  ]);
+      ]);
+
     // LOAN SUMMARY
     const loanAgg =
       await DebtLoan.aggregate([
@@ -1321,25 +1361,26 @@ const outstandingAgg =
           $match: {
             owner: ownerId,
             branch: branchId,
-            createdAt: {
-              $gte: start,
-              $lte: end
-            }
+            ...(start && {
+              createdAt: {
+                $gte: start,
+                $lte: end
+              }
+            })
           }
         },
-        
-       {
-  $group: {
-    _id: "$status",
-    count: {
-      $sum: 1
-    },
-    totalIssued: {
-      $sum:
-        "$principalAmount"
-    }
-  }
-}
+        {
+          $group: {
+            _id: "$status",
+            count: {
+              $sum: 1
+            },
+            totalIssued: {
+              $sum:
+                "$principalAmount"
+            }
+          }
+        }
       ]);
 
     // PAYMENTS
@@ -1349,10 +1390,12 @@ const outstandingAgg =
           $match: {
             owner: ownerId,
             branch: branchId,
-            createdAt: {
-              $gte: start,
-              $lte: end
-            }
+            ...(start && {
+              createdAt: {
+                $gte: start,
+                $lte: end
+              }
+            })
           }
         },
         {
@@ -1374,10 +1417,12 @@ const outstandingAgg =
             branch: branchId,
             status: "active",
             type: "expense",
-            createdAt: {
-              $gte: start,
-              $lte: end
-            }
+            ...(start && {
+              createdAt: {
+                $gte: start,
+                $lte: end
+              }
+            })
           }
         },
         {
@@ -1389,8 +1434,9 @@ const outstandingAgg =
           }
         }
       ]);
-const outstanding =
-  outstandingAgg[0]?.total || 0;
+
+    const outstanding =
+      outstandingAgg[0]?.total || 0;
 
     let overdueCount = 0;
     let activeCount = 0;
@@ -1398,7 +1444,6 @@ const outstanding =
 
     let totalLoans = 0;
     let totalIssued = 0;
-    
 
     loanAgg.forEach((l) => {
       totalLoans +=
@@ -1406,8 +1451,6 @@ const outstanding =
 
       totalIssued +=
         l.totalIssued || 0;
-
-      
 
       if (
         l._id === "overdue"
