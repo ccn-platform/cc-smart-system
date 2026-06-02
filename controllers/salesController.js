@@ -133,8 +133,7 @@ const createSale = async (
 
 
 // GET ALL SALES
- 
-const getSales = async (
+ const getSales = async (
   req,
   res
 ) => {
@@ -143,82 +142,99 @@ const getSales = async (
       req.query.period ||
       "today";
 
-    let start =
+    const now =
       new Date();
+
+    let start = null;
 
     let end =
-      new Date();
+      new Date(now);
 
-    if (
-      period ===
-      "today"
-    ) {
-      start =
-        new Date();
+    end.setHours(
+      23,
+      59,
+      59,
+      999
+    );
 
-      start.setUTCHours(
-        0,
-        0,
-        0,
-        0
-      );
-    }
+    switch (period) {
+      case "today":
+        start =
+          new Date(now);
 
-    if (
-      period ===
-      "week"
-    ) {
-      start =
-        new Date();
+        start.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+        break;
 
-      start.setUTCHours(
-        0,
-        0,
-        0,
-        0
-      );
+      case "week":
+        start =
+          new Date(now);
 
-      const day =
-        start.getUTCDay();
+        start.setDate(
+          start.getDate() - 7
+        );
 
-      const diff =
-        day === 0
-          ? 6
-          : day - 1;
+        start.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+        break;
 
-      start.setUTCDate(
-        start.getUTCDate() -
-          diff
-      );
-    }
+      case "month":
+        start =
+          new Date(now);
 
-    if (
-      period ===
-      "month"
-    ) {
-      start =
-        new Date(
-          Date.UTC(
-            end.getUTCFullYear(),
-            end.getUTCMonth(),
-            1
-          )
+        start.setDate(
+          start.getDate() - 30
+        );
+
+        start.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+        break;
+
+      case "all":
+        start = null;
+        break;
+
+      default:
+        start =
+          new Date(now);
+
+        start.setHours(
+          0,
+          0,
+          0,
+          0
         );
     }
 
+    const query = {
+      owner: req.ownerId,
+      branch: req.branchId
+    };
+
+    if (start) {
+      query.createdAt = {
+        $gte: start,
+        $lte: end
+      };
+    }
+
     const sales =
-      await Sale.find({
-        owner:
-          req.ownerId,
-        branch:
-          req.branchId,
-        createdAt: {
-          $gte: start,
-          $lte: end
-        }
-      }).sort({
-        createdAt: -1
-      });
+      await Sale.find(query)
+        .sort({
+          createdAt: -1
+        });
 
     return res.status(200).json(
       sales
