@@ -1,4 +1,4 @@
-  const mongoose = require("mongoose");
+ const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const cleanOCRText = require("../utils/cleanOCRText");
 const parseOrderText = require("../utils/parseOrderText");
@@ -336,9 +336,8 @@ const confirmOrder = async (
   }
 };
 
-
-// HISTORY
- const getOrderHistory = async (
+ // HISTORY
+const getOrderHistory = async (
   req,
   res
 ) => {
@@ -360,64 +359,83 @@ const confirmOrder = async (
       req.query.period ||
       "today";
 
-    let start =
+    const now =
       new Date();
 
+    let start;
     let end =
-      new Date();
+      new Date(now);
 
-    if (
-      period ===
-      "today"
-    ) {
-      start =
-        new Date();
+    // mwisho wa siku
+    end.setHours(
+      23,
+      59,
+      59,
+      999
+    );
 
-      start.setHours(
-        0,
-        0,
-        0,
-        0
-      );
-    }
+    switch (period) {
+      case "today":
+        start =
+          new Date(now);
 
-    if (
-      period ===
-      "week"
-    ) {
-      start =
-        new Date();
+        start.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+        break;
 
-      start.setHours(
-        0,
-        0,
-        0,
-        0
-      );
+      case "week":
+        start =
+          new Date(now);
 
-      const day =
-        start.getDay();
+        start.setHours(
+          0,
+          0,
+          0,
+          0
+        );
 
-      const diff =
-        day === 0
-          ? 6
-          : day - 1;
+        {
+          const day =
+            start.getDay();
 
-      start.setDate(
-        start.getDate() -
-          diff
-      );
-    }
+          const diff =
+            day === 0
+              ? 6
+              : day - 1;
 
-    if (
-      period ===
-      "month"
-    ) {
-      start =
-        new Date(
-          end.getFullYear(),
-          end.getMonth(),
-          1
+          start.setDate(
+            start.getDate() -
+              diff
+          );
+        }
+        break;
+
+      case "month":
+        start =
+          new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            1,
+            0,
+            0,
+            0,
+            0
+          );
+        break;
+
+      default:
+        start =
+          new Date(now);
+
+        start.setHours(
+          0,
+          0,
+          0,
+          0
         );
     }
 
@@ -429,6 +447,19 @@ const confirmOrder = async (
         $lte: end
       }
     };
+
+    console.log(
+      "Order History Query:",
+      {
+        owner:
+          req.ownerId,
+        branch:
+          req.branchId,
+        period,
+        start,
+        end
+      }
+    );
 
     let dbQuery =
       Order.find(query)
@@ -465,18 +496,27 @@ const confirmOrder = async (
     const orders =
       await dbQuery;
 
+    console.log(
+      `Orders found: ${orders.length}`
+    );
+
     res.status(200).json(
       orders
     );
 
   } catch (error) {
+    console.error(
+      "getOrderHistory error:",
+      error
+    );
+
     res.status(500).json({
       message:
-        error.message
+        error.message ||
+        "Failed to load history"
     });
   }
 };
-
 const deleteOrder = async (
   req,
   res
