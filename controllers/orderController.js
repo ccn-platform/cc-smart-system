@@ -1,4 +1,4 @@
- const mongoose = require("mongoose");
+  const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const cleanOCRText = require("../utils/cleanOCRText");
 const parseOrderText = require("../utils/parseOrderText");
@@ -427,6 +427,10 @@ const getOrderHistory = async (
           );
         break;
 
+  case "all":
+    start = null;
+    break;
+
       default:
         start =
           new Date(now);
@@ -439,15 +443,17 @@ const getOrderHistory = async (
         );
     }
 
-    const query = {
-      owner: req.ownerId,
-      branch: req.branchId,
-      createdAt: {
-        $gte: start,
-        $lte: end
-      }
-    };
+   const query = {
+  owner: req.ownerId,
+  branch: req.branchId
+};
 
+if (start) {
+  query.createdAt = {
+    $gte: start,
+    $lte: end
+  };
+}
     console.log(
       "Order History Query:",
       {
