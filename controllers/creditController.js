@@ -1,4 +1,4 @@
-    
+   
  const mongoose =
   require("mongoose");
  const CustomerIdentity =
@@ -327,10 +327,11 @@ const getLoanHistory =
 
       const limit = 5000;
 
-      const loans =
-        await DebtLoan.find({
-          owner: req.ownerId
-        })
+       const loans =
+  await DebtLoan.find({
+    owner: req.ownerId,
+    branch: req.branchId
+  })
           .populate(
             "customer",
             "fullName phone"
