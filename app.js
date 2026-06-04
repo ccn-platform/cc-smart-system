@@ -19,6 +19,9 @@ const productRoutes = require("./routes/productRoutes");
 const salesRoutes =require("./routes/salesRoutes");
 const creditRoutes =require("./routes/creditRoutes");
 const aiRoutes =require("./routes/aiRoutes");
+
+const adminRoutes =
+  require("./routes/adminRoutes");
   const app = express();
 
 app.use(cors());
@@ -43,7 +46,7 @@ app.get("/", (req, res) => {
     );
   }
 );
-
+app.use("/", adminRoutes);
 app.use("/api/reports",reportRoutes);
 app.use("/api/audit",auditRoutes);
 app.use("/api/shop", shopRoutes);
