@@ -7,24 +7,51 @@ router.get(
   "/users-view",
   async (req, res) => {
     try {
-      const users = await User.find({});
+      const users = await User.find({})
+        .select(
+          "name phone businessName role createdAt"
+        );
 
       let html = `
         <html>
+        <head>
+          <title>Users</title>
+          <style>
+            table {
+              border-collapse: collapse;
+              width: 100%;
+            }
+
+            th, td {
+              border: 1px solid #ddd;
+              padding: 8px;
+              text-align: left;
+            }
+
+            th {
+              background: #f2f2f2;
+            }
+          </style>
+        </head>
         <body>
-          <h2>Users</h2>
-          <table border="1">
+          <h2>Total Users: ${users.length}</h2>
+
+          <table>
             <tr>
               <th>Name</th>
               <th>Phone</th>
+              <th>Business</th>
+              <th>Role</th>
             </tr>
       `;
 
       users.forEach(user => {
         html += `
           <tr>
-            <td>${user.fullName || ""}</td>
+            <td>${user.name || ""}</td>
             <td>${user.phone || ""}</td>
+            <td>${user.businessName || ""}</td>
+            <td>${user.role || ""}</td>
           </tr>
         `;
       });
