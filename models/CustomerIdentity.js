@@ -206,6 +206,17 @@ customerIdentitySchema.index({
   owner: 1,
   fullName: 1
 });
+
+customerIdentitySchema.index(
+  {
+    owner: 1,
+    branch: 1,
+    fullName: 1
+  },
+  {
+    unique: true
+  }
+);
 module.exports =
   mongoose.model(
     "CustomerIdentity",
