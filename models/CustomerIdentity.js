@@ -1,4 +1,4 @@
-    const mongoose =
+      const mongoose =
   require("mongoose");
 
 const customerIdentitySchema =
@@ -201,6 +201,10 @@ customerIdentitySchema.index({
 customerIdentitySchema.index({
   owner: 1,
   createdAt: -1
+});
+customerIdentitySchema.index({
+  owner: 1,
+  fullName: 1
 });
 module.exports =
   mongoose.model(
