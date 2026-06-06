@@ -40,9 +40,6 @@ const findOrCreateCustomer =
 
       let customer = null;
 
-let existingCustomer =
-  false;
-
       if (
         fingerprintId &&
         fingerprintId.trim()
@@ -55,7 +52,6 @@ let existingCustomer =
   });
       }
 
-   
       if (
         !customer &&
         phone &&
@@ -68,32 +64,15 @@ let existingCustomer =
   });
       }
 
-          if (!customer) {
-  customer =
-    await CustomerIdentity.findOne({
-      owner: req.ownerId,
-      fullName:
-        fullName
-          .trim()
-          .toUpperCase()
-    });
-    if (customer) {
-  existingCustomer =
-    true;
-}
-}
-
       if (!customer) {
   const data = {
-  owner:
-    req.ownerId,
-  createdBy:
-    req.user.id,
-  fullName:
-    fullName
-      .trim()
-      .toUpperCase()
-};
+    owner:
+      req.ownerId,
+    createdBy:
+      req.user.id,
+    fullName:
+      fullName.trim()
+  };
 
   if (
     phone &&
@@ -160,37 +139,17 @@ let existingCustomer =
     await customer.save();
   }
 }
- return res.status(200).json({
-  customer,
 
-  existingCustomer,
+      return res.status(200).json(
+        customer
+      );
 
-  message:
-    existingCustomer
-      ? "Mteja huyu tayari yupo kwenye mfumo  badilisha  jina kama ni mteja mwingine."
-      : " Mteja amesajiliwa kwa mafanikio. "
-});
-
-    }  
-catch (error) {
-
-  if (error.code === 11000) {
-
-    const duplicateName =
-      error.keyValue?.fullName;
-
-    return res.status(400).json({
-      message:
-        `Jina "${duplicateName}" tayari limesajiliwa kwenye biashara hii.`
-    });
-  }
-
-  return res.status(500).json({
-    message:
-      error.message
-  });
-
-}
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }
   };
 
 
@@ -352,15 +311,12 @@ try {
   await session.endSession();
 }
 
-    }  
-    catch (error) {
-  return res.status(500).json({
-    message:
-      error.message
-  });
-}
-
- 
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }
   };
 
 const getLoanHistory =
@@ -982,26 +938,14 @@ try {
           imported.length
       });
 
-    } 
-    catch (error) {
+    } catch (error) {
 
-  if (error.code === 11000) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
 
-    const duplicateName =
-      error.keyValue?.fullName;
-
-    return res.status(400).json({
-      message:
-        `Jina "${duplicateName}" tayari limesajiliwa kwenye biashara hii.`
-    });
-  }
-
-  return res.status(500).json({
-    message:
-      error.message
-  });
-
-}
+    }
   };
 module.exports = {
   findOrCreateCustomer,
