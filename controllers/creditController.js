@@ -1,4 +1,4 @@
-   
+    
  const mongoose =
   require("mongoose");
  const CustomerIdentity =
@@ -9,6 +9,9 @@ const DebtLoan =
 
 const DebtPayment =
   require("../models/DebtPayment");
+
+const {readDebtImage
+} = require( "../services/ocrService");
 
 const {
   checkCreditEligibility
@@ -758,6 +761,190 @@ try {
       });
     }
   };
+
+
+  const scanDebtsFromImage =
+  async (req, res) => {
+    try {
+
+      if (!req.file) {
+        return res.status(400).json({
+          message: "Image required"
+        });
+      }
+
+      const text =
+        await readDebtImage(
+          req.file
+        );
+ 
+        const rows =
+  text
+    .split("\n")
+    .filter(Boolean)
+    .map((row) => {
+
+      const [
+        name,
+        amount,
+        days
+      ] = row
+        .split("|")
+        .map((v) =>
+          v.trim()
+        );
+
+      if (
+        !name ||
+        isNaN(Number(amount)) ||
+        isNaN(Number(days))
+      ) {
+        return null;
+      }
+
+      return {
+        name,
+        amount:
+          Number(amount),
+        days:
+          Number(days)
+      };
+    })
+    .filter(Boolean);
+      return res.status(200).json({
+        rows
+      });
+
+    } catch (error) {
+      return res.status(500).json({
+        message:
+          error.message
+      });
+    }
+  };
+
+  const importDebts =
+  async (req, res) => {
+    try {
+
+      const { rows } =
+        req.body;
+
+      if (
+        !Array.isArray(rows) ||
+        rows.length === 0
+      ) {
+        return res.status(400).json({
+          message:
+            "Rows required"
+        });
+      }
+
+      const imported = [];
+
+      for (const row of rows) {
+
+        const name =
+          row.name?.trim();
+
+        const amount =
+          Number(row.amount);
+
+        const days =
+          Number(row.days);
+
+        if (
+          !name ||
+          amount <= 0
+        ) {
+          continue;
+        }
+
+        let customer =
+          await CustomerIdentity.findOne({
+            owner:
+              req.ownerId,
+            fullName: name
+          });
+
+        if (!customer) {
+          customer =
+            await CustomerIdentity.create({
+              owner:
+                req.ownerId,
+              createdBy:
+                req.user.id,
+              fullName: name
+            });
+        }
+
+        const dueDate =
+          new Date();
+
+        dueDate.setDate(
+          dueDate.getDate() +
+          (days || 30)
+        );
+
+        const loan =
+          await DebtLoan.create({
+            owner:
+              req.ownerId,
+            branch:
+              req.branchId,
+            createdBy:
+              req.user.id,
+
+            customer:
+              customer._id,
+
+            loanNumber:
+              "LN" +
+              Date.now() +
+              Math.floor(
+                Math.random() *
+                10000
+              ),
+
+            principalAmount:
+              amount,
+
+            balanceAmount:
+              amount,
+
+            paidAmount: 0,
+
+            dueDate,
+
+            items: [],
+
+            note:
+              "Imported from debt notebook",
+
+            approvedBy:
+              req.user.id
+          });
+
+        imported.push(
+          loan._id
+        );
+      }
+
+      return res.status(201).json({
+        success: true,
+        count:
+          imported.length
+      });
+
+    } catch (error) {
+
+      return res.status(500).json({
+        message:
+          error.message
+      });
+
+    }
+  };
 module.exports = {
   findOrCreateCustomer,
   checkCredit,
@@ -767,5 +954,7 @@ module.exports = {
   receivePayment,
   scanFingerprint,
  getPaymentHistory,
+ scanDebtsFromImage,
+ importDebts,
    getOverdueLoans
 };
