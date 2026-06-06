@@ -844,8 +844,10 @@ try {
 
       for (const row of rows) {
 
-        const name =
-          row.name?.trim();
+ const name =
+  row.name
+    ?.trim()
+    .toUpperCase();
 
         const amount =
           Number(row.amount);
