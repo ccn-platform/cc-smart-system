@@ -1,4 +1,8 @@
-   const express =
+   
+  const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+  const express =
   require("express");
 
 const router =
@@ -14,16 +18,63 @@ const {
 const {
   findOrCreateCustomer,
   checkCredit,
+   scanDebtsFromImage,
   createDebtLoan,
   receivePayment,
   getLoanHistory,
   getPaymentHistory,
   getLoanById,
   scanFingerprint,
-  getOverdueLoans
+  getOverdueLoans,
+  importDebts
 } = require(
   "../controllers/creditController"
 );
+
+const uploadDir = path.join(
+  __dirname,
+  "../uploads/temp"
+);
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, {
+    recursive: true
+  });
+}
+
+const storage = multer.diskStorage({
+  destination: (
+    req,
+    file,
+    cb
+  ) => {
+    cb(null, uploadDir);
+  },
+
+  filename: (
+    req,
+    file,
+    cb
+  ) => {
+    const ext =
+      path.extname(
+        file.originalname || ".jpg"
+      );
+
+    cb(
+      null,
+      `${Date.now()}${ext}`
+    );
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize:
+      5 * 1024 * 1024
+  }
+});
 
 
 // SCAN FINGERPRINT
@@ -34,7 +85,20 @@ router.post(
   scanFingerprint
 );
 
+router.post(
+  "/scan-debts",
+  protect,
+  branchAccess,
+  upload.single("image"),
+  scanDebtsFromImage
+);
 
+router.post(
+  "/import-debts",
+  protect,
+  branchAccess,
+  importDebts
+);
 // FIND OR CREATE CUSTOMER
 router.post(
   "/customer",
@@ -42,6 +106,7 @@ router.post(
   branchAccess,
   findOrCreateCustomer
 );
+
 
 
 // CHECK CREDIT
