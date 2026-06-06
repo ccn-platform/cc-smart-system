@@ -66,6 +66,32 @@ DAGAA | 3 | 27000
 MCHELE | 100 | 220000
 `;
 
+const DEBT_PROMPT = `
+You are an OCR engine for handwritten debt books.
+
+Read ALL visible debt rows.
+
+Return ONLY valid rows.
+
+FORMAT:
+NAME | AMOUNT | DAYS
+
+RULES:
+- Keep customer names exactly as written
+- Amount must be number only
+- Days must be number only
+- Ignore dates
+- Ignore titles
+- Ignore notes
+- Ignore totals
+- One customer per line
+- Do not explain anything
+
+EXAMPLE:
+JUMA | 50000 | 30
+SAIDI | 20000 | 14
+`;
+
 const cleanupTempFile = async (
   filePath
 ) => {
@@ -78,8 +104,9 @@ const cleanupTempFile = async (
   }
 };
 
-const processOCR = async (
-  file
+ const processOCR = async (
+  file,
+  prompt
 ) => {
   if (!file) {
     throw new Error(
@@ -145,9 +172,9 @@ const processOCR = async (
                 contents: [
                   {
                     parts: [
-                      {
-                        text: PROMPT
-                      },
+                     {
+                       text: prompt
+                     },
                       {
                         inline_data:
                           {
@@ -247,13 +274,26 @@ const processOCR = async (
   }
 };
 
-const readImageText = (
+ const readImageText = (
   file
 ) =>
   limit(() =>
-    processOCR(file)
+    processOCR(
+      file,
+      PROMPT
+    )
   );
 
-module.exports = {
-  readImageText
+  const readDebtImage = (
+  file
+) =>
+  limit(() =>
+    processOCR(
+      file,
+      DEBT_PROMPT
+    )
+  );
+ module.exports = {
+  readImageText,
+  readDebtImage
 };
