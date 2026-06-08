@@ -1,4 +1,4 @@
-   const mongoose = require("mongoose");
+    const mongoose = require("mongoose");
 
 const crypto = require("crypto");
 const pushService = require("../services/pushService");
@@ -836,11 +836,12 @@ const updateProfile = async (req, res) => {
     });
   }
 };
-const getProfile = async (
+ const getProfile = async (
   req,
   res
 ) => {
   try {
+
     const user =
       await User.findById(
         req.user._id
@@ -848,18 +849,91 @@ const getProfile = async (
         "businessCategory"
       );
 
-    res.json({
-      user
+    let subscription =
+      null;
+
+    let branchData =
+      null;
+
+    if (
+      user.role === "staff"
+    ) {
+
+      if (user.branch) {
+
+        const branch =
+          await Branch.findById(
+            user.branch
+          ).select(
+            "name subscription"
+          );
+
+        if (branch) {
+
+          subscription =
+            branch.subscription ||
+            null;
+
+          branchData = {
+            id: branch._id,
+            name: branch.name,
+            subscription
+          };
+        }
+      }
+
+    } else {
+
+      const shop =
+        await Shop.findOne({
+          owner: user._id
+        });
+
+      if (shop) {
+
+        const mainBranch =
+          await Branch.findOne({
+            shop: shop._id,
+            isMain: true
+          }).select(
+            "name subscription"
+          );
+
+        if (mainBranch) {
+
+          subscription =
+            mainBranch.subscription ||
+            null;
+
+          branchData = {
+            id: mainBranch._id,
+            name:
+              mainBranch.name,
+            subscription
+          };
+        }
+      }
+    }
+
+    return res.json({
+      user: {
+        ...user.toObject(),
+
+        branch:
+          branchData,
+
+        subscription
+      }
     });
 
   } catch (error) {
-    res.status(500).json({
+
+    return res.status(500).json({
       message:
         error.message
     });
   }
 };
- 
 const sendResetPinCode = async (
   req,
   res
