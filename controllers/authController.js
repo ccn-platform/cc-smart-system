@@ -1,4 +1,4 @@
-    const mongoose = require("mongoose");
+   const mongoose = require("mongoose");
 
 const crypto = require("crypto");
 const pushService = require("../services/pushService");
@@ -65,7 +65,7 @@ if (isVodacom) {
 
   return res.status(400).json({
     message:
-      "Namba za Vodacom haziruhusiwi kujisajili."
+      "Namba za Vodacom haziruhusiwi kujisajili kwa sasa mpaka tutakapofanya maboresho tumia namba ya mtandao mwingine."
   });
 }
     // CHECK DUPLICATE
