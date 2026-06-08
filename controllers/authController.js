@@ -218,7 +218,7 @@ const mainBranch =
       });
     }
 
-const users =
+ const users =
   await User.find({})
     .select(
       "name phone role isActive"
@@ -229,61 +229,68 @@ console.log(
   "ALL USERS:",
   users
 );
-    const user =
-      await User.findOne({
-        phone,
-        isActive: true
-      })
-        .populate(
-          "branch",
-          "name"
-        )
-        .populate(
-          "businessCategory",
-          "code name"
-        );
 
-    console.log(
-      "USER FOUND:",
-      user
-        ? {
-            id: user._id,
-            phone:
-              user.phone,
-            role:
-              user.role,
-            isActive:
-              user.isActive,
-            branch:
-              user.branch
-          }
-        : null
+const user =
+  await User.findOne({
+    phone
+  })
+    .populate(
+      "branch",
+      "name"
+    )
+    .populate(
+      "businessCategory",
+      "code name"
     );
 
-    if (!user) {
-      return res.status(400).json({
-        message:
-          "Invalid credentials"
-      });
-    }
+console.log(
+  "USER FOUND:",
+  user
+    ? {
+        id: user._id,
+        phone:
+          user.phone,
+        role:
+          user.role,
+        isActive:
+          user.isActive,
+        branch:
+          user.branch
+      }
+    : null
+);
 
-    const match =
-      await bcrypt.compare(
-        password,
-        user.password
-      );
 
-    console.log(
-      "PASSWORD MATCH:",
-      match
-    );
+if (!user) {
+  return res.status(400).json({
+    message:
+      "Namba hii haijasajiliwa au sio sahihi."
+  });
+}
+if (!user.isActive) {
+  return res.status(403).json({
+    message:
+      "Account yako imefungwa au haipo. Wasiliana na mmiliki wa biashara."
+  });
+}
 
-    if (!match) {
-      return res.status(400).json({
-        message:
-          "Invalid credentials"
-      });
-    }
+const match =
+  await bcrypt.compare(
+    password,
+    user.password
+  );
+
+console.log(
+  "PASSWORD MATCH:",
+  match
+);
+
+if (!match) {
+  return res.status(400).json({
+    message:
+      "Neno la siri si sahihi."
+  });
+}
 
     const token =
       jwt.sign(
