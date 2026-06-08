@@ -46,6 +46,28 @@ const registerUser = async (req, res) => {
       });
     }
 
+    const vodaPrefixes = [
+  "25579",
+  "25574",
+  "25575",
+  "25576",
+];
+
+const isVodacom =
+  vodaPrefixes.some(
+    prefix =>
+      phone.startsWith(prefix)
+  );
+
+if (isVodacom) {
+  await session.abortTransaction();
+  session.endSession();
+
+  return res.status(400).json({
+    message:
+      "Namba za Vodacom haziruhusiwi kujisajili."
+  });
+}
     // CHECK DUPLICATE
     const exists = await User.findOne({
       phone
@@ -55,9 +77,10 @@ const registerUser = async (req, res) => {
       await session.abortTransaction();
       session.endSession();
 
-      return res.status(400).json({
-        message: "Phone already registered"
-      });
+     return res.status(400).json({
+  message:
+    "Namba hii tayari imeshatumika kusajili akaunti. Tumia namba nyingine au ingia kwenye akaunti yako."
+});
     }
 
     // HASH PASSWORD
