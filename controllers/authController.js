@@ -218,18 +218,7 @@ const mainBranch =
       });
     }
 
- const users =
-  await User.find({})
-    .select(
-      "name phone role isActive"
-    )
-    .limit(100);
-
-console.log(
-  "ALL USERS:",
-  users
-);
-
+ 
 const user =
   await User.findOne({
     phone
@@ -243,22 +232,7 @@ const user =
       "code name"
     );
 
-console.log(
-  "USER FOUND:",
-  user
-    ? {
-        id: user._id,
-        phone:
-          user.phone,
-        role:
-          user.role,
-        isActive:
-          user.isActive,
-        branch:
-          user.branch
-      }
-    : null
-);
+ 
 
 
 if (!user) {
@@ -280,10 +254,7 @@ const match =
     user.password
   );
 
-console.log(
-  "PASSWORD MATCH:",
-  match
-);
+ 
 
 if (!match) {
   return res.status(400).json({
@@ -315,17 +286,7 @@ if (!match) {
       "staff"
     ) {
 
-      console.log(
-        "STAFF LOGIN:",
-        {
-          id:
-            user._id,
-          phone:
-            user.phone,
-          branch:
-            user.branch
-        }
-      );
+      
 
       if (
         user.branch?._id
@@ -338,10 +299,7 @@ if (!match) {
             "name subscription"
           );
 
-        console.log(
-          "BRANCH FOUND:",
-          branch
-        );
+       
 
         if (branch) {
 
@@ -366,12 +324,7 @@ if (!match) {
           owner:
             user._id
         });
-
-      console.log(
-        "SHOP FOUND:",
-        shop?._id
-      );
-
+ 
       if (shop) {
 
         const mainBranch =
@@ -383,10 +336,7 @@ if (!match) {
             "name subscription"
           );
 
-        console.log(
-          "MAIN BRANCH:",
-          mainBranch
-        );
+        
 
         if (
           mainBranch
@@ -407,17 +357,7 @@ if (!match) {
       }
     }
 
-    console.log(
-      "LOGIN SUCCESS:",
-      {
-        role:
-          user.role,
-        businessCategory:
-          user.businessCategory,
-        branch:
-          branchData
-      }
-    );
+    
 
     return res.status(200).json({
       token,
@@ -457,10 +397,10 @@ if (!match) {
 
   } catch (error) {
 
-    console.log(
-      "LOGIN ERROR:",
-      error
-    );
+    console.error(
+  "LOGIN ERROR:",
+  error.message
+);
 
     return res.status(500).json({
       message:
