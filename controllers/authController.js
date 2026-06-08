@@ -218,6 +218,17 @@ const mainBranch =
       });
     }
 
+const users =
+  await User.find({})
+    .select(
+      "name phone role isActive"
+    )
+    .limit(100);
+
+console.log(
+  "ALL USERS:",
+  users
+);
     const user =
       await User.findOne({
         phone,
