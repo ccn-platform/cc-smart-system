@@ -194,14 +194,24 @@ const mainBranch =
     });
   }
 };
-
  const loginUser = async (req, res) => {
   try {
-    let { phone, password } = req.body;
 
-    phone = normalizePhone(phone);
+    let { phone, password } =
+      req.body;
 
-    if (!phone || !password) {
+    phone =
+      normalizePhone(phone);
+
+    console.log(
+      "LOGIN PHONE:",
+      phone
+    );
+
+    if (
+      !phone ||
+      !password
+    ) {
       return res.status(400).json({
         message:
           "Phone and password required"
@@ -222,6 +232,23 @@ const mainBranch =
           "code name"
         );
 
+    console.log(
+      "USER FOUND:",
+      user
+        ? {
+            id: user._id,
+            phone:
+              user.phone,
+            role:
+              user.role,
+            isActive:
+              user.isActive,
+            branch:
+              user.branch
+          }
+        : null
+    );
+
     if (!user) {
       return res.status(400).json({
         message:
@@ -235,6 +262,11 @@ const mainBranch =
         user.password
       );
 
+    console.log(
+      "PASSWORD MATCH:",
+      match
+    );
+
     if (!match) {
       return res.status(400).json({
         message:
@@ -242,21 +274,45 @@ const mainBranch =
       });
     }
 
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "30d" }
-    );
+    const token =
+      jwt.sign(
+        {
+          id: user._id
+        },
+        process.env.JWT_SECRET,
+        {
+          expiresIn:
+            "30d"
+        }
+      );
 
-    let subscription = null;
-    let branchData = null;
+    let subscription =
+      null;
+
+    let branchData =
+      null;
 
     if (
-      user.role === "staff"
+      user.role ===
+      "staff"
     ) {
+
+      console.log(
+        "STAFF LOGIN:",
+        {
+          id:
+            user._id,
+          phone:
+            user.phone,
+          branch:
+            user.branch
+        }
+      );
+
       if (
         user.branch?._id
       ) {
+
         const branch =
           await Branch.findById(
             user.branch._id
@@ -264,13 +320,20 @@ const mainBranch =
             "name subscription"
           );
 
+        console.log(
+          "BRANCH FOUND:",
+          branch
+        );
+
         if (branch) {
+
           subscription =
             branch.subscription ||
             null;
 
           branchData = {
-            id: branch._id,
+            id:
+              branch._id,
             name:
               branch.name,
             subscription
@@ -279,13 +342,20 @@ const mainBranch =
       }
 
     } else {
+
       const shop =
         await Shop.findOne({
           owner:
             user._id
         });
 
+      console.log(
+        "SHOP FOUND:",
+        shop?._id
+      );
+
       if (shop) {
+
         const mainBranch =
           await Branch.findOne({
             shop:
@@ -295,7 +365,15 @@ const mainBranch =
             "name subscription"
           );
 
-        if (mainBranch) {
+        console.log(
+          "MAIN BRANCH:",
+          mainBranch
+        );
+
+        if (
+          mainBranch
+        ) {
+
           subscription =
             mainBranch.subscription ||
             null;
@@ -311,29 +389,59 @@ const mainBranch =
       }
     }
 
+    console.log(
+      "LOGIN SUCCESS:",
+      {
+        role:
+          user.role,
+        businessCategory:
+          user.businessCategory,
+        branch:
+          branchData
+      }
+    );
+
     return res.status(200).json({
       token,
+
       user: {
-        id: user._id,
-        name: user.name,
+        id:
+          user._id,
+
+        name:
+          user.name,
+
         businessName:
           user.businessName,
-        phone: user.phone,
+
+        phone:
+          user.phone,
+
         businessCategory:
           user
             .businessCategory
-            ?.code,
-        role: user.role,
-        owner: user.owner,
-        branch: branchData,
+            ?.code ||
+          user
+            .businessCategory,
+
+        role:
+          user.role,
+
+        owner:
+          user.owner,
+
+        branch:
+          branchData,
+
         subscription
       }
     });
 
   } catch (error) {
+
     console.log(
       "LOGIN ERROR:",
-      error.message
+      error
     );
 
     return res.status(500).json({
@@ -342,7 +450,6 @@ const mainBranch =
     });
   }
 };
- 
 const addStaff =
   async (req, res) => {
     try {
