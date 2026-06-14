@@ -1,4 +1,4 @@
-    const mongoose = require("mongoose");
+   const mongoose = require("mongoose");
 
 const crypto = require("crypto");
 const pushService = require("../services/pushService");
@@ -631,15 +631,14 @@ const addStaff =
     }
   };
 
-  const deleteStaff = async (req, res) => {
+   const deleteStaff = async (req, res) => {
   try {
     const { staffId } = req.params;
 
     const staff = await User.findOne({
       _id: staffId,
       owner: req.ownerId,
-      role: "staff",
-      isActive: true
+      role: "staff"
     });
 
     if (!staff) {
@@ -648,11 +647,13 @@ const addStaff =
       });
     }
 
-    staff.isActive = false;
-    await staff.save();
+    await User.deleteOne({
+      _id: staff._id
+    });
 
     return res.status(200).json({
-      message: "Staff deleted successfully"
+      message:
+        "Staff deleted permanently"
     });
 
   } catch (error) {
@@ -661,70 +662,6 @@ const addStaff =
     });
   }
 };
- const deleteAccount = async (req, res) => {
-  const session =
-    await mongoose.startSession();
-
-  try {
-    session.startTransaction();
-
-    const ownerId =
-      req.ownerId;
-
-    // FIND SHOP
-    const shop =
-      await Shop.findOne({
-        owner: ownerId
-      }).session(session);
-
-    // DELETE STAFF + OWNER USERS
-    await User.deleteMany(
-      {
-        $or: [
-          { _id: ownerId },
-          { owner: ownerId }
-        ]
-      },
-      { session }
-    );
-
-    // DELETE BRANCHES + SHOP
-    if (shop) {
-      await Branch.deleteMany(
-        {
-          shop: shop._id
-        },
-        { session }
-      );
-
-      await Shop.deleteOne(
-        {
-          _id: shop._id
-        },
-        { session }
-      );
-    }
-
-    await session.commitTransaction();
-
-    return res.status(200).json({
-      message:
-        "Account deleted permanently"
-    });
-
-  } catch (error) {
-    await session.abortTransaction();
-
-    return res.status(500).json({
-      message:
-        error.message
-    });
-
-  } finally {
-    session.endSession();
-  }
-};
- 
 const updateProfile = async (req, res) => {
   try {
     const {
