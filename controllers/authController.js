@@ -431,6 +431,71 @@ if (!match) {
     });
   }
 };
+
+ const deleteAccount = async (req, res) => {
+  const session =
+    await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const ownerId =
+      req.ownerId;
+
+    // FIND SHOP
+    const shop =
+      await Shop.findOne({
+        owner: ownerId
+      }).session(session);
+
+    // DELETE STAFF + OWNER USERS
+    await User.deleteMany(
+      {
+        $or: [
+          { _id: ownerId },
+          { owner: ownerId }
+        ]
+      },
+      { session }
+    );
+
+    // DELETE BRANCHES + SHOP
+    if (shop) {
+      await Branch.deleteMany(
+        {
+          shop: shop._id
+        },
+        { session }
+      );
+
+      await Shop.deleteOne(
+        {
+          _id: shop._id
+        },
+        { session }
+      );
+    }
+
+    await session.commitTransaction();
+
+    return res.status(200).json({
+      message:
+        "Account deleted permanently"
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+
+    return res.status(500).json({
+      message:
+        error.message
+    });
+
+  } finally {
+    session.endSession();
+  }
+};
+ 
 const addStaff =
   async (req, res) => {
     try {
