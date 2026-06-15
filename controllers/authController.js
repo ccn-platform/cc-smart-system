@@ -696,8 +696,8 @@ const addStaff =
       });
     }
   };
-
-   const deleteStaff = async (req, res) => {
+ 
+const deleteStaff = async (req, res) => {
   try {
     const { staffId } = req.params;
 
@@ -728,6 +728,7 @@ const addStaff =
     });
   }
 };
+
 const updateProfile = async (req, res) => {
   try {
     const {
