@@ -1,4 +1,4 @@
-   const mongoose = require("mongoose");
+    const mongoose = require("mongoose");
 
 const crypto = require("crypto");
 const pushService = require("../services/pushService");
@@ -596,6 +596,37 @@ const addStaff =
     }
   };
 
+  const deleteStaff = async (req, res) => {
+  try {
+    const { staffId } = req.params;
+
+    const staff = await User.findOne({
+      _id: staffId,
+      owner: req.ownerId,
+      role: "staff"
+    });
+
+    if (!staff) {
+      return res.status(404).json({
+        message: "Staff not found"
+      });
+    }
+
+    await User.deleteOne({
+      _id: staff._id
+    });
+
+    return res.status(200).json({
+      message:
+        "Staff deleted permanently"
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message
+    });
+  }
+};
  const getStaff =
   async (req, res) => {
     try {
