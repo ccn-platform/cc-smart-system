@@ -1,4 +1,4 @@
-  const mongoose =
+     const mongoose =
   require("mongoose");
 
 const debtPaymentSchema =
@@ -96,6 +96,11 @@ const debtPaymentSchema =
         ref: "User",
         required: true
       },
+
+      transactionId: {
+        type: String,
+        default: null
+        },
 syncId: {
   type: String,
   default: null,
@@ -131,10 +136,7 @@ lastSyncedAt: {
   default: null
 },
 
-lastSyncedAt: {
-  type: Date,
-  default: null
-},
+ 
 
 syncError: {
   type: String,
@@ -145,10 +147,7 @@ queuedAt: {
   type: Date,
   default: null
 },
-queuedAt: {
-  type: Date,
-  default: null
-},
+ 
       status: {
         type: String,
         enum: [
@@ -226,6 +225,22 @@ debtPaymentSchema.index({
   customer: 1,
   status: 1
 });
+
+debtPaymentSchema.index(
+  {
+    owner: 1,
+    branch: 1,
+    transactionId: 1
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      transactionId: {
+        $type: "string"
+      }
+    }
+  }
+);
 module.exports =
   mongoose.model(
     "DebtPayment",
