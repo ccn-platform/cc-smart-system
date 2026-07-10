@@ -509,26 +509,25 @@ const receivePayment =
         });
       }
 
-      if (!transactionId) {
-        return res.status(400).json({
-          message:
-            "Namba ya muamala haijapatikana"
-        });
-      }
+       if (transactionId) {
 
-      const existingPayment =
-        await DebtPayment.findOne({
-          owner: req.ownerId,
-          branch: req.branchId,
-          transactionId
-        }).lean();
+  const existingPayment =
+    await DebtPayment.findOne({
+      owner: req.ownerId,
+      branch: req.branchId,
+      transactionId
+    }).lean();
 
-      if (existingPayment) {
-        return res.status(409).json({
-          message:
-            "Malipo haya tayari yameshapokelewa"
-        });
-      }
+  if (existingPayment) {
+    return res.status(409).json({
+      message:
+        "Malipo haya tayari yameshapokelewa"
+    });
+  }
+
+}
+
+    
 
       const loan =
         await DebtLoan.findOne({
