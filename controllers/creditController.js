@@ -1,4 +1,4 @@
-    
+     
  const mongoose =
   require("mongoose");
  const CustomerIdentity =
@@ -490,16 +490,16 @@ const scanFingerprint =
     }
   };
 
-
 // RECEIVE PAYMENT
- const receivePayment =
+const receivePayment =
   async (req, res) => {
     try {
       const {
         loanId,
         amount,
         paymentMethod,
-        reference
+        reference,
+        transactionId
       } = req.body;
 
       if (!loanId) {
@@ -509,38 +509,59 @@ const scanFingerprint =
         });
       }
 
+      if (!transactionId) {
+        return res.status(400).json({
+          message:
+            "Namba ya muamala haijapatikana"
+        });
+      }
+
+      const existingPayment =
+        await DebtPayment.findOne({
+          owner: req.ownerId,
+          branch: req.branchId,
+          transactionId
+        }).lean();
+
+      if (existingPayment) {
+        return res.status(409).json({
+          message:
+            "Malipo haya tayari yameshapokelewa"
+        });
+      }
+
       const loan =
-  await DebtLoan.findOne({
-    _id: loanId,
-    owner: req.ownerId,
-    branch: req.branchId
-  }).lean();
+        await DebtLoan.findOne({
+          _id: loanId,
+          owner: req.ownerId,
+          branch: req.branchId
+        }).lean();
 
-if (!loan) {
-  return res.status(404).json({
-    message:
-      "Loan not found"
-  });
-}
+      if (!loan) {
+        return res.status(404).json({
+          message:
+            "Loan not found"
+        });
+      }
 
-if (
-  loan.status === "paid"
-) {
-  return res.status(400).json({
-    message:
-      "This loan is already fully paid"
-  });
-}
+      if (
+        loan.status === "paid"
+      ) {
+        return res.status(400).json({
+          message:
+            "This loan is already fully paid"
+        });
+      }
 
-if (
-  loan.status ===
-  "cancelled"
-) {
-  return res.status(400).json({
-    message:
-      "Cancelled loan cannot receive payment"
-  });
-}
+      if (
+        loan.status ===
+        "cancelled"
+      ) {
+        return res.status(400).json({
+          message:
+            "Cancelled loan cannot receive payment"
+        });
+      }
 
       const payAmount =
         Number(amount);
@@ -576,149 +597,165 @@ if (
         });
       }
 
-      
-const session =
-  await mongoose.startSession();
+      const session =
+        await mongoose.startSession();
 
-try {
-  session.startTransaction();
+      try {
+        session.startTransaction();
 
-  const newBalance =
-    loan.balanceAmount -
-    payAmount;
+        const newBalance =
+          loan.balanceAmount -
+          payAmount;
 
-  const newStatus =
-    newBalance === 0
-      ? "paid"
-      : loan.status;
+        const newStatus =
+          newBalance === 0
+            ? "paid"
+            : loan.status;
 
-  const updateResult =
-    await DebtLoan.updateOne(
-      {
-        _id: loanId,
-        owner: req.ownerId,
-        branch: req.branchId,
-        balanceAmount: {
-          $gte: payAmount
-        },
-        status: {
-          $nin: [
-            "paid",
-            "cancelled"
-          ]
+        const updateResult =
+          await DebtLoan.updateOne(
+            {
+              _id: loanId,
+              owner: req.ownerId,
+              branch: req.branchId,
+              balanceAmount: {
+                $gte: payAmount
+              },
+              status: {
+                $nin: [
+                  "paid",
+                  "cancelled"
+                ]
+              }
+            },
+            {
+              $inc: {
+                paidAmount:
+                  payAmount,
+                balanceAmount:
+                  -payAmount
+              },
+              $set: {
+                lastPaymentDate:
+                  new Date(),
+                status:
+                  newStatus
+              }
+            },
+            {
+              session
+            }
+          );
+
+        if (
+          updateResult.modifiedCount === 0
+        ) {
+          await session.abortTransaction();
+
+          return res.status(400).json({
+            message:
+              "Payment could not be processed. Balance may have changed."
+          });
         }
-      },
-      {
-        $inc: {
-          paidAmount:
-            payAmount,
-          balanceAmount:
-            -payAmount
-        },
-        $set: {
-          lastPaymentDate:
-            new Date(),
-          status:
-            newStatus
+
+        await DebtPayment.create(
+          [
+            {
+              owner:
+                req.ownerId,
+              branch:
+                req.branchId,
+              loan:
+                loan._id,
+              customer:
+                loan.customer,
+              amount:
+                payAmount,
+              paymentMethod:
+                paymentMethod ||
+                "cash",
+              reference:
+                reference || "",
+              transactionId,
+              receivedBy:
+                req.user.id
+            }
+          ],
+          {
+            session
+          }
+        );
+
+        if (newStatus === "paid") {
+          await CustomerIdentity.findByIdAndUpdate(
+            loan.customer,
+            {
+              $inc: {
+                activeLoans: -1,
+                paidLoans: 1,
+                totalPaid:
+                  payAmount
+              }
+            },
+            {
+              session
+            }
+          );
+        } else {
+          await CustomerIdentity.findByIdAndUpdate(
+            loan.customer,
+            {
+              $inc: {
+                totalPaid:
+                  payAmount
+              }
+            },
+            {
+              session
+            }
+          );
         }
-      },
-      {
-        session
-      }
-    );
 
-  if (
-    updateResult.modifiedCount === 0
-  ) {
-    await session.abortTransaction();
+        await session.commitTransaction();
 
-    return res.status(400).json({
-      message:
-        "Payment could not be processed. Balance may have changed."
-    });
-  }
+        const updatedLoan =
+          await DebtLoan.findById(
+            loanId
+          ).lean();
 
-  await DebtPayment.create(
-    [
-      {
-        owner:
-          req.ownerId,
-        branch:
-          req.branchId,
-        loan:
-          loan._id,
-        customer:
-          loan.customer,
-        amount:
-          payAmount,
-        paymentMethod:
-          paymentMethod ||
-          "cash",
-        reference:
-          reference || "",
-        receivedBy:
-          req.user.id
-      }
-    ],
-    {
-      session
-    }
-  );
+        return res.status(200).json(
+          updatedLoan
+        );
 
-  if (newStatus === "paid") {
-    await CustomerIdentity.findByIdAndUpdate(
-      loan.customer,
-      {
-        $inc: {
-          activeLoans: -1,
-          paidLoans: 1,
-          totalPaid:
-            payAmount
+      } catch (err) {
+
+        if (
+          err?.code === 11000
+        ) {
+
+          if (
+            session.inTransaction()
+          ) {
+            await session.abortTransaction();
+          }
+
+          return res.status(409).json({
+            message:
+              "Malipo haya tayari yameshapokelewa"
+          });
         }
-      },
-      {
-        session
-      }
-    );
-  } else {
-    await CustomerIdentity.findByIdAndUpdate(
-      loan.customer,
-      {
-        $inc: {
-          totalPaid:
-            payAmount
+
+        if (
+          session.inTransaction()
+        ) {
+          await session.abortTransaction();
         }
-      },
-      {
-        session
+
+        throw err;
+
+      } finally {
+        await session.endSession();
       }
-    );
-  }
-
-  await session.commitTransaction();
-
-  const updatedLoan =
-    await DebtLoan.findById(
-      loanId
-    ).lean();
-
-  return res.status(200).json(
-    updatedLoan
-  );
-
- } catch (err) {
-  if (
-    session.inTransaction()
-  ) {
-    await session.abortTransaction();
-  }
-
-  throw err;
-
-} finally {
-  await session.endSession();
-}
-    
 
     } catch (error) {
       return res.status(500).json({
@@ -727,7 +764,7 @@ try {
       });
     }
   };
-
+ 
   const getPaymentHistory =
   async (req, res) => {
     try {
