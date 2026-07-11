@@ -766,6 +766,185 @@ const receivePayment =
       });
     }
   };
+ // REFUND PAYMENT
+const refundPayment =
+  async (req, res) => {
+    try {
+
+      const {
+        loanId,
+        amount
+      } = req.body;
+
+      if (!loanId) {
+        return res.status(400).json({
+          message:
+            "Loan ID required"
+        });
+      }
+
+      const refundAmount =
+        Number(amount);
+
+      if (
+        isNaN(refundAmount) ||
+        refundAmount <= 0
+      ) {
+        return res.status(400).json({
+          message:
+            "Kiasi cha refund si sahihi"
+        });
+      }
+
+      const loan =
+        await DebtLoan.findOne({
+          _id: loanId,
+          owner: req.ownerId,
+          branch: req.branchId
+        });
+
+      if (!loan) {
+        return res.status(404).json({
+          message:
+            "Deni halijapatikana"
+        });
+      }
+
+      if (
+        refundAmount >
+        loan.paidAmount
+      ) {
+        return res.status(400).json({
+          message:
+            "Kiasi cha refund kinazidi kilicholipwa"
+        });
+      }
+
+      const session =
+        await mongoose.startSession();
+
+      try {
+
+        session.startTransaction();
+
+        loan.paidAmount -=
+          refundAmount;
+
+        loan.balanceAmount +=
+          refundAmount;
+
+        if (
+          loan.status ===
+          "paid"
+        ) {
+          loan.status =
+            "active";
+
+          await CustomerIdentity.findByIdAndUpdate(
+            loan.customer,
+            {
+              $inc: {
+                activeLoans: 1,
+                paidLoans: -1,
+                totalPaid:
+                  -refundAmount
+              }
+            },
+            {
+              session
+            }
+          );
+        } else {
+
+          await CustomerIdentity.findByIdAndUpdate(
+            loan.customer,
+            {
+              $inc: {
+                totalPaid:
+                  -refundAmount
+              }
+            },
+            {
+              session
+            }
+          );
+        }
+
+        await loan.save({
+          session
+        });
+
+        // 🔥 HIFADHI REFUND KWENYE PAYMENT HISTORY
+        await DebtPayment.create(
+          [
+            {
+              owner:
+                req.ownerId,
+
+              branch:
+                req.branchId,
+
+              loan:
+                loan._id,
+
+              customer:
+                loan.customer,
+
+              amount:
+                refundAmount,
+
+              paymentMethod:
+                "cash",
+
+              reference:
+                "REFUND",
+
+              note:
+                "Malipo yamerudishwa kwenye deni",
+
+              receivedBy:
+                req.user.id,
+
+              status:
+                "reversed"
+            }
+          ],
+          {
+            session
+          }
+        );
+
+        await session.commitTransaction();
+
+        return res.status(200).json(
+          loan
+        );
+
+      } catch (err) {
+
+        if (
+          session.inTransaction()
+        ) {
+          await session.abortTransaction();
+        }
+
+        throw err;
+
+      } finally {
+
+        await session.endSession();
+
+      }
+
+    } catch (error) {
+
+      return res.status(500).json({
+        message:
+          error.message
+      });
+
+    }
+  };
  
   const getPaymentHistory =
   async (req, res) => {
@@ -1065,5 +1244,6 @@ module.exports = {
  getPaymentHistory,
  scanDebtsFromImage,
  importDebts,
+ refundPayment,
    getOverdueLoans
 };
