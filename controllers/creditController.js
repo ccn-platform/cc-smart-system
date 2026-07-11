@@ -891,7 +891,7 @@ const refundPayment =
                 loan.customer,
 
               amount:
-                refundAmount,
+                -refundAmount,
 
               paymentMethod:
                 "cash",
@@ -952,12 +952,17 @@ const refundPayment =
       const { loanId } =
         req.params;
 
-      const payments =
+    const payments =
   await DebtPayment.find({
     owner: req.ownerId,
     branch: req.branchId,
     loan: loanId,
-    status: "posted"
+    status: {
+      $in: [
+        "posted",
+        "reversed"
+      ]
+    }
   })
     .populate(
       "receivedBy",
