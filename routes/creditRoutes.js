@@ -21,6 +21,7 @@ const {
    scanDebtsFromImage,
    deleteDebtLoan,
   createDebtLoan,
+  refundPayment,
   receivePayment,
   getLoanHistory,
   getPaymentHistory,
@@ -135,6 +136,13 @@ router.post(
   branchAccess,
   receivePayment
 );
+router.post(
+  "/refund",
+  protect,
+  branchAccess,
+  refundPayment
+);
+
 router.delete(
   "/loan/:id",
   protect,
