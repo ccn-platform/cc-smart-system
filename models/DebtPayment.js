@@ -39,8 +39,8 @@ const debtPaymentSchema =
 
       amount: {
         type: Number,
-        required: true,
-        min: 1
+        required: true
+      
       },
 
       paymentDate: {
