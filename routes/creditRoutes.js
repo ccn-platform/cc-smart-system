@@ -19,6 +19,7 @@ const {
   findOrCreateCustomer,
   checkCredit,
    scanDebtsFromImage,
+   deleteDebtLoan,
   createDebtLoan,
   receivePayment,
   getLoanHistory,
@@ -134,7 +135,12 @@ router.post(
   branchAccess,
   receivePayment
 );
-
+router.delete(
+  "/loan/:id",
+  protect,
+  branchAccess,
+  deleteDebtLoan
+);
 
 // LOAN HISTORY
 router.get(
