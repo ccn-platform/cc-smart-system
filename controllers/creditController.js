@@ -330,10 +330,13 @@ const getLoanHistory =
 
       const limit = 5000;
 
-       const loans =
+  const loans =
   await DebtLoan.find({
     owner: req.ownerId,
-    branch: req.branchId
+    branch: req.branchId,
+    status: {
+      $ne: "cancelled"
+    }
   })
           .populate(
             "customer",
@@ -365,14 +368,14 @@ const getLoanHistory =
 const getLoanById =
   async (req, res) => {
     try {
-      const loan =
+   const loan =
   await DebtLoan.findOne({
-    _id:
-      req.params.id,
-    owner:
-      req.ownerId,
-    branch:
-      req.branchId
+    _id: req.params.id,
+    owner: req.ownerId,
+    branch: req.branchId,
+    status: {
+      $ne: "cancelled"
+    }
   })
     .populate(
       "customer",
@@ -983,9 +986,77 @@ const receivePayment =
 
     }
   };
+
+  // DELETE LOAN
+const deleteDebtLoan =
+  async (req, res) => {
+    try {
+
+      const loan =
+        await DebtLoan.findOne({
+          _id: req.params.id,
+          owner: req.ownerId,
+          branch: req.branchId
+        });
+
+      if (!loan) {
+        return res.status(404).json({
+          message:
+            "Deni halijapatikana"
+        });
+      }
+
+      if (
+        loan.status === "paid"
+      ) {
+        return res.status(400).json({
+          message:
+            "Deni lililolipwa kikamilifu haliwezi kufutwa"
+        });
+      }
+
+      if (
+        loan.status === "cancelled"
+      ) {
+        return res.status(400).json({
+          message:
+            "Deni hili tayari limefutwa"
+        });
+      }
+
+      loan.status =
+        "cancelled";
+
+      await loan.save();
+
+      await CustomerIdentity.findByIdAndUpdate(
+        loan.customer,
+        {
+          $inc: {
+            activeLoans: -1
+          }
+        }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message:
+          "Deni limefutwa kikamilifu"
+      });
+
+    } catch (error) {
+
+      return res.status(500).json({
+        message:
+          error.message
+      });
+
+    }
+  };
 module.exports = {
   findOrCreateCustomer,
   checkCredit,
+  deleteDebtLoan,
   createDebtLoan,
   getLoanHistory,
   getLoanById,
