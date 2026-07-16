@@ -65,7 +65,7 @@ if (isVodacom) {
 
   return res.status(400).json({
     message:
-      "Namba za Vodacom haziruhusiwi kujisajili kwa sasa mpaka tutakapofanya maboresho tumia namba ya mtandao mwingine."
+      "Namba za Vodacom haziruhusiwi kujisajili kwa sasa mpaka tutakapofanya maboresho tumia namba ya mtandao mwingine. au wasiliana nasi kwa namba 0758078629"
   });
 }
     // CHECK DUPLICATE
@@ -79,7 +79,7 @@ if (isVodacom) {
 
      return res.status(400).json({
   message:
-    "Namba hii tayari imeshatumika kusajili akaunti. Tumia namba nyingine au ingia kwenye akaunti yako."
+    "Namba hii tayari imeshatumika kusajili akaunti. Tumia namba nyingine au ingia kwenye akaunti yako. au wasiliana nasi kwa namba 0758078629"
 });
     }
 
@@ -261,7 +261,7 @@ const user =
 if (!user) {
   return res.status(400).json({
     message:
-      "Namba hii haijasajiliwa au sio sahihi."
+      "Namba hii haijasajiliwa au sio sahihi. kwa msaada  zaidi wasiliana  nasi kwa 0758078629"
   });
 }
 if (!user.isActive) {
@@ -282,7 +282,7 @@ const match =
 if (!match) {
   return res.status(400).json({
     message:
-      "Neno la siri si sahihi."
+      "Neno la siri si sahihi. wasiliana nasi kama umesahau neno la  siri kwa 0758078629"
   });
 }
 
