@@ -2,6 +2,7 @@
 require("express");
 const path = require("path");
 const cors = require("cors");
+ const axios = require("axios");
 const {
   markOverdueLoans
 } = require(
@@ -34,6 +35,27 @@ app.use((req, res, next) => {
 app.get("/", (req, res) => {
   res.send("CCN Backend Running");
 });
+
+app.get(
+  "/my-ip",
+  async (req, res) => {
+    try {
+      const response =
+        await axios.get(
+          "https://api.ipify.org?format=json"
+        );
+
+      res.json({
+        ip: response.data.ip
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        error: error.message
+      });
+    }
+  }
+);
  app.get(
   "/privacy-policy",
   (req, res) => {
