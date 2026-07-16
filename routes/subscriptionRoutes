@@ -1,4 +1,4 @@
-     const express = require("express");
+    const express = require("express");
 const router = express.Router();
 
  const {
@@ -68,10 +68,10 @@ const branch =
         branch.pendingExpiresAt >
           new Date()
       ) {
-        return res.status(400).json({
-          message:
-            "You have a pending payment"
-        });
+         return res.status(400).json({
+  message:
+    "Una ombi la malipo ambalo bado linaendelea kusubiri. Tafadhali subiri hadi dakika 6 likamilike au muda wake uishe kabla ya kujaribu tena. Ukipata tatizo wasiliana nasi kwa 0758078629."
+});
       }
 
       if (
@@ -137,8 +137,10 @@ return res.json({
   );
 }
   return res.status(400).json({
-    message: e.message
-  });
+  message:
+    `${e.message}. kwa tatizo hili la malipo  ili kupata msaada wasiliana nasi kwa 0758078629`
+    
+});
 }
   }
 );
