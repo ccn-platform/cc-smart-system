@@ -158,6 +158,24 @@ shelfFillDifference: {
   default: 0
 },
 
+storeSimilarityScore: {
+  type: Number,
+  default: 100
+},
+
+possibleDifferentStore: {
+  type: Boolean,
+  default: false
+},
+storeType: {
+  type: String,
+  default: ""
+},
+
+layoutDescription: {
+  type: String,
+  default: ""
+},
       // ANALYSIS
 
       analyzedAt: {
