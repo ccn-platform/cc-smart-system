@@ -22,7 +22,7 @@ const {
   getAuditHistory,
   getSingleAudit
 } = require(
-  "../controllers/storeAuditController"
+  "../controllers/StoreAuditController"
 );
 
 const router =
