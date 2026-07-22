@@ -1,4 +1,4 @@
-  const Shop =
+ const Shop =
   require("../models/Shop");
 
 const {
@@ -20,12 +20,14 @@ const uploadAuditVideo =
     req,
     res
   ) => {
+
     try {
 
       if (!req.file) {
         return res
           .status(400)
           .json({
+            success: false,
             message:
               "Video required"
           });
@@ -41,6 +43,7 @@ const uploadAuditVideo =
         return res
           .status(404)
           .json({
+            success: false,
             message:
               "Shop not found"
           });
@@ -64,24 +67,30 @@ const uploadAuditVideo =
             "pending"
         });
 
-      // BACKGROUND ANALYSIS
+      // START ANALYSIS IN BACKGROUND
       analyzeAudit(
         audit._id
-      ).catch(error => {
-        console.error(
-          "AUDIT_BACKGROUND_ANALYSIS_ERROR:",
-          error
-        );
-      });
+      ).catch(
+        error => {
 
-      res.status(201).json({
-        success: true,
+          console.error(
+            "AUDIT_BACKGROUND_ANALYSIS_ERROR:",
+            error
+          );
 
-        message:
-          "Audit uploaded successfully",
+        }
+      );
 
-        audit
-      });
+      return res
+        .status(201)
+        .json({
+          success: true,
+
+          message:
+            "Audit uploaded successfully",
+
+          audit
+        });
 
     } catch (error) {
 
@@ -90,13 +99,15 @@ const uploadAuditVideo =
         error
       );
 
-      res.status(500).json({
-        success: false,
+      return res
+        .status(500)
+        .json({
+          success: false,
 
-        message:
-          error.message ||
-          "Failed to upload audit"
-      });
+          message:
+            error.message ||
+            "Failed to upload audit"
+        });
     }
   };
 
@@ -105,6 +116,7 @@ const getAuditHistory =
     req,
     res
   ) => {
+
     try {
 
       const audits =
@@ -113,10 +125,12 @@ const getAuditHistory =
           req.branchId
         );
 
-      res.json({
+      return res.json({
         success: true,
+
         count:
           audits.length,
+
         audits
       });
 
@@ -127,12 +141,14 @@ const getAuditHistory =
         error
       );
 
-      res.status(500).json({
-        success: false,
+      return res
+        .status(500)
+        .json({
+          success: false,
 
-        message:
-          error.message
-      });
+          message:
+            error.message
+        });
     }
   };
 
@@ -141,6 +157,7 @@ const getSingleAudit =
     req,
     res
   ) => {
+
     try {
 
       const audit =
@@ -151,6 +168,7 @@ const getSingleAudit =
         );
 
       if (!audit) {
+
         return res
           .status(404)
           .json({
@@ -159,10 +177,12 @@ const getSingleAudit =
             message:
               "Audit not found"
           });
+
       }
 
-      res.json({
+      return res.json({
         success: true,
+
         audit
       });
 
@@ -173,12 +193,14 @@ const getSingleAudit =
         error
       );
 
-      res.status(500).json({
-        success: false,
+      return res
+        .status(500)
+        .json({
+          success: false,
 
-        message:
-          error.message
-      });
+          message:
+            error.message
+        });
     }
   };
 
