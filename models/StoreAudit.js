@@ -128,6 +128,35 @@ const storeAuditSchema =
         ref: "StoreAudit",
         default: null
       },
+      visibleProducts: {
+  type: Number,
+  default: 0
+},
+
+visibleShelves: {
+  type: Number,
+  default: 0
+},
+
+shelfFillPercent: {
+  type: Number,
+  default: 0
+},
+
+productsDifference: {
+  type: Number,
+  default: 0
+},
+
+shelvesDifference: {
+  type: Number,
+  default: 0
+},
+
+shelfFillDifference: {
+  type: Number,
+  default: 0
+},
 
       // ANALYSIS
 
