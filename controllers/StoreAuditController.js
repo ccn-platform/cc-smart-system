@@ -6,7 +6,7 @@ const {
   getAudits,
   getAuditById
 } = require(
-  "../services/storeAuditService"
+  "../services/StoreAuditService"
 );
 
 const uploadAuditVideo =
