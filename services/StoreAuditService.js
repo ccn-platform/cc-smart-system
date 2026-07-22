@@ -99,6 +99,24 @@ const saveAnalysis =
 
         estimatedLossValue:
           analysis.estimatedLossValue,
+          
+          visibleProducts:
+            analysis.visibleProducts || 0,
+
+        visibleShelves:
+          analysis.visibleShelves || 0,
+
+       shelfFillPercent:
+         analysis.shelfFillPercent || 0,
+
+      productsDifference:
+        analysis.productsDifference || 0,
+
+       shelvesDifference:
+          analysis.shelvesDifference || 0,
+
+        shelfFillDifference:
+           analysis.shelfFillDifference || 0,
 
         inventoryDifference:
           analysis.inventoryDifference || 0,
