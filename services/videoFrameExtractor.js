@@ -20,9 +20,7 @@ const extractFrames =
     auditId
   ) => {
 
-    if (
-      !videoPath
-    ) {
+    if (!videoPath) {
       throw new Error(
         "Video path required"
       );
@@ -32,6 +30,11 @@ const extractFrames =
       path.resolve(
         videoPath
       );
+
+    console.log(
+      "🎬 VIDEO PATH:",
+      absoluteVideoPath
+    );
 
     if (
       !fs.existsSync(
@@ -49,6 +52,11 @@ const extractFrames =
         "../uploads/frames",
         String(auditId)
       );
+
+    console.log(
+      "📁 OUTPUT DIR:",
+      outputDir
+    );
 
     if (
       fs.existsSync(
@@ -77,6 +85,32 @@ const extractFrames =
         reject
       ) => {
 
+        let finished =
+          false;
+
+        const timeout =
+          setTimeout(
+            () => {
+
+              if (
+                finished
+              ) {
+                return;
+              }
+
+              finished =
+                true;
+
+              reject(
+                new Error(
+                  "FFMPEG timeout after 60 seconds"
+                )
+              );
+
+            },
+            60000
+          );
+
         ffmpeg(
           absoluteVideoPath
         )
@@ -89,6 +123,7 @@ const extractFrames =
           .outputOptions([
             "-vf fps=1"
           ])
+
           .on(
             "start",
             command => {
@@ -102,9 +137,45 @@ const extractFrames =
               );
             }
           )
+
+          .on(
+            "progress",
+            progress => {
+
+              console.log(
+                "⏳ FFMPEG PROGRESS:",
+                progress.percent
+              );
+            }
+          )
+
+          .on(
+            "stderr",
+            line => {
+
+              console.log(
+                "📄 FFMPEG:",
+                line
+              );
+            }
+          )
+
           .on(
             "end",
             () => {
+
+              if (
+                finished
+              ) {
+                return;
+              }
+
+              finished =
+                true;
+
+              clearTimeout(
+                timeout
+              );
 
               const files =
                 fs
@@ -134,12 +205,29 @@ const extractFrames =
               );
             }
           )
+
           .on(
             "error",
             error => {
 
+              if (
+                finished
+              ) {
+                return;
+              }
+
+              finished =
+                true;
+
+              clearTimeout(
+                timeout
+              );
+
               console.error(
-                "FFMPEG ERROR:",
+                "❌ FFMPEG ERROR:"
+              );
+
+              console.error(
                 error
               );
 
@@ -148,6 +236,7 @@ const extractFrames =
               );
             }
           )
+
           .run();
       }
     );
