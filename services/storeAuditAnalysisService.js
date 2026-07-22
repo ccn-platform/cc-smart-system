@@ -1,9 +1,10 @@
   const StoreAudit =
   require("../models/StoreAudit");
 
-const {
+ const {
   updateAuditStatus,
-  saveAnalysis
+  saveAnalysis,
+  getPreviousCompletedAudit
 } = require(
   "./StoreAuditService"
 );
@@ -106,12 +107,193 @@ const analyzeAudit =
           visionError
         );
       }
+let inventoryDifference = 0;
+let lossDifference = 0;
+let riskDifference = 0;
+let comparedWithAudit = null;
+
+try {
+
+  const previousAudit =
+    await getPreviousCompletedAudit(
+      audit.shop,
+      audit._id
+    );
+
+  if (previousAudit) {
+
+    comparedWithAudit =
+      previousAudit._id;
+
+    inventoryDifference =
+      visionResult.estimatedInventoryValue -
+      (
+        previousAudit.estimatedInventoryValue ||
+        0
+      );
+
+    lossDifference =
+      visionResult.estimatedLossValue -
+      (
+        previousAudit.estimatedLossValue ||
+        0
+      );
+
+    riskDifference =
+      visionResult.riskScore -
+      (
+        previousAudit.riskScore ||
+        0
+      );
+  }
+
+} catch (comparisonError) {
+
+  console.error(
+    "AUDIT_COMPARISON_ERROR:",
+    comparisonError
+  );
+}
 
       const confidenceScore =
         frames.length > 0
           ? 75
           : 60;
 
+         const hasPreviousAudit =
+             !!comparedWithAudit;
+         const findings = [
+
+  {
+    title:
+      "Bidhaa Zilizoonekana",
+
+    value:
+      String(
+        visionResult.visibleProducts
+      ),
+
+    confidence: 75
+  },
+
+  {
+    title:
+      "Rafu Zilizoonekana",
+
+    value:
+      String(
+        visionResult.visibleShelves
+      ),
+
+    confidence: 75
+  },
+
+  {
+    title:
+      "Asilimia ya Ujazaji wa Rafu",
+
+    value:
+      `${visionResult.shelfFillPercent}%`,
+
+    confidence: 70
+  }
+
+];    
+
+if (hasPreviousAudit) {
+
+  findings.push(
+
+    {
+      title:
+        "Mabadiliko ya Stock",
+
+      value:
+        inventoryDifference >= 0
+          ? `Imeongezeka TZS ${inventoryDifference.toLocaleString()}`
+          : `Imepungua TZS ${Math.abs(inventoryDifference).toLocaleString()}`,
+
+      confidence: 90
+    },
+
+    {
+      title:
+        "Mabadiliko ya Hasara",
+
+      value:
+        lossDifference >= 0
+          ? `Imeongezeka TZS ${lossDifference.toLocaleString()}`
+          : `Imepungua TZS ${Math.abs(lossDifference).toLocaleString()}`,
+
+      confidence: 90
+    },
+
+    {
+      title:
+        "Mabadiliko ya Hatari",
+
+      value:
+        riskDifference >= 0
+          ? `Hatari imeongezeka kwa ${riskDifference}%`
+          : `Hatari imepungua kwa ${Math.abs(riskDifference)}%`,
+
+      confidence: 90
+    },
+
+    {
+      title:
+        "Audit Iliyolinganishwa",
+
+      value:
+        String(
+          comparedWithAudit
+        ),
+
+      confidence: 100
+    }
+
+  );
+
+} else {
+
+  findings.push({
+
+    title:
+      "Ulinganisho",
+
+    value:
+      "Hakuna audit ya awali ya kulinganisha.",
+
+    confidence: 100
+
+  });
+
+}
+findings.push(
+
+  {
+    title:
+      "Fremu Zilizochambuliwa",
+
+    value:
+      String(
+        frames.length
+      ),
+
+    confidence: 100
+  },
+
+  {
+    title:
+      "Hali ya Ukaguzi",
+
+    value:
+      "Imekamilika",
+
+    confidence: 100
+  }
+
+);
       const analysis = {
 
         summary:
@@ -128,65 +310,14 @@ const analyzeAudit =
         estimatedLossValue:
           visionResult.estimatedLossValue,
 
-        findings: [
+          inventoryDifference,
 
-          {
-            title:
-              "Bidhaa Zilizoonekana",
+           lossDifference,
 
-            value:
-              String(
-                visionResult.visibleProducts
-              ),
+           riskDifference,
 
-            confidence: 75
-          },
-
-          {
-            title:
-              "Rafu Zilizoonekana",
-
-            value:
-              String(
-                visionResult.visibleShelves
-              ),
-
-            confidence: 75
-          },
-
-          {
-            title:
-              "Asilimia ya Ujazaji wa Rafu",
-
-            value:
-              `${visionResult.shelfFillPercent}%`,
-
-            confidence: 70
-          },
-
-          {
-            title:
-              "Fremu /shelfu Zilizochambuliwa",
-
-            value:
-              String(
-                frames.length
-              ),
-
-            confidence: 100
-          },
-
-          {
-            title:
-              "Hali ya Ukaguzi",
-
-            value:
-              "Imekamilika",
-
-            confidence: 100
-          }
-
-        ]
+            comparedWithAudit,
+           findings
       };
 
       await saveAnalysis(
