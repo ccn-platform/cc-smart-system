@@ -82,7 +82,7 @@ const analyzeAudit =
         riskScore: 50,
 
         summary:
-          "No visual analysis available."
+          "Hakuna uchambuzi wa picha uliopatikana."
       };
 
       try {
@@ -132,7 +132,7 @@ const analyzeAudit =
 
           {
             title:
-              "Visible Products",
+              "Bidhaa Zilizoonekana",
 
             value:
               String(
@@ -144,7 +144,7 @@ const analyzeAudit =
 
           {
             title:
-              "Visible Shelves",
+              "Rafu Zilizoonekana",
 
             value:
               String(
@@ -156,7 +156,7 @@ const analyzeAudit =
 
           {
             title:
-              "Shelf Fill Rate",
+              "Asilimia ya Ujazaji wa Rafu",
 
             value:
               `${visionResult.shelfFillPercent}%`,
@@ -166,7 +166,7 @@ const analyzeAudit =
 
           {
             title:
-              "Frames Processed",
+              "Fremu /shelfu Zilizochambuliwa",
 
             value:
               String(
@@ -178,10 +178,10 @@ const analyzeAudit =
 
           {
             title:
-              "Audit Status",
+              "Hali ya Ukaguzi",
 
             value:
-              "Completed",
+              "Imekamilika",
 
             confidence: 100
           }
