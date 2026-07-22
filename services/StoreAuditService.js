@@ -99,7 +99,7 @@ const saveAnalysis =
 
         estimatedLossValue:
           analysis.estimatedLossValue,
-          
+
           visibleProducts:
             analysis.visibleProducts || 0,
 
@@ -120,6 +120,18 @@ const saveAnalysis =
 
         inventoryDifference:
           analysis.inventoryDifference || 0,
+
+          storeSimilarityScore:
+             analysis.storeSimilarityScore || 100,
+
+          possibleDifferentStore:
+             analysis.possibleDifferentStore || false,
+
+             storeType:
+                analysis.storeType || "",
+
+              layoutDescription:
+                analysis.layoutDescription || "",
 
         lossDifference:
           analysis.lossDifference || 0,
