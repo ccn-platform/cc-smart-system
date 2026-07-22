@@ -1,4 +1,4 @@
- const fs =
+  const fs =
   require("fs/promises");
 
 const axios =
@@ -30,31 +30,65 @@ const MODEL =
 
 const VISION_PROMPT =
 `
-You are a retail store audit AI.
+Wewe ni mkaguzi mtaalamu wa maduka ya rejareja Tanzania.
 
-Analyze this image from a Tanzanian retail shop.
+Chambua picha hii ya duka kwa umakini mkubwa.
 
-Estimate:
+Angalia:
+
+- Mchele
+- Unga
+- Sukari
+- Mafuta ya kupikia
+- Sabuni
+- Vinywaji
+- Maji ya chupa
+- Bidhaa za dukani
+- Rafu
+- Makreti
+- Katoni
+- Magunia
+- Mpangilio wa bidhaa
+- Usafi wa mazingira
+
+USIDHANIE kuwa bidhaa hazipo kwa sababu zimewekwa chini.
+
+Maduka mengi Tanzania hupanga bidhaa:
+
+- Kwenye rafu
+- Kwenye magunia
+- Kwenye katoni
+- Kwenye makreti
+- Kwa kuzipanga juu kwa juu
+
+Kadiria:
 
 1. visibleProducts
 2. visibleShelves
-3. shelfFillPercent (0-100)
+3. shelfFillPercent
 4. estimatedInventoryValueTZS
 5. estimatedLossValueTZS
-6. riskScore (0-100)
+6. riskScore
 
-Return ONLY valid JSON.
+MUHTASARI UWE KWA KISWAHILI.
 
-Example:
+Risk Score:
+0-20 = Hatari ndogo
+21-50 = Hatari ya wastani
+51-100 = Hatari kubwa
+
+Rudisha JSON PEKEE.
+
+Mfano:
 
 {
-  "visibleProducts":120,
-  "visibleShelves":8,
+  "visibleProducts":180,
+  "visibleShelves":12,
   "shelfFillPercent":82,
-  "estimatedInventoryValueTZS":2500000,
-  "estimatedLossValueTZS":150000,
-  "riskScore":12,
-  "summary":"Store appears well stocked with low risk."
+  "estimatedInventoryValueTZS":3500000,
+  "estimatedLossValueTZS":120000,
+  "riskScore":18,
+  "summary":"Duka linaonekana kuwa na bidhaa nyingi, limepangwa vizuri na lina kiwango kidogo cha hatari."
 }
 `;
 
@@ -99,6 +133,7 @@ const analyzeSingleFrame =
               ]
             }
           ],
+
           generationConfig: {
             temperature: 0
           }
@@ -118,8 +153,9 @@ const analyzeSingleFrame =
         ?.text;
 
     if (!text) {
+
       throw new Error(
-        "Empty vision response"
+        "Hakuna majibu kutoka Gemini"
       );
     }
 
@@ -149,15 +185,23 @@ const analyzeFrames =
       !frames ||
       !frames.length
     ) {
+
       return {
+
         visibleProducts: 0,
+
         visibleShelves: 0,
+
         shelfFillPercent: 0,
+
         estimatedInventoryValue: 0,
+
         estimatedLossValue: 0,
+
         riskScore: 100,
+
         summary:
-          "No frames available."
+          "Hakuna fremu zilizopatikana kwa uchambuzi."
       };
     }
 
@@ -197,15 +241,23 @@ const analyzeFrames =
     if (
       !results.length
     ) {
+
       return {
+
         visibleProducts: 0,
+
         visibleShelves: 0,
+
         shelfFillPercent: 0,
+
         estimatedInventoryValue: 0,
+
         estimatedLossValue: 0,
+
         riskScore: 100,
+
         summary:
-          "Analysis failed."
+          "Uchambuzi wa picha umeshindikana."
       };
     }
 
@@ -233,6 +285,7 @@ const analyzeFrames =
         );
 
     return {
+
       visibleProducts:
         avg(
           "visibleProducts"
@@ -266,7 +319,7 @@ const analyzeFrames =
       summary:
         results[0]
           ?.summary ||
-        "Analysis completed."
+        "Uchambuzi umekamilika."
     };
   };
 
