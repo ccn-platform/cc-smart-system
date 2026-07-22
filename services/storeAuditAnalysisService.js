@@ -110,6 +110,11 @@ const analyzeAudit =
 let inventoryDifference = 0;
 let lossDifference = 0;
 let riskDifference = 0;
+let productsDifference = 0;
+
+let shelvesDifference = 0;
+
+let shelfFillDifference = 0;
 let comparedWithAudit = null;
 
 try {
@@ -145,6 +150,26 @@ try {
         previousAudit.riskScore ||
         0
       );
+      productsDifference =
+  visionResult.visibleProducts -
+  (
+    previousAudit.visibleProducts ||
+    0
+  );
+
+shelvesDifference =
+  visionResult.visibleShelves -
+  (
+    previousAudit.visibleShelves ||
+    0
+  );
+
+shelfFillDifference =
+  visionResult.shelfFillPercent -
+  (
+    previousAudit.shelfFillPercent ||
+    0
+  );
   }
 
 } catch (comparisonError) {
@@ -239,6 +264,41 @@ if (hasPreviousAudit) {
 
       confidence: 90
     },
+    {
+  title:
+    "Mabadiliko ya Bidhaa",
+
+  value:
+    productsDifference >= 0
+      ? `Bidhaa zimeongezeka kwa ${productsDifference}`
+      : `Bidhaa zimepungua kwa ${Math.abs(productsDifference)}`,
+
+  confidence: 90
+},
+
+{
+  title:
+    "Mabadiliko ya Rafu",
+
+  value:
+    shelvesDifference >= 0
+      ? `Rafu zimeongezeka kwa ${shelvesDifference}`
+      : `Rafu zimepungua kwa ${Math.abs(shelvesDifference)}`,
+
+  confidence: 90
+},
+
+{
+  title:
+    "Mabadiliko ya Ujazaji wa Rafu",
+
+  value:
+    shelfFillDifference >= 0
+      ? `Ujazaji umeongezeka kwa ${shelfFillDifference}%`
+      : `Ujazaji umepungua kwa ${Math.abs(shelfFillDifference)}%`,
+
+  confidence: 90
+},
 
     {
       title:
@@ -310,12 +370,28 @@ findings.push(
         estimatedLossValue:
           visionResult.estimatedLossValue,
 
+          visibleProducts:
+            visionResult.visibleProducts,
+
+         visibleShelves:
+             visionResult.visibleShelves,
+
+         shelfFillPercent:
+              visionResult.shelfFillPercent,
+
           inventoryDifference,
 
            lossDifference,
 
            riskDifference,
+           productsDifference,
 
+           shelvesDifference,
+
+            shelfFillDifference,
+
+ 
+ 
             comparedWithAudit,
            findings
       };
