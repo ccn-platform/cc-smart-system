@@ -105,7 +105,32 @@ const storeAuditSchema =
         max: 100
       },
 
+      // COMPARISON DATA
+
+      inventoryDifference: {
+        type: Number,
+        default: 0
+      },
+
+      lossDifference: {
+        type: Number,
+        default: 0
+      },
+
+      riskDifference: {
+        type: Number,
+        default: 0
+      },
+
+      comparedWithAudit: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+        ref: "StoreAudit",
+        default: null
+      },
+
       // ANALYSIS
+
       analyzedAt: {
         type: Date,
         default: null
