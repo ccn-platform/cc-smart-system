@@ -110,6 +110,8 @@ const analyzeAudit =
 let inventoryDifference = 0;
 let lossDifference = 0;
 let riskDifference = 0;
+let storeSimilarityScore = 100;
+let possibleDifferentStore = false;
 let productsDifference = 0;
 
 let shelvesDifference = 0;
@@ -170,6 +172,23 @@ shelfFillDifference =
     previousAudit.shelfFillPercent ||
     0
   );
+storeSimilarityScore -=
+  Math.abs(productsDifference) * 0.5;
+
+storeSimilarityScore -=
+  Math.abs(shelvesDifference) * 5;
+
+storeSimilarityScore -=
+  Math.abs(shelfFillDifference);
+
+if (storeSimilarityScore < 0) {
+  storeSimilarityScore = 0;
+}
+
+if (storeSimilarityScore < 60) {
+  possibleDifferentStore = true;
+}
+
   }
 
 } catch (comparisonError) {
@@ -228,6 +247,7 @@ shelfFillDifference =
 if (hasPreviousAudit) {
 
   findings.push(
+
 
     {
       title:
@@ -300,6 +320,26 @@ if (hasPreviousAudit) {
   confidence: 90
 },
 
+
+{
+  title: "Ufanano wa Duka",
+
+  value:
+    `${storeSimilarityScore}%`,
+
+  confidence: 90
+},
+
+{
+  title: "Utambuzi wa Duka",
+
+  value:
+    possibleDifferentStore
+      ? "Inawezekana video hii ni ya duka tofauti."
+      : "Video inaonekana kuwa ya duka lile lile.",
+
+  confidence: 90
+},
     {
       title:
         "Audit Iliyolinganishwa",
@@ -379,11 +419,23 @@ findings.push(
          shelfFillPercent:
               visionResult.shelfFillPercent,
 
+              storeType:
+                 visionResult.storeType,
+
+               layoutDescription:
+                  visionResult.layoutDescription,
+
           inventoryDifference,
 
            lossDifference,
 
            riskDifference,
+
+           storeSimilarityScore,
+
+           possibleDifferentStore,
+           
+
            productsDifference,
 
            shelvesDifference,
