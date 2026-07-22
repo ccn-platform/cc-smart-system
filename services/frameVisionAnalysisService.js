@@ -63,12 +63,16 @@ Maduka mengi Tanzania hupanga bidhaa:
 
 Kadiria:
 
+ Kadiria:
+
 1. visibleProducts
 2. visibleShelves
 3. shelfFillPercent
 4. estimatedInventoryValueTZS
 5. estimatedLossValueTZS
 6. riskScore
+7. storeType
+8. layoutDescription
 
 MUHTASARI UWE KWA KISWAHILI.
 
@@ -81,13 +85,15 @@ Rudisha JSON PEKEE.
 
 Mfano:
 
-{
+ {
   "visibleProducts":180,
   "visibleShelves":12,
   "shelfFillPercent":82,
   "estimatedInventoryValueTZS":3500000,
   "estimatedLossValueTZS":120000,
   "riskScore":18,
+  "storeType":"Duka la vyakula",
+  "layoutDescription":"Rafu 4 mbele, freezer 1, eneo la vinywaji upande wa kushoto",
   "summary":"Duka linaonekana kuwa na bidhaa nyingi, limepangwa vizuri na lina kiwango kidogo cha hatari."
 }
 `;
@@ -286,41 +292,37 @@ const analyzeFrames =
 
     return {
 
-      visibleProducts:
-        avg(
-          "visibleProducts"
-        ),
+  visibleProducts:
+    avg("visibleProducts"),
 
-      visibleShelves:
-        avg(
-          "visibleShelves"
-        ),
+  visibleShelves:
+    avg("visibleShelves"),
 
-      shelfFillPercent:
-        avg(
-          "shelfFillPercent"
-        ),
+  shelfFillPercent:
+    avg("shelfFillPercent"),
 
-      estimatedInventoryValue:
-        avg(
-          "estimatedInventoryValueTZS"
-        ),
+  estimatedInventoryValue:
+    avg("estimatedInventoryValueTZS"),
 
-      estimatedLossValue:
-        avg(
-          "estimatedLossValueTZS"
-        ),
+  estimatedLossValue:
+    avg("estimatedLossValueTZS"),
 
-      riskScore:
-        avg(
-          "riskScore"
-        ),
+  riskScore:
+    avg("riskScore"),
 
-      summary:
-        results[0]
-          ?.summary ||
-        "Uchambuzi umekamilika."
-    };
+  storeType:
+    results[0]?.storeType ||
+    "Haijajulikana",
+
+  layoutDescription:
+    results[0]?.layoutDescription ||
+    "Haijajulikana",
+
+  summary:
+    results[0]?.summary ||
+    "Uchambuzi umekamilika."
+};
+ 
   };
 
 module.exports = {
