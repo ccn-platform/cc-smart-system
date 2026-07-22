@@ -1,4 +1,4 @@
- const StoreAudit =
+  const StoreAudit =
   require("../models/StoreAudit");
 
 const createAudit =
@@ -33,7 +33,8 @@ const getAuditById =
       branch: branchId
     }).lean();
   };
-  const updateAuditStatus =
+
+const updateAuditStatus =
   async (
     auditId,
     status
@@ -48,6 +49,25 @@ const getAuditById =
         new: true
       }
     );
+  };
+
+const getPreviousCompletedAudit =
+  async (
+    shopId,
+    currentAuditId
+  ) => {
+
+    return StoreAudit.findOne({
+      shop: shopId,
+      status: "completed",
+      _id: {
+        $ne: currentAuditId
+      }
+    })
+      .sort({
+        createdAt: -1
+      })
+      .lean();
   };
 
 const saveAnalysis =
@@ -80,6 +100,18 @@ const saveAnalysis =
         estimatedLossValue:
           analysis.estimatedLossValue,
 
+        inventoryDifference:
+          analysis.inventoryDifference || 0,
+
+        lossDifference:
+          analysis.lossDifference || 0,
+
+        riskDifference:
+          analysis.riskDifference || 0,
+
+        comparedWithAudit:
+          analysis.comparedWithAudit || null,
+
         analyzedAt:
           new Date()
       },
@@ -93,6 +125,7 @@ module.exports = {
   createAudit,
   getAudits,
   getAuditById,
-   updateAuditStatus,
+  updateAuditStatus,
+  getPreviousCompletedAudit,
   saveAnalysis
 };
