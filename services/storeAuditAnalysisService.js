@@ -1,4 +1,4 @@
- const StoreAudit =
+  const StoreAudit =
   require("../models/StoreAudit");
 
 const {
@@ -12,6 +12,12 @@ const {
   extractFrames
 } = require(
   "./videoFrameExtractor"
+);
+
+const {
+  analyzeFrames
+} = require(
+  "./frameVisionAnalysisService"
 );
 
 const analyzeAudit =
@@ -39,21 +45,18 @@ const analyzeAudit =
         );
       }
 
-      let frameCount = 0;
+      let frames = [];
 
       try {
 
-        const frames =
+        frames =
           await extractFrames(
             audit.videoUrl,
             audit._id
           );
 
-        frameCount =
-          frames.length;
-
         console.log(
-          `📸 Frames extracted: ${frameCount}`
+          `📸 Frames extracted: ${frames.length}`
         );
 
       } catch (frameError) {
@@ -62,63 +65,101 @@ const analyzeAudit =
           "FRAME_EXTRACTION_ERROR:",
           frameError
         );
-
       }
 
-      // ==================================
-      // FUTURE PHASES
-      // AI PRODUCT DETECTION
-      // SHELF ANALYSIS
-      // STOCK ESTIMATION
-      // AUDIT COMPARISON
-      // ==================================
+      let visionResult = {
 
-      await new Promise(
-        resolve =>
-          setTimeout(
-            resolve,
-            2000
-          )
-      );
+        visibleProducts: 0,
+
+        visibleShelves: 0,
+
+        shelfFillPercent: 0,
+
+        estimatedInventoryValue: 0,
+
+        estimatedLossValue: 0,
+
+        riskScore: 50,
+
+        summary:
+          "No visual analysis available."
+      };
+
+      try {
+
+        visionResult =
+          await analyzeFrames(
+            frames
+          );
+
+        console.log(
+          "🧠 Vision Analysis:",
+          visionResult
+        );
+
+      } catch (
+        visionError
+      ) {
+
+        console.error(
+          "VISION_ANALYSIS_ERROR:",
+          visionError
+        );
+      }
 
       const confidenceScore =
-        frameCount > 0
+        frames.length > 0
           ? 75
           : 60;
 
       const analysis = {
 
         summary:
-          frameCount > 0
-            ? `Video analyzed successfully. ${frameCount} frames processed. Store appears organized and stocked.`
-            : "Audit completed. Video uploaded successfully.",
+          visionResult.summary,
 
         confidenceScore,
 
-        riskScore: 15,
+        riskScore:
+          visionResult.riskScore,
 
-        estimatedInventoryValue: 0,
+        estimatedInventoryValue:
+          visionResult.estimatedInventoryValue,
 
-        estimatedLossValue: 0,
+        estimatedLossValue:
+          visionResult.estimatedLossValue,
 
         findings: [
 
           {
             title:
-              "Store Condition",
+              "Visible Products",
 
             value:
-              "Good",
+              String(
+                visionResult.visibleProducts
+              ),
 
             confidence: 75
           },
 
           {
             title:
-              "Shelf Visibility",
+              "Visible Shelves",
 
             value:
-              "Adequate",
+              String(
+                visionResult.visibleShelves
+              ),
+
+            confidence: 75
+          },
+
+          {
+            title:
+              "Shelf Fill Rate",
+
+            value:
+              `${visionResult.shelfFillPercent}%`,
 
             confidence: 70
           },
@@ -129,7 +170,7 @@ const analyzeAudit =
 
             value:
               String(
-                frameCount
+                frames.length
               ),
 
             confidence: 100
@@ -181,7 +222,6 @@ const analyzeAudit =
           "AUDIT_STATUS_UPDATE_ERROR:",
           updateError
         );
-
       }
 
       throw error;
