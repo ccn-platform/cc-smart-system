@@ -1,4 +1,4 @@
-const express =
+ const express =
 require("express");
 const path = require("path");
 const cors = require("cors");
@@ -20,7 +20,7 @@ const productRoutes = require("./routes/productRoutes");
 const salesRoutes =require("./routes/salesRoutes");
 const creditRoutes =require("./routes/creditRoutes");
 const aiRoutes =require("./routes/aiRoutes");
-const storeAuditRoutes =require("./routes/storeAuditRoutes");
+const StoreAuditRoutes =require("./routes/storeAuditRoutes");
 
 const adminRoutes =
   require("./routes/adminRoutes");
@@ -82,7 +82,7 @@ app.use("/api/ai",aiRoutes);
 app.use("/api/cash",cashRoutes);
 app.use("/api/credit",creditRoutes);
 app.use("/api/subscription", subscriptionRoutes);
-app.use("/api/store-audit",storeAuditRoutes);
+app.use("/api/Store-audit",StoreAuditRoutes);
 setInterval(() => {
   markOverdueLoans();
 }, 60000);
