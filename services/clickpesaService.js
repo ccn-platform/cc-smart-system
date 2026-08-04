@@ -1,4 +1,4 @@
- 
+  
  require("dns").setDefaultResultOrder("ipv4first");
 
 const axios = require("axios");
@@ -61,15 +61,40 @@ class ClickPesaService {
 
   } catch (error) {
 
-   console.error("ClickPesa payment error", {
+  console.error("ClickPesa payment error", {
     reference,
     phone,
     amount,
     error: error.response?.data || error.message
-   });
+  });
 
-   throw new Error("Mobile push request failed");
-  }
+ const message = String(
+  error.response?.data?.message ||
+  error.response?.data?.error?.message ||
+  error.response?.data?.error?.details ||
+  error.message ||
+  ""
+);
+
+   if (/insufficient\s+funds/i.test(message)) {
+  throw new Error(
+     "Salio kwenye akaunti yako ya malipo halitoshi. Tafadhali weka fedha kisha ujaribu tena. Ukihitaji msaada wasiliana nasi kwa 0758078629."
+  );
+}
+
+  if (
+  error.code === "ECONNABORTED" ||
+  error.code === "ECONNREFUSED" ||
+  error.code === "ENOTFOUND" ||
+  error.code === "ETIMEDOUT"
+) {
+  throw new Error(
+  "Huduma ya malipo haipatikani kwa sasa. Tafadhali jaribu tena baada ya muda. Tatizo likiendelea wasiliana nasi kwa 0758078629."
+);
+}
+
+throw new Error(message || "Malipo yameshindwa. Tafadhali jaribu tena. au kwa msaada  zaidi wasiliana nasi kwa namba 0758078629");
+}
  }
 
 }
