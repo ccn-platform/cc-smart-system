@@ -17,7 +17,7 @@ class ClickPesaService {
  async mobilePush(phone, amount, reference) {
 
   if (!amount || amount <= 0) {
-   throw new Error("Invalid payment amount");
+    throw new Error("Kiasi cha malipo si sahihi.");
   }
 
   phone = phone.replace(/\D/g, "");
@@ -27,7 +27,7 @@ class ClickPesaService {
   }
 
   if (!phone.startsWith("255") || phone.length !== 12) {
-   throw new Error("Invalid Tanzania phone number");
+    throw new Error("Namba ya simu si sahihi.");
   }
 
   try {
