@@ -67,6 +67,15 @@ class ClickPesaService {
     amount,
     error: error.response?.data || error.message
   });
+console.log("========== CLICKPESA ERROR ==========");
+console.log("Full response:");
+console.log(JSON.stringify(error.response?.data, null, 2));
+console.log("Message:", error.response?.data?.message);
+console.log("Error:", error.response?.data?.error);
+console.log("Details:", error.response?.data?.error?.details);
+console.log("Code:", error.code);
+console.log("====================================");
+
 
  const message = String(
   error.response?.data?.message ||
