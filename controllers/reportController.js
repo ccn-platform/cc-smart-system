@@ -1,4 +1,4 @@
-     const mongoose = require("mongoose");
+      const mongoose = require("mongoose");
   const Sale =
 require("../models/Sale");
 
@@ -1900,8 +1900,46 @@ const getReportHistory = async (req, res) => {
   }
 };
 
+const getReportHistoryById = async (req, res) => {
+  try {
+
+    if (!req.ownerId || !req.branchId) {
+      return res.status(401).json({
+        message: "Unauthorized"
+      });
+    }
+
+    const report =
+      await ReportHistory.findOne({
+        _id: req.params.id,
+        owner: req.ownerId,
+        branch: req.branchId
+      }).lean();
+
+    if (!report) {
+      return res.status(404).json({
+        message: "Report not found"
+      });
+    }
+
+    return res.status(200).json(report);
+
+  } catch (error) {
+
+    console.log(
+      "REPORT DETAILS ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      message: error.message
+    });
+
+  }
+};
  module.exports = {
   getDailyReport,
+  getReportHistoryById,
   getReportHistory,
   getWeeklyReport,
   getMonthlyReport,
