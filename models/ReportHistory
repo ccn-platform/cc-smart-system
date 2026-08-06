@@ -1,0 +1,81 @@
+ const mongoose = require("mongoose");
+
+const reportHistorySchema = new mongoose.Schema(
+  {
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true
+    },
+
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      required: true,
+      index: true
+    },
+
+    reportType: {
+      type: String,
+      enum: [
+        "daily",
+        "weekly",
+        "monthly",
+        "inventory",
+        "credit",
+        "expense",
+        "top_products"
+      ],
+      required: true,
+      index: true
+    },
+
+    periodStart: {
+      type: Date,
+      index: true
+    },
+
+    periodEnd: {
+      type: Date,
+      index: true
+    },
+
+    report: {
+      type: mongoose.Schema.Types.Mixed,
+     required: true
+   }
+  },
+  {
+    timestamps: true,
+    minimize: false,
+    versionKey: false
+  }
+);
+
+// Queries za history zitakuwa haraka sana
+reportHistorySchema.index({
+  owner: 1,
+  branch: 1,
+  reportType: 1,
+  createdAt: -1
+});
+
+// Kutafuta report ya kipindi fulani
+ reportHistorySchema.index(
+  {
+    owner: 1,
+    branch: 1,
+    reportType: 1,
+    periodStart: 1,
+    periodEnd: 1
+  },
+  {
+    unique: true
+  }
+);
+
+module.exports = mongoose.model(
+  "ReportHistory",
+  reportHistorySchema
+);
