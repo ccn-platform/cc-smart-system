@@ -1,4 +1,4 @@
-     const mongoose = require("mongoose");
+      const mongoose = require("mongoose");
   const Sale =
 require("../models/Sale");
 
@@ -17,6 +17,47 @@ require("../models/DebtPayment");
 
 const Product =
 require("../models/Product");
+
+const ReportHistory =
+require("../models/ReportHistory");
+
+const saveReportHistory = async (
+  req,
+  reportType,
+  report,
+  periodStart = null,
+  periodEnd = null
+) => {
+  try {
+    await ReportHistory.findOneAndUpdate(
+      {
+        owner: req.ownerId,
+        branch: req.branchId,
+        reportType,
+        periodStart,
+        periodEnd
+      },
+      {
+        owner: req.ownerId,
+        branch: req.branchId,
+        reportType,
+        periodStart,
+        periodEnd,
+        report
+      },
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true
+      }
+    );
+  } catch (err) {
+    console.error(
+      "SAVE REPORT HISTORY:",
+      err.message
+    );
+  }
+};
  
   const getInventoryReport = async (req, res) => {
   try {
@@ -134,28 +175,38 @@ require("../models/Product");
         .limit(10)
         .lean();
 
-    res.status(200).json({
-      summary: {
-        totalProducts:
-          summary.totalProducts,
-        stockQty:
-          summary.stockQty,
-        stockCostValue:
-          summary.stockCostValue,
-        stockSaleValue:
-          summary.stockSaleValue,
-        expectedProfit
-      },
-      alerts: {
-        lowStockCount:
-          lowStock.length,
-        outOfStockCount:
-          outOfStock.length
-      },
-      lowStock,
-      outOfStock,
-      topValue
-    });
+   const report = {
+  summary: {
+    totalProducts:
+      summary.totalProducts,
+    stockQty:
+      summary.stockQty,
+    stockCostValue:
+      summary.stockCostValue,
+    stockSaleValue:
+      summary.stockSaleValue,
+    expectedProfit
+  },
+
+  alerts: {
+    lowStockCount:
+      lowStock.length,
+    outOfStockCount:
+      outOfStock.length
+  },
+
+  lowStock,
+  outOfStock,
+  topValue
+};
+
+await saveReportHistory(
+  req,
+  "inventory",
+  report
+);
+
+return res.status(200).json(report);
 
   } catch (error) {
     console.log(
@@ -411,42 +462,52 @@ const remainingPurchaseProfit =
         : "BIASHARA INA HASARA";
 
     // RESPONSE
-    res.status(200).json({
-      date: today,
+const report = {
+  date: today,
 
-      sales: {
-        totalSales,
-        totalSalesProfit,
-        count: salesCount
-      },
+  sales: {
+    totalSales,
+    totalSalesProfit,
+    count: salesCount
+  },
 
-      purchases: {
-        totalBuy,
-       totalSellValue,
-       totalOrderProfit,
-       remainingPurchaseProfit,
-       count: orderCount
-     },
+  purchases: {
+    totalBuy,
+    totalSellValue,
+    totalOrderProfit,
+    remainingPurchaseProfit,
+    count: orderCount
+  },
 
-      cash: {
-        cashIncome,
-        totalExpense
-      },
+  cash: {
+    cashIncome,
+    totalExpense
+  },
 
-      credit: {
-        loansIssued,
-        debtCollected,
-        overdueCount
-      },
+  credit: {
+    loansIssued,
+    debtCollected,
+    overdueCount
+  },
 
-      summary: {
-        netCashFlow: netPosition,
-        totalBusinessProfit,
-        netProfit,
-        profitMargin,
-        profitStatus
-      }
-    });
+  summary: {
+    netCashFlow: netPosition,
+    totalBusinessProfit,
+    netProfit,
+    profitMargin,
+    profitStatus
+  }
+};
+
+await saveReportHistory(
+  req,
+  "daily",
+  report,
+  today,
+  tomorrow
+);
+
+return res.status(200).json(report);
 
   } catch (error) {
     console.log(
@@ -715,48 +776,58 @@ const remainingPurchaseProfit =
         ? "BIASHARA INA FAIDA"
         : "BIASHARA INA HASARA";
 
-    // RESPONSE
-    res.status(200).json({
-      month:
-        now.getUTCMonth() + 1,
+   // RESPONSE
+const report = {
+  month:
+    now.getUTCMonth() + 1,
 
-      year:
-        now.getUTCFullYear(),
+  year:
+    now.getUTCFullYear(),
 
-      sales: {
-        totalSales,
-        totalProfit,
-        count: salesCount
-      },
+  sales: {
+    totalSales,
+    totalProfit,
+    count: salesCount
+  },
 
-       purchases: {
-        totalBuy,
-        totalSellValue,
-        totalOrderProfit,
-        remainingPurchaseProfit,
-        count: orderCount
-      },
+  purchases: {
+    totalBuy,
+    totalSellValue,
+    totalOrderProfit,
+    remainingPurchaseProfit,
+    count: orderCount
+  },
 
-      cash: {
-        income,
-        totalExpense
-      },
+  cash: {
+    income,
+    totalExpense
+  },
 
-      credit: {
-        loansIssued,
-        collected,
-        overdueCount
-      },
+  credit: {
+    loansIssued,
+    collected,
+    overdueCount
+  },
 
-      summary: {
-        netCashFlow:
-          netPosition,
-        totalBusinessProfit,
-        netProfit,
-        profitMargin,
-        profitStatus
-      }
-    });
+  summary: {
+    netCashFlow:
+      netPosition,
+    totalBusinessProfit,
+    netProfit,
+    profitMargin,
+    profitStatus
+  }
+};
+
+await saveReportHistory(
+  req,
+  "monthly",
+  report,
+  start,
+  end
+);
+
+return res.status(200).json(report);
 
   } catch (error) {
     console.log(
@@ -1031,44 +1102,53 @@ const getWeeklyReport = async (req, res) => {
         : "BIASHARA INA HASARA";
 
     // RESPONSE
-    res.status(200).json({
-      startDate: start,
-      endDate: end,
+const report = {
+  startDate: start,
+  endDate: end,
 
-      sales: {
-        totalSales,
-        totalProfit,
-        count: salesCount
-      },
+  sales: {
+    totalSales,
+    totalProfit,
+    count: salesCount
+  },
 
-      purchases: {
-        totalBuy,
-        totalSellValue,
-        totalOrderProfit,
-        remainingPurchaseProfit,
-        count: orderCount
-      },
+  purchases: {
+    totalBuy,
+    totalSellValue,
+    totalOrderProfit,
+    remainingPurchaseProfit,
+    count: orderCount
+  },
 
-      cash: {
-        income,
-        totalExpense
-      },
+  cash: {
+    income,
+    totalExpense
+  },
 
-      credit: {
-        loansIssued,
-        collected,
-        overdueCount
-      },
+  credit: {
+    loansIssued,
+    collected,
+    overdueCount
+  },
 
-      summary: {
-        netCashFlow:
-          netPosition,
-        totalBusinessProfit,
-        netProfit,
-        profitMargin,
-        profitStatus
-      }
-    });
+  summary: {
+    netCashFlow: netPosition,
+    totalBusinessProfit,
+    netProfit,
+    profitMargin,
+    profitStatus
+  }
+};
+
+await saveReportHistory(
+  req,
+  "weekly",
+  report,
+  start,
+  end
+);
+
+return res.status(200).json(report);
 
   } catch (error) {
     console.log(
@@ -1212,9 +1292,17 @@ const getTopProductsReport = async (req, res) => {
         }
       ]);
 
-    res.status(200).json(
-      result
-    );
+ await saveReportHistory(
+  req,
+  "top_products",
+  result,
+  start,
+  end
+);
+
+return res.status(200).json(
+  result
+);
 
   } catch (error) {
     console.log(
@@ -1502,39 +1590,49 @@ const getTopProductsReport = async (req, res) => {
           "fullName phone riskScore"
         );
 
-    res.status(200).json({
-      summary: {
-        totalLoans,
-        totalIssued,
-        totalCollected,
-        outstanding,
-        overdueCount,
-        activeCount,
-        paidCount
-      },
+    const report = {
+  summary: {
+    totalLoans,
+    totalIssued,
+    totalCollected,
+    outstanding,
+    overdueCount,
+    activeCount,
+    paidCount
+  },
 
-      cashFlow: {
-        issued: totalIssued,
-        collected:
-          totalCollected,
-        expense:
-          totalExpense,
-        net: netCash
-      },
+  cashFlow: {
+    issued: totalIssued,
+    collected:
+      totalCollected,
+    expense:
+      totalExpense,
+    net: netCash
+  },
 
-      loanHealth: {
-        active:
-          activeCount,
-        overdue:
-          overdueCount,
-        paid:
-          paidCount
-      },
+  loanHealth: {
+    active:
+      activeCount,
+    overdue:
+      overdueCount,
+    paid:
+      paidCount
+  },
 
-      riskyCustomers,
+  riskyCustomers,
 
-      period
-    });
+  period
+};
+
+await saveReportHistory(
+  req,
+  "credit",
+  report,
+  start,
+  end
+);
+
+return res.status(200).json(report);
 
   } catch (error) {
     console.log(
@@ -1699,16 +1797,33 @@ const todayExpense =
         )
         .lean();
 
-    res.status(200).json({
-      summary: {
-        totalExpense,
-         entries: totalEntries
-      },
-      categories:
-        expenseAgg,
-      top3,
-      recent
-    });
+    const report = {
+  summary: {
+    totalExpense,
+    entries: totalEntries,
+    todayExpense:
+      todayExpense[0]?.total || 0
+  },
+
+  categories:
+    expenseAgg,
+
+  top3,
+
+  recent
+};
+
+await saveReportHistory(
+  req,
+  "expense",
+  report,
+  start,
+  end
+);
+
+return res.status(200).json(
+  report
+);
 
   } catch (error) {
     console.log(
@@ -1724,6 +1839,7 @@ const todayExpense =
 };
  module.exports = {
   getDailyReport,
+  getReportHistory,
   getWeeklyReport,
   getMonthlyReport,
   getTopProductsReport,
