@@ -1,4 +1,4 @@
-      const mongoose = require("mongoose");
+     const mongoose = require("mongoose");
   const Sale =
 require("../models/Sale");
 
@@ -1837,6 +1837,69 @@ return res.status(200).json(
     });
   }
 };
+const getReportHistory = async (req, res) => {
+  try {
+
+    if (!req.ownerId || !req.branchId) {
+      return res.status(401).json({
+        message: "Unauthorized"
+      });
+    }
+
+    const page =
+      Number(req.query.page) || 1;
+
+    const limit =
+      Number(req.query.limit) || 20;
+
+    const skip =
+      (page - 1) * limit;
+
+    const filter = {
+      owner: req.ownerId,
+      branch: req.branchId
+    };
+
+    if (req.query.reportType) {
+      filter.reportType =
+        req.query.reportType;
+    }
+
+    const reports =
+      await ReportHistory.find(filter)
+        .sort({
+          createdAt: -1
+        })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+    const total =
+      await ReportHistory.countDocuments(
+        filter
+      );
+
+    return res.status(200).json({
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      reports
+    });
+
+  } catch (error) {
+
+    console.log(
+      "REPORT HISTORY ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      message: error.message
+    });
+
+  }
+};
+
  module.exports = {
   getDailyReport,
   getReportHistory,
