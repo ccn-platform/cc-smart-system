@@ -1,4 +1,4 @@
- const express = require("express");
+  const express = require("express");
 const router = express.Router();
 
 const middleware =
@@ -63,4 +63,10 @@ router.get(
   reportController.getExpenseReport
 );
 
+router.get(
+  "/history",
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getReportHistory
+);
 module.exports = router;
