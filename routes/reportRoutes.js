@@ -69,4 +69,10 @@ router.get(
   middleware.branchAccess,
   reportController.getReportHistory
 );
+router.get(
+  "/history/:id",
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getReportHistoryById
+);
 module.exports = router;
