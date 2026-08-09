@@ -21,6 +21,8 @@ require("../models/Product");
 const ReportHistory =
 require("../models/ReportHistory");
 
+  ```javascript
+
 const saveReportHistory = async (
   req,
   reportType,
@@ -29,14 +31,60 @@ const saveReportHistory = async (
   periodEnd = null
 ) => {
   try {
+
+    // =====================================================
+    // BASIC SECURITY
+    // =====================================================
+
+    if (!req.ownerId || !req.branchId) {
+      console.error(
+        "SAVE REPORT HISTORY: Missing ownerId or branchId"
+      );
+
+      return;
+    }
+
+
+    // =====================================================
+    // DAILY REPORT
+    // =====================================================
+    // Daily report inapaswa kuwa na RECORD MOJA TU
+    // kwa tarehe husika.
+    //
+    // Tunatumia:
+    // owner + branch + reportType + periodStart
+    //
+    // Hivyo:
+    // 09 Aug -> record moja
+    // 10 Aug -> record nyingine
+    //
+    // Kufungua Daily Report mara nyingi hakutatengeneza
+    // records mpya; ita-update record iliyopo.
+    // =====================================================
+
+    const filter =
+      reportType === "daily"
+        ? {
+            owner: req.ownerId,
+            branch: req.branchId,
+            reportType: "daily",
+            periodStart: periodStart
+          }
+        : {
+            owner: req.ownerId,
+            branch: req.branchId,
+            reportType,
+            periodStart,
+            periodEnd
+          };
+
+
+    // =====================================================
+    // SAVE / UPDATE
+    // =====================================================
+
     await ReportHistory.findOneAndUpdate(
-      {
-        owner: req.ownerId,
-        branch: req.branchId,
-        reportType,
-        periodStart,
-        periodEnd
-      },
+      filter,
       {
         owner: req.ownerId,
         branch: req.branchId,
@@ -51,14 +99,23 @@ const saveReportHistory = async (
         setDefaultsOnInsert: true
       }
     );
+
+
   } catch (err) {
+
+    // IMPORTANT:
+    // Tatizo la history lisivunje Daily Report yenyewe.
     console.error(
       "SAVE REPORT HISTORY:",
       err.message
     );
+
   }
 };
- 
+```
+
+
+
   const getInventoryReport = async (req, res) => {
   try {
     // SECURITY
@@ -220,24 +277,24 @@ return res.status(200).json(report);
     });
   }
 };
-
-  const getDailyReport = async (req, res) => {
+ 
+const getDailyReport = async (req, res) => {
   try {
+
+    // =====================================================
     // SECURITY
+    // =====================================================
+
     if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
         message: "Unauthorized"
       });
     }
 
-    // USE UTC
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
 
-    const tomorrow = new Date(today);
-    tomorrow.setUTCDate(
-      today.getUTCDate() + 1
-    );
+    // =====================================================
+    // IDS
+    // =====================================================
 
     const ownerId =
       new mongoose.Types.ObjectId(
@@ -249,279 +306,662 @@ return res.status(200).json(report);
         req.branchId
       );
 
+
+    // =====================================================
+    // TANZANIA DATE
+    // Tanzania = UTC + 3
+    //
+    // Tunatumia timezone hii kwa Daily Snapshot
+    // ili siku ibaki sahihi kwa Tanzania.
+    // =====================================================
+
+    const now = new Date();
+
+    const TANZANIA_OFFSET_MS =
+      3 * 60 * 60 * 1000;
+
+
+    // Muda wa sasa wa Tanzania
+    const tanzaniaNow =
+      new Date(
+        now.getTime() +
+        TANZANIA_OFFSET_MS
+      );
+
+
+    // =====================================================
+    // LOCAL DATE YA TANZANIA
+    // =====================================================
+
+    const year =
+      tanzaniaNow.getUTCFullYear();
+
+    const month =
+      tanzaniaNow.getUTCMonth();
+
+    const day =
+      tanzaniaNow.getUTCDate();
+
+
+    // =====================================================
+    // MWANZO WA SIKU YA TANZANIA
+    //
+    // Mfano:
+    // Tanzania:
+    // 2026-08-09 00:00
+    //
+    // UTC:
+    // 2026-08-08 21:00
+    // =====================================================
+
+    const today =
+      new Date(
+        Date.UTC(
+          year,
+          month,
+          day,
+          0,
+          0,
+          0,
+          0
+        ) -
+        TANZANIA_OFFSET_MS
+      );
+
+
+    // =====================================================
+    // MWISHO / START YA SIKU INAYOFUATA
+    // =====================================================
+
+    const tomorrow =
+      new Date(
+        today.getTime() +
+        24 * 60 * 60 * 1000
+      );
+
+
+    // =====================================================
     // SALES
+    // =====================================================
+
     const salesAgg =
       await Sale.aggregate([
+
         {
           $match: {
             owner: ownerId,
             branch: branchId,
+
             createdAt: {
               $gte: today,
               $lt: tomorrow
             }
           }
         },
+
         {
           $group: {
             _id: null,
+
             totalSales: {
-              $sum: "$totalAmount"
+              $sum:
+                "$totalAmount"
             },
+
             totalProfit: {
-              $sum: "$totalProfit"
+              $sum:
+                "$totalProfit"
             },
+
             count: {
               $sum: 1
             }
           }
         }
+
       ]);
+
 
     const totalSales =
       salesAgg[0]?.totalSales || 0;
 
+
     const totalSalesProfit =
       salesAgg[0]?.totalProfit || 0;
+
 
     const salesCount =
       salesAgg[0]?.count || 0;
 
+
+    // =====================================================
     // PURCHASES
+    // =====================================================
+
     const ordersAgg =
       await Order.aggregate([
+
         {
           $match: {
             owner: ownerId,
             branch: branchId,
+
             createdAt: {
               $gte: today,
               $lt: tomorrow
             }
           }
         },
+
         {
           $group: {
             _id: null,
+
             totalBuy: {
-              $sum: "$buyTotal"
+              $sum:
+                "$buyTotal"
             },
+
             totalSellValue: {
-              $sum: "$sellTotal"
+              $sum:
+                "$sellTotal"
             },
+
             totalOrderProfit: {
-              $sum: "$totalProfit"
+              $sum:
+                "$totalProfit"
             },
+
             count: {
               $sum: 1
             }
           }
         }
+
       ]);
+
 
     const totalBuy =
       ordersAgg[0]?.totalBuy || 0;
 
+
     const totalSellValue =
       ordersAgg[0]?.totalSellValue || 0;
+
 
     const totalOrderProfit =
       ordersAgg[0]?.totalOrderProfit || 0;
 
+
     const orderCount =
       ordersAgg[0]?.count || 0;
 
+
+    // =====================================================
     // CASH
+    // =====================================================
+
     const cashAgg =
       await CashEntry.aggregate([
+
         {
           $match: {
             owner: ownerId,
             branch: branchId,
+
             status: "active",
+
             createdAt: {
               $gte: today,
               $lt: tomorrow
             }
           }
         },
+
         {
           $group: {
             _id: "$type",
+
             total: {
-              $sum: "$amount"
+              $sum:
+                "$amount"
             }
           }
         }
+
       ]);
 
+
     let cashIncome = 0;
+
     let totalExpense = 0;
 
+
     cashAgg.forEach((c) => {
-      if (c._id === "income") {
-        cashIncome = c.total;
+
+      if (
+        c._id === "income"
+      ) {
+        cashIncome =
+          c.total || 0;
       }
 
-      if (c._id === "expense") {
-        totalExpense = c.total;
+
+      if (
+        c._id === "expense"
+      ) {
+        totalExpense =
+          c.total || 0;
       }
+
     });
 
-    // LOANS
+
+    // =====================================================
+    // LOANS ISSUED TODAY
+    // =====================================================
+
     const loanAgg =
       await DebtLoan.aggregate([
+
         {
           $match: {
             owner: ownerId,
             branch: branchId,
+
             createdAt: {
               $gte: today,
               $lt: tomorrow
             }
           }
         },
+
         {
           $group: {
-            _id: null,
+            _id: "$status",
+
+            count: {
+              $sum: 1
+            },
+
             totalIssued: {
               $sum:
                 "$principalAmount"
             }
           }
         }
+
       ]);
 
-    const loansIssued =
-      loanAgg[0]?.totalIssued || 0;
 
-    // PAYMENTS
+    let loansIssued = 0;
+
+    let loanCount = 0;
+
+    let activeCount = 0;
+
+    let overdueCountToday = 0;
+
+    let paidCount = 0;
+
+
+    loanAgg.forEach((loan) => {
+
+      loanCount +=
+        loan.count || 0;
+
+
+      loansIssued +=
+        loan.totalIssued || 0;
+
+
+      if (
+        loan._id === "active"
+      ) {
+        activeCount =
+          loan.count || 0;
+      }
+
+
+      if (
+        loan._id === "overdue"
+      ) {
+        overdueCountToday =
+          loan.count || 0;
+      }
+
+
+      if (
+        loan._id === "paid"
+      ) {
+        paidCount =
+          loan.count || 0;
+      }
+
+    });
+
+
+    // =====================================================
+    // PAYMENTS COLLECTED TODAY
+    // =====================================================
+
     const paymentAgg =
       await DebtPayment.aggregate([
+
         {
           $match: {
             owner: ownerId,
             branch: branchId,
+
             createdAt: {
               $gte: today,
               $lt: tomorrow
             }
           }
         },
+
         {
           $group: {
             _id: null,
+
             totalCollected: {
-              $sum: "$amount"
+              $sum:
+                "$amount"
             }
           }
         }
+
       ]);
+
 
     const debtCollected =
       paymentAgg[0]
         ?.totalCollected || 0;
 
-    // OVERDUE
+
+    // =====================================================
+    // CURRENT OUTSTANDING CREDIT
+    //
+    // Hii ni balance ya mikopo ambayo bado haijalipwa.
+    //
+    // Hatuwekei tarehe hapa kwa sababu tunataka
+    // hali halisi ya credit wakati report inafunguliwa.
+    // =====================================================
+
+    const outstandingAgg =
+      await DebtLoan.aggregate([
+
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+
+            status: {
+              $in: [
+                "active",
+                "overdue"
+              ]
+            }
+          }
+        },
+
+        {
+          $group: {
+            _id: null,
+
+            totalOutstanding: {
+              $sum:
+                "$balanceAmount"
+            }
+          }
+        }
+
+      ]);
+
+
+    const outstanding =
+      outstandingAgg[0]
+        ?.totalOutstanding || 0;
+
+
+    // =====================================================
+    // CURRENT OVERDUE
+    //
+    // Hii ni overdue iliyopo sasa kwenye biashara,
+    // sio tu loans zilizotengenezwa leo.
+    //
+    // Tunaiweka hivi ili app ya zamani iendelee kupata
+    // overdueCount kama ilivyokuwa awali.
+    // =====================================================
+
     const overdueCount =
       await DebtLoan.countDocuments({
+
         owner: ownerId,
+
         branch: branchId,
+
         status: "overdue"
+
       });
 
+
+    // =====================================================
     // CALCULATIONS
+    // =====================================================
+
     const netPosition =
       totalSales +
       cashIncome +
       debtCollected -
       totalExpense -
       totalBuy;
-const remainingPurchaseProfit =
-  totalOrderProfit -
-  totalExpense;
+
+
+    const remainingPurchaseProfit =
+      totalOrderProfit -
+      totalExpense;
+
 
     const totalBusinessProfit =
       totalSalesProfit +
       totalOrderProfit;
 
+
     const netProfit =
       totalBusinessProfit -
       totalExpense;
 
+
     const profitMargin =
       totalBusinessProfit > 0
-        ? (netProfit /
-            totalBusinessProfit) *
-          100
+        ? (
+            netProfit /
+            totalBusinessProfit
+          ) * 100
         : 0;
+
 
     const profitStatus =
       netProfit >= 0
         ? "BIASHARA INA FAIDA"
         : "BIASHARA INA HASARA";
 
+
+    // =====================================================
     // RESPONSE
-const report = {
-  date: today,
+    //
+    // IMPORTANT:
+    // Fields za zamani zimeachwa vilevile.
+    // Tumeongeza fields mpya tu.
+    // =====================================================
 
-  sales: {
-    totalSales,
-    totalSalesProfit,
-    count: salesCount
-  },
+    const report = {
 
-  purchases: {
-    totalBuy,
-    totalSellValue,
-    totalOrderProfit,
-    remainingPurchaseProfit,
-    count: orderCount
-  },
+      // Tarehe la Daily Snapshot
+      date: today,
 
-  cash: {
-    cashIncome,
-    totalExpense
-  },
+      // Muda report ilipofunguliwa/ku-refreshiwa
+      snapshotAt: new Date(),
 
-  credit: {
-    loansIssued,
-    debtCollected,
-    overdueCount
-  },
 
-  summary: {
-    netCashFlow: netPosition,
-    totalBusinessProfit,
-    netProfit,
-    profitMargin,
-    profitStatus
-  }
-};
+      // ===================================================
+      // SALES
+      // ===================================================
 
-await saveReportHistory(
-  req,
-  "daily",
-  report,
-  today,
-  tomorrow
-);
+      sales: {
 
-return res.status(200).json(report);
+        totalSales,
+
+        totalSalesProfit,
+
+        count:
+          salesCount
+
+      },
+
+
+      // ===================================================
+      // PURCHASES
+      // ===================================================
+
+      purchases: {
+
+        totalBuy,
+
+        totalSellValue,
+
+        totalOrderProfit,
+
+        remainingPurchaseProfit,
+
+        count:
+          orderCount
+
+      },
+
+
+      // ===================================================
+      // CASH
+      // ===================================================
+
+      cash: {
+
+        // OLD FIELD
+        cashIncome,
+
+        // OLD FIELD
+        totalExpense
+
+      },
+
+
+      // ===================================================
+      // CREDIT
+      // ===================================================
+
+      credit: {
+
+        // OLD FIELD
+        loansIssued,
+
+        // OLD FIELD
+        debtCollected,
+
+        // OLD FIELD
+        overdueCount,
+
+        // NEW
+        outstanding,
+
+        // NEW
+        activeCount,
+
+        // NEW
+        paidCount,
+
+        // NEW
+        loanCount
+
+      },
+
+
+      // ===================================================
+      // SUMMARY
+      // ===================================================
+
+      summary: {
+
+        netCashFlow:
+          netPosition,
+
+        totalBusinessProfit,
+
+        netProfit,
+
+        profitMargin,
+
+        profitStatus
+
+      }
+
+    };
+
+
+    // =====================================================
+    // SAVE / UPDATE DAILY SNAPSHOT
+    //
+    // Kwa sababu tunatumia:
+    //
+    // reportType = "daily"
+    // periodStart = today
+    // periodEnd = tomorrow
+    //
+    // saveReportHistory() yako iliyopo ita-update
+    // report ya siku hiyo badala ya kutengeneza nyingine.
+    // =====================================================
+
+    await saveReportHistory(
+
+      req,
+
+      "daily",
+
+      report,
+
+      today,
+
+      tomorrow
+
+    );
+
+
+    // =====================================================
+    // RESPONSE
+    // =====================================================
+
+    return res.status(200).json(
+      report
+    );
+
 
   } catch (error) {
+
     console.log(
       "DAILY REPORT ERROR:",
       error
     );
 
-    res.status(500).json({
+
+    return res.status(500).json({
+
       message:
         error.message
+
     });
+
   }
 };
-
  
 const getMonthlyReport = async (req, res) => {
   try {
@@ -1348,19 +1788,14 @@ return res.status(200).json(
     let end =
       new Date(now);
 
-    end.setHours(
-      23,
-      59,
-      59,
-      999
-    );
+   end.setUTCHours(23, 59, 59, 999);
 
     switch (period) {
       case "today":
         start =
           new Date(now);
 
-        start.setHours(
+        start.setUTCHour(
           0,
           0,
           0,
@@ -1837,14 +2272,20 @@ return res.status(200).json(
     });
   }
 };
+  ```javascript
 const getReportHistory = async (req, res) => {
   try {
+
+    // =====================================================
+    // SECURITY
+    // =====================================================
 
     if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
         message: "Unauthorized"
       });
     }
+
 
     const page =
       Number(req.query.page) || 1;
@@ -1855,15 +2296,197 @@ const getReportHistory = async (req, res) => {
     const skip =
       (page - 1) * limit;
 
+
+    // =====================================================
+    // BASE FILTER
+    // =====================================================
+
     const filter = {
       owner: req.ownerId,
       branch: req.branchId
     };
 
+
+    // =====================================================
+    // REPORT TYPE FILTER
+    // =====================================================
+
     if (req.query.reportType) {
       filter.reportType =
         req.query.reportType;
     }
+
+
+    // =====================================================
+    // DAILY HISTORY
+    //
+    // Daily report:
+    // TAREHE MOJA = REPORT MOJA
+    //
+    // Hata kama database ina duplicate za zamani,
+    // tunachukua report iliyotengenezwa/updated mwisho.
+    // =====================================================
+
+    if (
+      !req.query.reportType ||
+      req.query.reportType === "daily"
+    ) {
+
+      const dailyFilter = {
+        owner: req.ownerId,
+        branch: req.branchId,
+        reportType: "daily"
+      };
+
+
+      // ===================================================
+      // GET UNIQUE DAILY REPORTS
+      // ===================================================
+
+      const dailyReports =
+        await ReportHistory.aggregate([
+
+          {
+            $match: dailyFilter
+          },
+
+
+          // -----------------------------------------------
+          // MPYA ZAIDI KWANZA
+          // -----------------------------------------------
+
+          {
+            $sort: {
+              periodStart: -1,
+              createdAt: -1,
+              updatedAt: -1
+            }
+          },
+
+
+          // -----------------------------------------------
+          // GROUP KWA TAREHE
+          //
+          // periodStart ya Daily tayari inawakilisha
+          // mwanzo wa siku husika.
+          // -----------------------------------------------
+
+          {
+            $group: {
+              _id: {
+                $dateToString: {
+                  format: "%Y-%m-%d",
+                  date: "$periodStart"
+                }
+              },
+
+              report: {
+                $first: "$$ROOT"
+              }
+            }
+          },
+
+
+          // -----------------------------------------------
+          // RUDISHA DOCUMENT YA REPORT
+          // -----------------------------------------------
+
+          {
+            $replaceRoot: {
+              newRoot: "$report"
+            }
+          },
+
+
+          // -----------------------------------------------
+          // TAREHE MPYA KWANZA
+          // -----------------------------------------------
+
+          {
+            $sort: {
+              periodStart: -1,
+              createdAt: -1
+            }
+          },
+
+
+          // -----------------------------------------------
+          // PAGINATION
+          // -----------------------------------------------
+
+          {
+            $skip: skip
+          },
+
+          {
+            $limit: limit
+          }
+
+        ]);
+
+
+      // ===================================================
+      // COUNT UNIQUE DAILY DATES
+      // ===================================================
+
+      const totalResult =
+        await ReportHistory.aggregate([
+
+          {
+            $match: dailyFilter
+          },
+
+          {
+            $group: {
+              _id: {
+                $dateToString: {
+                  format: "%Y-%m-%d",
+                  date: "$periodStart"
+                }
+              }
+            }
+          },
+
+          {
+            $count: "total"
+          }
+
+        ]);
+
+
+      const total =
+        totalResult[0]?.total || 0;
+
+
+      // ===================================================
+      // RESPONSE
+      // ===================================================
+
+      return res.status(200).json({
+        total,
+        page,
+        pages:
+          Math.ceil(
+            total / limit
+          ),
+        reports:
+          dailyReports
+      });
+    }
+
+
+    // =====================================================
+    // OTHER REPORTS
+    //
+    // Weekly
+    // Monthly
+    // Credit
+    // Expense
+    // Inventory
+    // Top Products
+    //
+    // HAZIBADILISHWA.
+    // =====================================================
 
     const reports =
       await ReportHistory.find(filter)
@@ -1874,17 +2497,23 @@ const getReportHistory = async (req, res) => {
         .limit(limit)
         .lean();
 
+
     const total =
       await ReportHistory.countDocuments(
         filter
       );
 
+
     return res.status(200).json({
       total,
       page,
-      pages: Math.ceil(total / limit),
+      pages:
+        Math.ceil(
+          total / limit
+        ),
       reports
     });
+
 
   } catch (error) {
 
@@ -1893,15 +2522,23 @@ const getReportHistory = async (req, res) => {
       error
     );
 
-    res.status(500).json({
-      message: error.message
+
+    return res.status(500).json({
+      message:
+        error.message
     });
 
   }
 };
+```
 
+```javascript
 const getReportHistoryById = async (req, res) => {
   try {
+
+    // =====================================================
+    // SECURITY
+    // =====================================================
 
     if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
@@ -1909,20 +2546,72 @@ const getReportHistoryById = async (req, res) => {
       });
     }
 
-    const report =
-      await ReportHistory.findOne({
-        _id: req.params.id,
-        owner: req.ownerId,
-        branch: req.branchId
-      }).lean();
 
-    if (!report) {
-      return res.status(404).json({
-        message: "Report not found"
+    // =====================================================
+    // VALIDATE REPORT ID
+    // =====================================================
+
+    const reportId =
+      req.params.id;
+
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        reportId
+      )
+    ) {
+      return res.status(400).json({
+        message:
+          "Invalid report ID"
       });
     }
 
-    return res.status(200).json(report);
+
+    // =====================================================
+    // FIND EXACT REPORT
+    //
+    // Muhimu:
+    // HATUHESABU REPORT TENA HAPA.
+    //
+    // Tunachukua snapshot ileile iliyohifadhiwa
+    // wakati report ilipofunguliwa/ku-refreshiwa.
+    // =====================================================
+
+    const report =
+      await ReportHistory.findOne({
+        _id: reportId,
+
+        owner:
+          req.ownerId,
+
+        branch:
+          req.branchId
+
+      }).lean();
+
+
+    // =====================================================
+    // NOT FOUND
+    // =====================================================
+
+    if (!report) {
+      return res.status(404).json({
+        message:
+          "Report not found"
+      });
+    }
+
+
+    // =====================================================
+    // RESPONSE
+    //
+    // Tunabaki na structure ya zamani.
+    // Hivyo app ya zamani haiharibiki.
+    // =====================================================
+
+    return res.status(200).json(
+      report
+    );
+
 
   } catch (error) {
 
@@ -1931,12 +2620,18 @@ const getReportHistoryById = async (req, res) => {
       error
     );
 
-    res.status(500).json({
-      message: error.message
+
+    return res.status(500).json({
+      message:
+        error.message
     });
 
   }
 };
+```
+
+
+ 
  module.exports = {
   getDailyReport,
   getReportHistoryById,
