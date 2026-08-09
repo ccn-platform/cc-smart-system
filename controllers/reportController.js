@@ -21,7 +21,7 @@ require("../models/Product");
 const ReportHistory =
 require("../models/ReportHistory");
 
-  ```javascript
+  
 
 const saveReportHistory = async (
   req,
@@ -112,7 +112,7 @@ const saveReportHistory = async (
 
   }
 };
-```
+ 
 
 
 
@@ -2272,7 +2272,7 @@ return res.status(200).json(
     });
   }
 };
-  ```javascript
+   
 const getReportHistory = async (req, res) => {
   try {
 
@@ -2530,9 +2530,9 @@ const getReportHistory = async (req, res) => {
 
   }
 };
-```
+ 
 
-```javascript
+ 
 const getReportHistoryById = async (req, res) => {
   try {
 
@@ -2628,7 +2628,7 @@ const getReportHistoryById = async (req, res) => {
 
   }
 };
-```
+ 
 
 
  
