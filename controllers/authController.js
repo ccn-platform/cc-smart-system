@@ -47,10 +47,10 @@ const registerUser = async (req, res) => {
     }
 
     const vodaPrefixes = [
-  "25579",
-  "25574",
-  "25575",
-  "25576",
+  "255228",
+  "255345",
+  "255455",
+  "2558543",
 ];
 
 const isVodacom =
@@ -65,7 +65,7 @@ if (isVodacom) {
 
   return res.status(400).json({
     message:
-      "Namba za Vodacom haziruhusiwi kujisajili kwa sasa mpaka tutakapofanya maboresho tumia namba ya mtandao mwingine. au wasiliana nasi kwa namba 0758078629"
+      "Namba za aina hii  haziruhusiwi kujisajili kwa sasa mpaka tutakapofanya maboresho tumia namba ya mtandao mwingine. au wasiliana nasi kwa namba 0758078629"
   });
 }
     // CHECK DUPLICATE
