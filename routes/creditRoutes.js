@@ -22,6 +22,7 @@ const {
    deleteDebtLoan,
   createDebtLoan,
    syncLoan,
+   syncPayment,
   refundPayment,
   receivePayment,
   getLoanHistory,
@@ -136,6 +137,13 @@ router.post(
   syncLoan
 );
 
+// SYNC OFFLINE PAYMENT
+router.post(
+  "/sync-payment",
+  protect,
+  branchAccess,
+  syncPayment
+);
 // RECEIVE PAYMENT
 router.post(
   "/payment",
@@ -168,7 +176,7 @@ router.get(
 
 // OVERDUE
 router.get(
-  "/overdue",
+  "/overdue", 
   protect,
   branchAccess,
   getOverdueLoans
