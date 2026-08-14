@@ -21,6 +21,7 @@ const {
    scanDebtsFromImage,
    deleteDebtLoan,
   createDebtLoan,
+   syncLoan,
   refundPayment,
   receivePayment,
   getLoanHistory,
@@ -127,7 +128,13 @@ router.post(
   branchAccess,
   createDebtLoan
 );
-
+// SYNC OFFLINE LOAN
+router.post(
+  "/sync-loan",
+  protect,
+  branchAccess,
+  syncLoan
+);
 
 // RECEIVE PAYMENT
 router.post(
