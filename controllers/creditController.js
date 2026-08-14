@@ -180,8 +180,7 @@ const checkCredit =
     }
   };
 
-
-// CREATE LOAN
+ // CREATE LOAN
 const createDebtLoan =
   async (req, res) => {
     try {
@@ -191,8 +190,17 @@ const createDebtLoan =
         dueDate,
         items,
         note,
-        businessCategory
+        businessCategory,
+
+        // NEW: offline sync fields
+        source,
+        syncId,
+        deviceId
       } = req.body;
+
+      // --------------------------------
+      // BASIC VALIDATION
+      // --------------------------------
 
       if (!customerId) {
         return res.status(400).json({
@@ -221,95 +229,239 @@ const createDebtLoan =
         });
       }
 
-      const check =
-        await checkCreditEligibility({
-          customerId,
-          businessCategory
-        });
+      // --------------------------------
+      // OFFLINE DETECTION
+      // --------------------------------
 
-      if (!check.approved) {
-        return res.status(400).json({
-          message:
-            check.reason
-        });
-      }
+      const isOffline =
+        source === "offline";
 
-       const session =
-  await mongoose.startSession();
+      // --------------------------------
+      // BACKWARD COMPATIBILITY
+      // --------------------------------
+      //
+      // OLD APP:
+      // source haipo
+      // => existing credit check inaendelea
+      //
+      // NEW OFFLINE APP:
+      // source === "offline"
+      // => credit eligibility check inarukwa
+      //
+      // Customer anaweza kuwa na loans nyingi.
+      // --------------------------------
 
-try {
-  session.startTransaction();
-
-  const loan =
-    await DebtLoan.create(
-      [
-        {
-          owner:
-            req.ownerId,
-          branch:
-            req.branchId,
-          createdBy:
-            req.user.id,
-          customer:
+      if (!isOffline) {
+        const check =
+          await checkCreditEligibility({
             customerId,
-          businessCategory,
-          loanNumber:
-            "LN" +
-            Date.now() +
-            Math.floor(
-              Math.random() *
-              10000
-            ),
-          principalAmount:
-            cleanAmount,
-          balanceAmount:
-            cleanAmount,
-          paidAmount: 0,
-          dueDate,
-          items:
-            items || [],
-          note:
-            note || "",
-          approvedBy:
-            req.user.id
+            businessCategory
+          });
+
+        if (!check.approved) {
+          return res.status(400).json({
+            message:
+              check.reason
+          });
         }
-      ],
-      {
-        session
       }
-    );
 
-  await CustomerIdentity.findByIdAndUpdate(
-    customerId,
-    {
-      $inc: {
-        totalLoans: 1,
-        activeLoans: 1,
-        totalBorrowed:
-          cleanAmount
+      // --------------------------------
+      // OFFLINE SYNC DUPLICATE PROTECTION
+      // --------------------------------
+
+      if (
+        isOffline &&
+        syncId
+      ) {
+        const existingLoan =
+          await DebtLoan.findOne({
+            owner:
+              req.ownerId,
+            branch:
+              req.branchId,
+            syncId
+          }).lean();
+
+        if (existingLoan) {
+          return res.status(200).json({
+            ...existingLoan,
+            alreadySynced: true
+          });
+        }
       }
-    },
-    {
-      session
-    }
-  );
- await session.commitTransaction();
-  return res.status(201).json(
-    loan[0]
-  );
 
- } catch (err) {
-  if (
-    session.inTransaction()
-  ) {
-    await session.abortTransaction();
-  }
+      // --------------------------------
+      // CREATE LOAN
+      // --------------------------------
 
-  throw err;
+      const session =
+        await mongoose.startSession();
 
-} finally {
-  await session.endSession();
-}
+      try {
+        session.startTransaction();
+
+        const loan =
+          await DebtLoan.create(
+            [
+              {
+                owner:
+                  req.ownerId,
+
+                branch:
+                  req.branchId,
+
+                createdBy:
+                  req.user.id,
+
+                customer:
+                  customerId,
+
+                businessCategory:
+                  businessCategory || "",
+
+                loanNumber:
+                  "LN" +
+                  Date.now() +
+                  Math.floor(
+                    Math.random() *
+                    10000
+                  ),
+
+                principalAmount:
+                  cleanAmount,
+
+                balanceAmount:
+                  cleanAmount,
+
+                paidAmount:
+                  0,
+
+                dueDate,
+
+                items:
+                  items || [],
+
+                note:
+                  note || "",
+
+                approvedBy:
+                  isOffline
+                    ? null
+                    : req.user.id,
+
+                // --------------------------------
+                // OFFLINE / SYNC FIELDS
+                // --------------------------------
+
+                syncId:
+                  syncId || null,
+
+                syncStatus:
+                  "synced",
+
+                source:
+                  isOffline
+                    ? "offline"
+                    : "online",
+
+                deviceId:
+                  deviceId || null,
+
+                lastSyncedAt:
+                  isOffline
+                    ? new Date()
+                    : null,
+
+                syncError:
+                  "",
+
+                queuedAt:
+                  isOffline
+                    ? null
+                    : null,
+
+                approvalMethod:
+                  isOffline
+                    ? "offline_pending"
+                    : "auto"
+              }
+            ],
+            {
+              session
+            }
+          );
+
+        // --------------------------------
+        // UPDATE CUSTOMER COUNTERS
+        // --------------------------------
+
+        await CustomerIdentity.findByIdAndUpdate(
+          customerId,
+          {
+            $inc: {
+              totalLoans:
+                1,
+
+              activeLoans:
+                1,
+
+              totalBorrowed:
+                cleanAmount
+            }
+          },
+          {
+            session
+          }
+        );
+
+        await session.commitTransaction();
+
+        return res.status(201).json(
+          loan[0]
+        );
+
+      } catch (err) {
+
+        if (
+          session.inTransaction()
+        ) {
+          await session.abortTransaction();
+        }
+
+        // --------------------------------
+        // DUPLICATE syncId
+        // --------------------------------
+
+        if (
+          err?.code === 11000 &&
+          isOffline &&
+          syncId
+        ) {
+          const existingLoan =
+            await DebtLoan.findOne({
+              owner:
+                req.ownerId,
+
+              branch:
+                req.branchId,
+
+              syncId
+            }).lean();
+
+          if (existingLoan) {
+            return res.status(200).json({
+              ...existingLoan,
+              alreadySynced: true
+            });
+          }
+        }
+
+        throw err;
+
+      } finally {
+        await session.endSession();
+      }
 
     } catch (error) {
       return res.status(500).json({
