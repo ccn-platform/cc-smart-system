@@ -1896,6 +1896,414 @@ const refundPayment =
 
     }
   };
+
+  // ====================================
+// SYNC OFFLINE REFUND
+// ====================================
+
+const syncRefund = async (req, res) => {
+  try {
+
+    const {
+      loanId,
+      loanSyncId,
+      amount,
+      syncId,
+      deviceId,
+      paymentDate
+    } = req.body;
+
+    // --------------------------------
+    // VALIDATION
+    // --------------------------------
+
+    if (!loanId && !loanSyncId) {
+      return res.status(400).json({
+        message:
+          "Loan ID or loanSyncId required"
+      });
+    }
+
+    if (!syncId) {
+      return res.status(400).json({
+        message:
+          "syncId required"
+      });
+    }
+
+    if (!deviceId) {
+      return res.status(400).json({
+        message:
+          "deviceId required"
+      });
+    }
+
+    const refundAmount =
+      Number(amount);
+
+    if (
+      !refundAmount ||
+      refundAmount <= 0
+    ) {
+      return res.status(400).json({
+        message:
+          "Kiasi cha refund si sahihi"
+      });
+    }
+
+    // --------------------------------
+    // CHECK DUPLICATE REFUND
+    // --------------------------------
+
+    const existingRefund =
+      await DebtPayment.findOne({
+        owner:
+          req.ownerId,
+
+        branch:
+          req.branchId,
+
+        syncId
+      }).lean();
+
+    if (existingRefund) {
+
+      return res.status(200).json({
+
+        success: true,
+
+        alreadySynced: true,
+
+        payment:
+          existingRefund
+      });
+    }
+
+    // --------------------------------
+    // FIND LOAN
+    // --------------------------------
+
+    let loan = null;
+
+    // Kama server MongoDB ID ipo
+    if (loanId) {
+
+      // Hakikisha si offline syncId
+      if (
+        mongoose.Types.ObjectId.isValid(
+          loanId
+        )
+      ) {
+
+        loan =
+          await DebtLoan.findOne({
+            _id:
+              loanId,
+
+            owner:
+              req.ownerId,
+
+            branch:
+              req.branchId
+          });
+      }
+    }
+
+    // --------------------------------
+    // FIND USING OFFLINE syncId
+    // --------------------------------
+
+    if (!loan && loanSyncId) {
+
+      loan =
+        await DebtLoan.findOne({
+          owner:
+            req.ownerId,
+
+          branch:
+            req.branchId,
+
+          syncId:
+            loanSyncId
+        });
+    }
+
+    if (!loan) {
+
+      return res.status(404).json({
+        message:
+          "Deni halijapatikana kwenye server"
+      });
+    }
+
+    // --------------------------------
+    // VALIDATE REFUND
+    // --------------------------------
+
+    if (
+      refundAmount >
+      loan.paidAmount
+    ) {
+
+      return res.status(400).json({
+        message:
+          "Kiasi cha refund kinazidi kilicholipwa"
+      });
+    }
+
+    // --------------------------------
+    // START TRANSACTION
+    // --------------------------------
+
+    const session =
+      await mongoose.startSession();
+
+    try {
+
+      session.startTransaction();
+
+      // --------------------------------
+      // UPDATE LOAN
+      // --------------------------------
+
+      const oldStatus =
+        loan.status;
+
+      loan.paidAmount =
+        loan.paidAmount -
+        refundAmount;
+
+      loan.balanceAmount =
+        loan.balanceAmount +
+        refundAmount;
+
+      // --------------------------------
+      // IF WAS PAID
+      // --------------------------------
+
+      if (
+        oldStatus === "paid"
+      ) {
+
+        loan.status =
+          "active";
+
+        await CustomerIdentity.findByIdAndUpdate(
+          loan.customer,
+          {
+            $inc: {
+              activeLoans: 1,
+              paidLoans: -1,
+              totalPaid:
+                -refundAmount
+            }
+          },
+          {
+            session
+          }
+        );
+
+      } else {
+
+        await CustomerIdentity.findByIdAndUpdate(
+          loan.customer,
+          {
+            $inc: {
+              totalPaid:
+                -refundAmount
+            }
+          },
+          {
+            session
+          }
+        );
+      }
+
+      // --------------------------------
+      // SAVE LOAN
+      // --------------------------------
+
+      await loan.save({
+        session
+      });
+
+      // --------------------------------
+      // SAVE REFUND HISTORY
+      // --------------------------------
+
+      const refund =
+        await DebtPayment.create(
+          [
+            {
+              owner:
+                req.ownerId,
+
+              branch:
+                req.branchId,
+
+              loan:
+                loan._id,
+
+              customer:
+                loan.customer,
+
+              amount:
+                -refundAmount,
+
+              paymentDate:
+                paymentDate
+                  ? new Date(
+                      paymentDate
+                    )
+                  : new Date(),
+
+              paymentMethod:
+                "cash",
+
+              channel:
+                "offline_sync",
+
+              reference:
+                "REFUND",
+
+              note:
+                "Malipo yamerudishwa kwenye deni",
+
+              receivedBy:
+                req.user.id,
+
+              // OFFLINE SYNC
+              syncId,
+
+              syncStatus:
+                "synced",
+
+              source:
+                "offline",
+
+              deviceId,
+
+              lastSyncedAt:
+                new Date(),
+
+              syncError:
+                "",
+
+              queuedAt:
+                null,
+
+              status:
+                "reversed"
+            }
+          ],
+          {
+            session
+          }
+        );
+
+      // --------------------------------
+      // COMMIT
+      // --------------------------------
+
+      await session.commitTransaction();
+
+      // --------------------------------
+      // RESPONSE
+      // --------------------------------
+
+      return res.status(200).json({
+
+        success: true,
+
+        alreadySynced:
+          false,
+
+        refund:
+          refund[0],
+
+        loan: {
+
+          _id:
+            loan._id,
+
+          syncId:
+            loan.syncId,
+
+          balanceAmount:
+            loan.balanceAmount,
+
+          paidAmount:
+            loan.paidAmount,
+
+          status:
+            loan.status
+        }
+
+      });
+
+    } catch (err) {
+
+      if (
+        session.inTransaction()
+      ) {
+
+        await session.abortTransaction();
+      }
+
+      // --------------------------------
+      // DUPLICATE SYNC
+      // --------------------------------
+
+      if (
+        err?.code === 11000
+      ) {
+
+        const existing =
+          await DebtPayment.findOne({
+            owner:
+              req.ownerId,
+
+            branch:
+              req.branchId,
+
+            syncId
+          }).lean();
+
+        if (existing) {
+
+          return res.status(200).json({
+
+            success: true,
+
+            alreadySynced:
+              true,
+
+            payment:
+              existing
+          });
+        }
+      }
+
+      throw err;
+
+    } finally {
+
+      await session.endSession();
+    }
+
+  } catch (error) {
+
+    console.error(
+      "❌ SYNC REFUND ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        error.message
+    });
+  }
+};
  
   const getPaymentHistory =
   async (req, res) => {
@@ -2195,6 +2603,7 @@ const deleteDebtLoan =
   createDebtLoan,
   syncLoan,
   syncPayment,
+   syncRefund,
   getLoanHistory,
   getLoanById,
   receivePayment,
