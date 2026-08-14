@@ -1,4 +1,4 @@
-   
+  
   const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -183,19 +183,27 @@ router.get(
 );
 
 
-// SINGLE LOAN
-router.get(
-  "/:id",
-  protect,
-  branchAccess,
-  getLoanById
-);
+ // ====================================
+// PAYMENT HISTORY
+// ====================================
 
 router.get(
   "/payment-history/:loanId",
   protect,
   branchAccess,
   getPaymentHistory
+);
+
+
+// ====================================
+// SINGLE LOAN
+// ====================================
+
+router.get(
+  "/:id",
+  protect,
+  branchAccess,
+  getLoanById
 );
 module.exports =
   router;
