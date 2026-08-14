@@ -1206,6 +1206,517 @@ const receivePayment =
       });
     }
   };
+
+// ====================================
+// SYNC OFFLINE PAYMENT
+// ====================================
+
+const syncPayment = async (req, res) => {
+  try {
+
+    const {
+      loanId,
+      amount,
+      paymentMethod,
+      reference,
+      transactionId,
+      syncId,
+      deviceId,
+      paymentDate
+    } = req.body;
+
+    // --------------------------------
+    // VALIDATION
+    // --------------------------------
+
+    if (!loanId) {
+      return res.status(400).json({
+        message: "Loan ID required"
+      });
+    }
+
+    if (!syncId) {
+      return res.status(400).json({
+        message: "syncId required"
+      });
+    }
+
+    if (!deviceId) {
+      return res.status(400).json({
+        message: "deviceId required"
+      });
+    }
+
+    const payAmount =
+      Number(amount);
+
+    if (
+      !payAmount ||
+      payAmount <= 0
+    ) {
+      return res.status(400).json({
+        message:
+          "Valid payment amount required"
+      });
+    }
+
+    // --------------------------------
+    // CHECK DUPLICATE syncId
+    // --------------------------------
+
+    const existingPayment =
+      await DebtPayment.findOne({
+        owner:
+          req.ownerId,
+
+        branch:
+          req.branchId,
+
+        syncId
+      }).lean();
+
+    if (existingPayment) {
+
+      return res.status(200).json({
+        success: true,
+
+        alreadySynced: true,
+
+        payment:
+          existingPayment
+      });
+    }
+
+    // --------------------------------
+    // CHECK DUPLICATE transactionId
+    // --------------------------------
+
+    if (transactionId) {
+
+      const existingTransaction =
+        await DebtPayment.findOne({
+          owner:
+            req.ownerId,
+
+          branch:
+            req.branchId,
+
+          transactionId
+        }).lean();
+
+      if (existingTransaction) {
+
+        return res.status(200).json({
+          success: true,
+
+          alreadySynced: true,
+
+          payment:
+            existingTransaction
+        });
+      }
+    }
+
+    // --------------------------------
+    // FIND LOAN
+    // --------------------------------
+
+    const loan =
+      await DebtLoan.findOne({
+        _id:
+          loanId,
+
+        owner:
+          req.ownerId,
+
+        branch:
+          req.branchId
+      }).lean();
+
+    if (!loan) {
+
+      return res.status(404).json({
+        message:
+          "Loan not found"
+      });
+    }
+
+    // --------------------------------
+    // CHECK LOAN STATUS
+    // --------------------------------
+
+    if (
+      loan.status ===
+      "cancelled"
+    ) {
+
+      return res.status(400).json({
+        message:
+          "Cancelled loan cannot receive payment"
+      });
+    }
+
+    if (
+      loan.status ===
+      "paid"
+    ) {
+
+      return res.status(400).json({
+        message:
+          "This loan is already fully paid"
+      });
+    }
+
+    // --------------------------------
+    // PREVENT OVERPAYMENT
+    // --------------------------------
+
+    if (
+      payAmount >
+      loan.balanceAmount
+    ) {
+
+      return res.status(400).json({
+        message:
+          `Payment exceeds remaining balance of ${loan.balanceAmount}`
+      });
+    }
+
+    // --------------------------------
+    // START TRANSACTION
+    // --------------------------------
+
+    const session =
+      await mongoose.startSession();
+
+    try {
+
+      session.startTransaction();
+
+      // --------------------------------
+      // CALCULATE NEW BALANCE
+      // --------------------------------
+
+      const newBalance =
+        loan.balanceAmount -
+        payAmount;
+
+      const newStatus =
+        newBalance === 0
+          ? "paid"
+          : loan.status;
+
+      // --------------------------------
+      // UPDATE LOAN
+      // --------------------------------
+
+      const updateResult =
+        await DebtLoan.updateOne(
+          {
+            _id:
+              loanId,
+
+            owner:
+              req.ownerId,
+
+            branch:
+              req.branchId,
+
+            balanceAmount: {
+              $gte:
+                payAmount
+            },
+
+            status: {
+              $nin: [
+                "paid",
+                "cancelled"
+              ]
+            }
+          },
+
+          {
+            $inc: {
+              paidAmount:
+                payAmount,
+
+              balanceAmount:
+                -payAmount
+            },
+
+            $set: {
+              lastPaymentDate:
+                paymentDate
+                  ? new Date(
+                      paymentDate
+                    )
+                  : new Date(),
+
+              status:
+                newStatus
+            }
+          },
+
+          {
+            session
+          }
+        );
+
+      if (
+        updateResult.modifiedCount ===
+        0
+      ) {
+
+        await session.abortTransaction();
+
+        return res.status(400).json({
+          message:
+            "Payment could not be processed. Balance may have changed."
+        });
+      }
+
+      // --------------------------------
+      // CREATE PAYMENT
+      // --------------------------------
+
+      const payment =
+        await DebtPayment.create(
+          [
+            {
+              loan:
+                loan._id,
+
+              customer:
+                loan.customer,
+
+              owner:
+                req.ownerId,
+
+              branch:
+                req.branchId,
+
+              amount:
+                payAmount,
+
+              paymentDate:
+                paymentDate
+                  ? new Date(
+                      paymentDate
+                    )
+                  : new Date(),
+
+              paymentMethod:
+                paymentMethod ||
+                "cash",
+
+              channel:
+                "offline_sync",
+
+              reference:
+                reference ||
+                "",
+
+              transactionId:
+                transactionId ||
+                null,
+
+              receivedBy:
+                req.user.id,
+
+              // --------------------------
+              // OFFLINE SYNC
+              // --------------------------
+
+              syncId,
+
+              syncStatus:
+                "synced",
+
+              source:
+                "offline",
+
+              deviceId,
+
+              lastSyncedAt:
+                new Date(),
+
+              syncError:
+                "",
+
+              queuedAt:
+                null,
+
+              status:
+                "posted"
+            }
+          ],
+          {
+            session
+          }
+        );
+
+      // --------------------------------
+      // UPDATE CUSTOMER
+      // --------------------------------
+
+      if (
+        newStatus ===
+        "paid"
+      ) {
+
+        await CustomerIdentity.findByIdAndUpdate(
+          loan.customer,
+
+          {
+            $inc: {
+              activeLoans:
+                -1,
+
+              paidLoans:
+                1,
+
+              totalPaid:
+                payAmount
+            }
+          },
+
+          {
+            session
+          }
+        );
+
+      } else {
+
+        await CustomerIdentity.findByIdAndUpdate(
+          loan.customer,
+
+          {
+            $inc: {
+              totalPaid:
+                payAmount
+            }
+          },
+
+          {
+            session
+          }
+        );
+      }
+
+      // --------------------------------
+      // COMMIT
+      // --------------------------------
+
+      await session.commitTransaction();
+
+      // --------------------------------
+      // RETURN
+      // --------------------------------
+
+      return res.status(200).json({
+
+        success: true,
+
+        alreadySynced:
+          false,
+
+        payment:
+          payment[0],
+
+        loan: {
+          _id:
+            loan._id,
+
+          balanceAmount:
+            newBalance,
+
+          paidAmount:
+            loan.paidAmount +
+            payAmount,
+
+          status:
+            newStatus
+        }
+
+      });
+
+    } catch (err) {
+
+      if (
+        session.inTransaction()
+      ) {
+        await session.abortTransaction();
+      }
+
+      // --------------------------------
+      // DUPLICATE PROTECTION
+      // --------------------------------
+
+      if (
+        err?.code === 11000
+      ) {
+
+        const existingPayment =
+          await DebtPayment.findOne({
+            owner:
+              req.ownerId,
+
+            branch:
+              req.branchId,
+
+            $or: [
+              {
+                syncId
+              },
+
+              ...(transactionId
+                ? [
+                    {
+                      transactionId
+                    }
+                  ]
+                : [])
+            ]
+          }).lean();
+
+        if (
+          existingPayment
+        ) {
+
+          return res.status(200).json({
+
+            success: true,
+
+            alreadySynced:
+              true,
+
+            payment:
+              existingPayment
+          });
+        }
+      }
+
+      throw err;
+
+    } finally {
+
+      await session.endSession();
+    }
+
+  } catch (error) {
+
+    console.error(
+      "❌ SYNC PAYMENT ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        error.message
+    });
+  }
+};
+
  // REFUND PAYMENT
 const refundPayment =
   async (req, res) => {
@@ -1677,19 +2188,20 @@ const deleteDebtLoan =
 
     }
   };
-module.exports = {
+ module.exports = {
   findOrCreateCustomer,
   checkCredit,
   deleteDebtLoan,
   createDebtLoan,
-    syncLoan,
+  syncLoan,
+  syncPayment,
   getLoanHistory,
   getLoanById,
   receivePayment,
   scanFingerprint,
- getPaymentHistory,
- scanDebtsFromImage,
- importDebts,
- refundPayment,
-   getOverdueLoans
+  getPaymentHistory,
+  scanDebtsFromImage,
+  importDebts,
+  refundPayment,
+  getOverdueLoans
 };
