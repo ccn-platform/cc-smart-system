@@ -1,4 +1,4 @@
-  
+   
   const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -23,6 +23,7 @@ const {
   createDebtLoan,
    syncLoan,
    syncPayment,
+    syncRefund,
   refundPayment,
   receivePayment,
   getLoanHistory,
@@ -144,6 +145,14 @@ router.post(
   branchAccess,
   syncPayment
 );
+// SYNC OFFLINE REFUND
+router.post(
+  "/sync-refund",
+  protect,
+  branchAccess,
+  syncRefund
+);
+
 // RECEIVE PAYMENT
 router.post(
   "/payment",
