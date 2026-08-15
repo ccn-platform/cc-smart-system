@@ -1,4 +1,4 @@
-  const mongoose =
+   const mongoose =
   require("mongoose");
 
 const debtLoanSchema =
@@ -149,24 +149,48 @@ lastSyncedAt: {
   default: null
 },
 
-lastSyncedAt: {
-  type: Date,
-  default: null
-},
+ 
 
 syncError: {
   type: String,
   default: ""
 },
 
+deleteSyncId: {
+  type: String,
+  default: null,
+  index: true
+},
+
+deleteDeviceId: {
+  type: String,
+  default: null
+},
+
+deleteSource: {
+  type: String,
+  enum: [
+    "online",
+    "offline"
+  ],
+  default: null
+},
+
+deleteSyncedAt: {
+  type: Date,
+  default: null
+},
+
+deletedAt: {
+  type: Date,
+  default: null
+},
+
 queuedAt: {
   type: Date,
   default: null
 },
-queuedAt: {
-  type: Date,
-  default: null
-},
+ 
       approvalMethod: {
         type: String,
         enum: [
@@ -254,6 +278,21 @@ debtLoanSchema.index({
   }
 );
 
+debtLoanSchema.index(
+  {
+    owner: 1,
+    branch: 1,
+    deleteSyncId: 1
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      deleteSyncId: {
+        $type: "string"
+      }
+    }
+  }
+);
 module.exports =
   mongoose.model(
     "DebtLoan",
