@@ -20,6 +20,7 @@ const {
   checkCredit,
    scanDebtsFromImage,
    deleteDebtLoan,
+   syncDeleteLoan,
   createDebtLoan,
    syncLoan,
    syncPayment,
@@ -138,6 +139,13 @@ router.post(
   syncLoan
 );
 
+// SYNC OFFLINE DELETE LOAN
+router.post(
+  "/sync-delete-loan",
+  protect,
+  branchAccess,
+  syncDeleteLoan
+);
 // SYNC OFFLINE PAYMENT
 router.post(
   "/sync-payment",
