@@ -1,4 +1,4 @@
-     
+    
  const mongoose =
   require("mongoose");
  const CustomerIdentity =
@@ -2764,10 +2764,314 @@ const deleteDebtLoan =
 
     }
   };
+
+  // ====================================
+// SYNC OFFLINE DELETE LOAN
+// ====================================
+
+const syncDeleteLoan =
+  async (req, res) => {
+    let session = null;
+
+    try {
+
+      const {
+        loanId,
+        loanSyncId,
+        deleteSyncId,
+        deviceId
+      } = req.body;
+
+      // ====================================
+      // VALIDATION
+      // ====================================
+
+      if (!loanId && !loanSyncId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Loan ID or loanSyncId required"
+        });
+      }
+
+      if (!deleteSyncId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "deleteSyncId required"
+        });
+      }
+
+      if (!deviceId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "deviceId required"
+        });
+      }
+
+      // ====================================
+      // FIND LOAN
+      // ====================================
+
+      let loan = null;
+
+      // -------------------------------
+      // SERVER MONGODB ID
+      // -------------------------------
+
+      if (
+        loanId &&
+        mongoose.Types.ObjectId.isValid(
+          loanId
+        )
+      ) {
+
+        loan =
+          await DebtLoan.findOne({
+            _id: loanId,
+            owner: req.ownerId,
+            branch: req.branchId
+          });
+
+      }
+
+      // -------------------------------
+      // OFFLINE LOAN syncId
+      // -------------------------------
+
+      if (
+        !loan &&
+        loanSyncId
+      ) {
+
+        loan =
+          await DebtLoan.findOne({
+            owner: req.ownerId,
+            branch: req.branchId,
+            syncId: loanSyncId
+          });
+
+      }
+
+      // ====================================
+      // LOAN NOT FOUND
+      // ====================================
+
+      if (!loan) {
+
+        return res.status(404).json({
+          success: false,
+          message:
+            "Deni halijapatikana kwenye server"
+        });
+
+      }
+
+      // ====================================
+      // ALREADY CANCELLED
+      // ====================================
+
+      if (
+        loan.status === "cancelled"
+      ) {
+
+        // Ikiwa deletion hii tayari
+        // ilishawahi kufika server
+
+        if (
+          loan.deleteSyncId ===
+          deleteSyncId
+        ) {
+
+          return res.status(200).json({
+            success: true,
+            alreadySynced: true,
+            message:
+              "Delete tayari imesync"
+          });
+
+        }
+
+        return res.status(400).json({
+          success: false,
+          message:
+            "Deni hili tayari limefutwa"
+        });
+
+      }
+
+      // ====================================
+      // PAID LOAN CANNOT DELETE
+      // ====================================
+
+      if (
+        loan.status === "paid"
+      ) {
+
+        return res.status(400).json({
+          success: false,
+          message:
+            "Deni lililolipwa kikamilifu haliwezi kufutwa"
+        });
+
+      }
+
+      // ====================================
+      // START TRANSACTION
+      // ====================================
+
+      session =
+        await mongoose.startSession();
+
+      session.startTransaction();
+
+      // ====================================
+      // CANCEL LOAN
+      // ====================================
+
+      loan.status =
+        "cancelled";
+
+      loan.deleteSyncId =
+        deleteSyncId;
+
+      loan.deleteDeviceId =
+        deviceId;
+
+      loan.deleteSource =
+        "offline";
+
+      loan.deleteSyncedAt =
+        new Date();
+
+      loan.deletedAt =
+        new Date();
+
+      await loan.save({
+        session
+      });
+
+      // ====================================
+      // UPDATE CUSTOMER
+      // ====================================
+
+      await CustomerIdentity.findByIdAndUpdate(
+        loan.customer,
+        {
+          $inc: {
+            activeLoans: -1
+          }
+        },
+        {
+          session
+        }
+      );
+
+      // ====================================
+      // COMMIT
+      // ====================================
+
+      await session.commitTransaction();
+
+      return res.status(200).json({
+        success: true,
+        alreadySynced: false,
+        message:
+          "Deni limefutwa na offline delete imesync",
+        loan: {
+          _id:
+            loan._id,
+
+          syncId:
+            loan.syncId,
+
+          deleteSyncId:
+            loan.deleteSyncId,
+
+          status:
+            loan.status
+        }
+      });
+
+    } catch (error) {
+
+      if (
+        session &&
+        session.inTransaction()
+      ) {
+        await session.abortTransaction();
+      }
+
+      // ====================================
+      // DUPLICATE DELETE
+      // ====================================
+
+      if (
+        error?.code === 11000
+      ) {
+
+        const existingLoan =
+          await DebtLoan.findOne({
+            owner:
+              req.ownerId,
+
+            branch:
+              req.branchId,
+
+            deleteSyncId:
+              req.body.deleteSyncId
+          }).lean();
+
+        if (existingLoan) {
+
+          return res.status(200).json({
+            success: true,
+            alreadySynced: true,
+
+            loan: {
+              _id:
+                existingLoan._id,
+
+              syncId:
+                existingLoan.syncId,
+
+              deleteSyncId:
+                existingLoan.deleteSyncId,
+
+              status:
+                existingLoan.status
+            }
+          });
+
+        }
+      }
+
+      console.error(
+        "❌ SYNC DELETE LOAN ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error?.message ||
+          "Delete loan sync failed"
+      });
+
+    } finally {
+
+      if (session) {
+        await session.endSession();
+      }
+
+    }
+  };
  module.exports = {
   findOrCreateCustomer,
   checkCredit,
   deleteDebtLoan,
+  syncDeleteLoan,
   createDebtLoan,
   syncLoan,
   syncPayment,
