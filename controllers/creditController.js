@@ -1,4 +1,4 @@
-    
+     
  const mongoose =
   require("mongoose");
  const CustomerIdentity =
@@ -473,10 +473,15 @@ const createDebtLoan =
     }
   };
 
-  // SYNC OFFLINE LOAN
+ // ====================================
+// SYNC OFFLINE LOAN
+// ====================================
+
 const syncLoan =
   async (req, res) => {
+
     try {
+
       const {
         customerId,
         amount,
@@ -488,29 +493,36 @@ const syncLoan =
         deviceId
       } = req.body;
 
-      // --------------------------------
+
+      // ====================================
       // REQUIRED FIELDS
-      // --------------------------------
+      // ====================================
 
       if (!customerId) {
+
         return res.status(400).json({
           message:
             "Customer required"
         });
+
       }
 
       if (!syncId) {
+
         return res.status(400).json({
           message:
             "syncId required"
         });
+
       }
 
       if (!deviceId) {
+
         return res.status(400).json({
           message:
             "deviceId required"
         });
+
       }
 
       const cleanAmount =
@@ -520,25 +532,57 @@ const syncLoan =
         !cleanAmount ||
         cleanAmount <= 0
       ) {
+
         return res.status(400).json({
           message:
             "Valid loan amount required"
         });
+
       }
 
       if (!dueDate) {
+
         return res.status(400).json({
           message:
             "Due date required"
         });
+
       }
 
-      // --------------------------------
+
+      // ====================================
+      // VERIFY CUSTOMER FIRST
+      // ====================================
+
+      const customer =
+        await CustomerIdentity.findOne({
+
+          _id:
+            customerId,
+
+          owner:
+            req.ownerId
+
+        }).lean();
+
+
+      if (!customer) {
+
+        return res.status(404).json({
+          message:
+            "Customer not found"
+        });
+
+      }
+
+
+      // ====================================
       // CHECK DUPLICATE SYNC
-      // --------------------------------
+      // ====================================
 
       const existingLoan =
         await DebtLoan.findOne({
+
           owner:
             req.ownerId,
 
@@ -546,51 +590,49 @@ const syncLoan =
             req.branchId,
 
           syncId
-        }).lean();
+
+        })
+        .populate(
+          "customer",
+          "fullName phone"
+        )
+        .lean();
+
 
       if (existingLoan) {
+
         return res.status(200).json({
+
           success: true,
+
           alreadySynced: true,
+
           loan:
             existingLoan
+
         });
+
       }
 
-      // --------------------------------
-      // VERIFY CUSTOMER
-      // --------------------------------
 
-      const customer =
-        await CustomerIdentity.findOne({
-          _id:
-            customerId,
-
-          owner:
-            req.ownerId
-        }).lean();
-
-      if (!customer) {
-        return res.status(404).json({
-          message:
-            "Customer not found"
-        });
-      }
-
-      // --------------------------------
+      // ====================================
       // CREATE SERVER LOAN
-      // --------------------------------
+      // ====================================
 
       const session =
         await mongoose.startSession();
 
+
       try {
+
         session.startTransaction();
+
 
         const loan =
           await DebtLoan.create(
             [
               {
+
                 owner:
                   req.ownerId,
 
@@ -633,14 +675,8 @@ const syncLoan =
                 note:
                   note || "",
 
-                // Offline loan has now
-                // arrived at server.
                 approvedBy:
                   null,
-
-                // --------------------------------
-                // SYNC INFORMATION
-                // --------------------------------
 
                 syncId:
                   syncId,
@@ -666,10 +702,9 @@ const syncLoan =
                 approvalMethod:
                   "offline_pending",
 
-                // Loan is now active
-                // on the server.
                 status:
                   "active"
+
               }
             ],
             {
@@ -677,14 +712,18 @@ const syncLoan =
             }
           );
 
-        // --------------------------------
+
+        // ====================================
         // UPDATE CUSTOMER COUNTERS
-        // --------------------------------
+        // ====================================
 
         await CustomerIdentity.findByIdAndUpdate(
+
           customerId,
+
           {
             $inc: {
+
               totalLoans:
                 1,
 
@@ -693,39 +732,77 @@ const syncLoan =
 
               totalBorrowed:
                 cleanAmount
+
             }
           },
+
           {
             session
           }
+
         );
+
+
+        // ====================================
+        // COMMIT
+        // ====================================
 
         await session.commitTransaction();
 
+
+        // ====================================
+        // GET CREATED LOAN WITH CUSTOMER
+        // ====================================
+
+        const syncedLoan =
+          await DebtLoan.findById(
+            loan[0]._id
+          )
+          .populate(
+            "customer",
+            "fullName phone"
+          )
+          .lean();
+
+
+        // ====================================
+        // RESPONSE
+        // ====================================
+
         return res.status(201).json({
+
           success: true,
+
           alreadySynced: false,
+
           loan:
-            loan[0]
+            syncedLoan
+
         });
+
 
       } catch (err) {
 
         if (
           session.inTransaction()
         ) {
+
           await session.abortTransaction();
+
         }
 
-        // --------------------------------
+
+        // ====================================
         // DUPLICATE syncId
-        // --------------------------------
+        // ====================================
 
         if (
           err?.code === 11000
         ) {
+
           const existingLoan =
             await DebtLoan.findOne({
+
               owner:
                 req.ownerId,
 
@@ -733,30 +810,56 @@ const syncLoan =
                 req.branchId,
 
               syncId
-            }).lean();
+
+            })
+            .populate(
+              "customer",
+              "fullName phone"
+            )
+            .lean();
+
 
           if (existingLoan) {
+
             return res.status(200).json({
+
               success: true,
+
               alreadySynced: true,
+
               loan:
                 existingLoan
+
             });
+
           }
+
         }
 
         throw err;
 
       } finally {
+
         await session.endSession();
+
       }
 
     } catch (error) {
+
+      console.error(
+        "❌ SYNC OFFLINE LOAN ERROR:",
+        error
+      );
+
       return res.status(500).json({
+
         message:
           error.message
+
       });
+
     }
+
   };
 
 const getLoanHistory =
