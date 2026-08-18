@@ -1,4 +1,4 @@
-     
+       
  const mongoose =
   require("mongoose");
  const CustomerIdentity =
@@ -1344,6 +1344,7 @@ const syncPayment = async (req, res) => {
         message:
           "Loan ID or loanSyncId required"
       });
+
     }
 
 
@@ -1354,6 +1355,7 @@ const syncPayment = async (req, res) => {
         message:
           "syncId required"
       });
+
     }
 
 
@@ -1364,6 +1366,7 @@ const syncPayment = async (req, res) => {
         message:
           "deviceId required"
       });
+
     }
 
 
@@ -1381,6 +1384,7 @@ const syncPayment = async (req, res) => {
         message:
           "Valid payment amount required"
       });
+
     }
 
 
@@ -1404,6 +1408,21 @@ const syncPayment = async (req, res) => {
 
     if (existingPayment) {
 
+      const existingLoan =
+        await DebtLoan.findOne({
+
+          _id:
+            existingPayment.loan,
+
+          owner:
+            req.ownerId,
+
+          branch:
+            req.branchId
+
+        }).lean();
+
+
       return res.status(200).json({
 
         success: true,
@@ -1411,8 +1430,37 @@ const syncPayment = async (req, res) => {
         alreadySynced: true,
 
         payment:
-          existingPayment
+          existingPayment,
+
+        loan:
+          existingLoan
+            ? {
+
+                _id:
+                  existingLoan._id,
+
+                syncId:
+                  existingLoan.syncId ||
+                  null,
+
+                balanceAmount:
+                  Number(
+                    existingLoan.balanceAmount || 0
+                  ),
+
+                paidAmount:
+                  Number(
+                    existingLoan.paidAmount || 0
+                  ),
+
+                status:
+                  existingLoan.status
+
+              }
+            : null
+
       });
+
     }
 
 
@@ -1438,6 +1486,21 @@ const syncPayment = async (req, res) => {
 
       if (existingTransaction) {
 
+        const existingLoan =
+          await DebtLoan.findOne({
+
+            _id:
+              existingTransaction.loan,
+
+            owner:
+              req.ownerId,
+
+            branch:
+              req.branchId
+
+          }).lean();
+
+
         return res.status(200).json({
 
           success: true,
@@ -1445,9 +1508,39 @@ const syncPayment = async (req, res) => {
           alreadySynced: true,
 
           payment:
-            existingTransaction
+            existingTransaction,
+
+          loan:
+            existingLoan
+              ? {
+
+                  _id:
+                    existingLoan._id,
+
+                  syncId:
+                    existingLoan.syncId ||
+                    null,
+
+                  balanceAmount:
+                    Number(
+                      existingLoan.balanceAmount || 0
+                    ),
+
+                  paidAmount:
+                    Number(
+                      existingLoan.paidAmount || 0
+                    ),
+
+                  status:
+                    existingLoan.status
+
+                }
+              : null
+
         });
+
       }
+
     }
 
 
@@ -1472,6 +1565,7 @@ const syncPayment = async (req, res) => {
             syncId:
               loanSyncId
           })
+
     };
 
 
@@ -1493,7 +1587,9 @@ const syncPayment = async (req, res) => {
 
         message:
           "Loan not found"
+
       });
+
     }
 
 
@@ -1512,7 +1608,9 @@ const syncPayment = async (req, res) => {
 
         message:
           "Cancelled loan cannot receive payment"
+
       });
+
     }
 
 
@@ -1527,7 +1625,9 @@ const syncPayment = async (req, res) => {
 
         message:
           "This loan is already fully paid"
+
       });
+
     }
 
 
@@ -1556,7 +1656,9 @@ const syncPayment = async (req, res) => {
 
         message:
           `Payment exceeds remaining balance of ${currentBalance}`
+
       });
+
     }
 
 
@@ -1663,6 +1765,7 @@ const syncPayment = async (req, res) => {
         {
           session
         }
+
       );
 
 
@@ -1683,7 +1786,9 @@ const syncPayment = async (req, res) => {
 
         message:
           "Payment could not be processed. Balance may have changed."
+
       });
+
     }
 
 
@@ -1774,6 +1879,7 @@ const syncPayment = async (req, res) => {
         {
           session
         }
+
       );
 
 
@@ -1810,6 +1916,7 @@ const syncPayment = async (req, res) => {
         {
           session
         }
+
       );
 
     } else {
@@ -1832,7 +1939,9 @@ const syncPayment = async (req, res) => {
         {
           session
         }
+
       );
+
     }
 
 
@@ -1881,7 +1990,6 @@ const syncPayment = async (req, res) => {
 
   } catch (error) {
 
-
     // ====================================
     // ABORT TRANSACTION
     // ====================================
@@ -1892,6 +2000,7 @@ const syncPayment = async (req, res) => {
     ) {
 
       await session.abortTransaction();
+
     }
 
 
@@ -1932,9 +2041,22 @@ const syncPayment = async (req, res) => {
         }).lean();
 
 
-      if (
-        existingPayment
-      ) {
+      if (existingPayment) {
+
+        const existingLoan =
+          await DebtLoan.findOne({
+
+            _id:
+              existingPayment.loan,
+
+            owner:
+              req.ownerId,
+
+            branch:
+              req.branchId
+
+          }).lean();
+
 
         return res.status(200).json({
 
@@ -1943,10 +2065,39 @@ const syncPayment = async (req, res) => {
           alreadySynced: true,
 
           payment:
-            existingPayment
+            existingPayment,
+
+          loan:
+            existingLoan
+              ? {
+
+                  _id:
+                    existingLoan._id,
+
+                  syncId:
+                    existingLoan.syncId ||
+                    null,
+
+                  balanceAmount:
+                    Number(
+                      existingLoan.balanceAmount || 0
+                    ),
+
+                  paidAmount:
+                    Number(
+                      existingLoan.paidAmount || 0
+                    ),
+
+                  status:
+                    existingLoan.status
+
+                }
+              : null
 
         });
+
       }
+
     }
 
 
@@ -1972,7 +2123,6 @@ const syncPayment = async (req, res) => {
 
 
   } finally {
-
 
     // ====================================
     // END SESSION
