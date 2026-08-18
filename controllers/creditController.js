@@ -2726,45 +2726,113 @@ const syncRefund = async (req, res) => {
   }
 };
  
-  const getPaymentHistory =
+ const getPaymentHistory =
   async (req, res) => {
+
     try {
+
       const { loanId } =
         req.params;
 
-    const payments =
-  await DebtPayment.find({
-    owner: req.ownerId,
-    branch: req.branchId,
-    loan: loanId,
-    status: {
-      $in: [
-        "posted",
-        "reversed"
-      ]
-    }
-  })
-    .populate(
-      "receivedBy",
-      "name"
-    )
-    .sort({
-      paymentDate: -1
-    })
-    .limit(100)
-    .lean();
+
+      const payments =
+        await DebtPayment.find({
+          owner: req.ownerId,
+          branch: req.branchId,
+          loan: loanId,
+
+          status: {
+            $in: [
+              "posted",
+              "reversed"
+            ]
+          }
+
+        })
+          .populate(
+            "receivedBy",
+            "name"
+          )
+          .sort({
+            paymentDate: -1
+          })
+          .limit(100)
+          .lean();
+
+
+      // ====================================
+      // NORMALIZE PAYMENT HISTORY
+      // ====================================
+      //
+      // Hii haibadilishi malipo ya zamani.
+      //
+      // Inaacha fields zote zilizokuwepo,
+      // na kuhakikisha syncId inarudi
+      // kwa frontend.
+      //
+      // App za zamani zinaendelea kupata
+      // response ileile.
+      // ====================================
+
+      const normalizedPayments =
+        payments.map(
+          (payment) => ({
+
+            ...payment,
+
+            syncId:
+              payment.syncId || null
+
+          })
+        );
+
+
+      console.log(
+        "📥 PAYMENT HISTORY RESPONSE:",
+        {
+          loanId,
+
+          count:
+            normalizedPayments.length,
+
+          payments:
+            normalizedPayments.map(
+              (payment) => ({
+                paymentId:
+                  String(
+                    payment._id
+                  ),
+
+                syncId:
+                  payment.syncId,
+
+                amount:
+                  payment.amount
+              })
+            )
+        }
+      );
+
 
       return res.status(200).json(
-        payments
+        normalizedPayments
       );
+
     } catch (error) {
+
+      console.error(
+        "❌ GET PAYMENT HISTORY ERROR:",
+        error
+      );
+
       return res.status(500).json({
         message:
           error.message
       });
-    }
-  };
 
+    }
+
+  };
 
   const scanDebtsFromImage =
   async (req, res) => {
