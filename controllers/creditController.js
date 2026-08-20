@@ -3018,80 +3018,217 @@ const syncRefund = async (req, res) => {
 
     }
   };
+ 
+  // ====================================
+// DELETE LOAN COMPLETELY
+// ====================================
 
-  // DELETE LOAN
 const deleteDebtLoan =
   async (req, res) => {
+
+    let session = null;
+
     try {
+
+      // ====================================
+      // START TRANSACTION
+      // ====================================
+
+      session =
+        await mongoose.startSession();
+
+      session.startTransaction();
+
+
+      // ====================================
+      // FIND LOAN
+      // ====================================
 
       const loan =
         await DebtLoan.findOne({
           _id: req.params.id,
           owner: req.ownerId,
           branch: req.branchId
-        });
+        }).session(session);
+
+
+      // ====================================
+      // LOAN NOT FOUND
+      // ====================================
 
       if (!loan) {
+
+        await session.abortTransaction();
+
         return res.status(404).json({
+          success: false,
           message:
             "Deni halijapatikana"
         });
+
       }
+
+
+      // ====================================
+      // PAID LOAN CANNOT DELETE
+      // ====================================
 
       if (
         loan.status === "paid"
       ) {
+
+        await session.abortTransaction();
+
         return res.status(400).json({
+          success: false,
           message:
             "Deni lililolipwa kikamilifu haliwezi kufutwa"
         });
+
       }
 
-      if (
-        loan.status === "cancelled"
-      ) {
-        return res.status(400).json({
-          message:
-            "Deni hili tayari limefutwa"
-        });
-      }
 
-      loan.status =
-        "cancelled";
+      // ====================================
+      // SAVE IMPORTANT VALUES
+      // BEFORE DELETING
+      // ====================================
 
-      await loan.save();
+      const loanId =
+        loan._id;
 
-      await CustomerIdentity.findByIdAndUpdate(
-        loan.customer,
+      const customerId =
+        loan.customer;
+
+
+      // ====================================
+      // DELETE PAYMENT HISTORY
+      // ====================================
+
+      await DebtPayment.deleteMany(
         {
-          $inc: {
-            activeLoans: -1
-          }
+          loan: loanId,
+          owner: req.ownerId,
+          branch: req.branchId
+        },
+        {
+          session
         }
       );
 
+
+      // ====================================
+      // UPDATE CUSTOMER ACTIVE LOANS
+      // ====================================
+
+      if (customerId) {
+
+        await CustomerIdentity.findByIdAndUpdate(
+          customerId,
+          {
+            $inc: {
+              activeLoans: -1
+            }
+          },
+          {
+            session
+          }
+        );
+
+      }
+
+
+      // ====================================
+      // DELETE LOAN COMPLETELY
+      // ====================================
+
+      await DebtLoan.deleteOne(
+        {
+          _id: loanId,
+          owner: req.ownerId,
+          branch: req.branchId
+        },
+        {
+          session
+        }
+      );
+
+
+      // ====================================
+      // COMMIT TRANSACTION
+      // ====================================
+
+      await session.commitTransaction();
+
+
+      // ====================================
+      // SUCCESS
+      // ====================================
+
       return res.status(200).json({
+
         success: true,
+
         message:
           "Deni limefutwa kikamilifu"
+
       });
+
 
     } catch (error) {
 
+      // ====================================
+      // ROLLBACK IF ERROR
+      // ====================================
+
+      if (
+        session &&
+        session.inTransaction()
+      ) {
+
+        await session.abortTransaction();
+
+      }
+
+
+      console.error(
+        "❌ DELETE LOAN ERROR:",
+        error
+      );
+
+
       return res.status(500).json({
+
+        success: false,
+
         message:
-          error.message
+          error?.message ||
+          "Imeshindikana kufuta deni"
+
       });
 
-    }
-  };
 
-  // ====================================
+    } finally {
+
+      // ====================================
+      // CLOSE SESSION
+      // ====================================
+
+      if (session) {
+
+        await session.endSession();
+
+      }
+
+    }
+
+  };
+ // ====================================
 // SYNC OFFLINE DELETE LOAN
 // ====================================
 
 const syncDeleteLoan =
   async (req, res) => {
+
     let session = null;
 
     try {
@@ -3103,33 +3240,46 @@ const syncDeleteLoan =
         deviceId
       } = req.body;
 
+
       // ====================================
       // VALIDATION
       // ====================================
 
-      if (!loanId && !loanSyncId) {
+      if (
+        !loanId &&
+        !loanSyncId
+      ) {
+
         return res.status(400).json({
           success: false,
           message:
             "Loan ID or loanSyncId required"
         });
+
       }
 
+
       if (!deleteSyncId) {
+
         return res.status(400).json({
           success: false,
           message:
             "deleteSyncId required"
         });
+
       }
 
+
       if (!deviceId) {
+
         return res.status(400).json({
           success: false,
           message:
             "deviceId required"
         });
+
       }
+
 
       // ====================================
       // FIND LOAN
@@ -3137,9 +3287,10 @@ const syncDeleteLoan =
 
       let loan = null;
 
-      // -------------------------------
-      // SERVER MONGODB ID
-      // -------------------------------
+
+      // ------------------------------------
+      // FIND BY SERVER MONGODB ID
+      // ------------------------------------
 
       if (
         loanId &&
@@ -3157,9 +3308,10 @@ const syncDeleteLoan =
 
       }
 
-      // -------------------------------
-      // OFFLINE LOAN syncId
-      // -------------------------------
+
+      // ------------------------------------
+      // FIND BY OFFLINE syncId
+      // ------------------------------------
 
       if (
         !loan &&
@@ -3175,52 +3327,22 @@ const syncDeleteLoan =
 
       }
 
+
       // ====================================
-      // LOAN NOT FOUND
+      // LOAN ALREADY DOES NOT EXIST
       // ====================================
 
       if (!loan) {
 
-        return res.status(404).json({
-          success: false,
+        return res.status(200).json({
+          success: true,
+          alreadySynced: true,
           message:
-            "Deni halijapatikana kwenye server"
+            "Deni tayari limefutwa kwenye server"
         });
 
       }
 
-      // ====================================
-      // ALREADY CANCELLED
-      // ====================================
-
-      if (
-        loan.status === "cancelled"
-      ) {
-
-        // Ikiwa deletion hii tayari
-        // ilishawahi kufika server
-
-        if (
-          loan.deleteSyncId ===
-          deleteSyncId
-        ) {
-
-          return res.status(200).json({
-            success: true,
-            alreadySynced: true,
-            message:
-              "Delete tayari imesync"
-          });
-
-        }
-
-        return res.status(400).json({
-          success: false,
-          message:
-            "Deni hili tayari limefutwa"
-        });
-
-      }
 
       // ====================================
       // PAID LOAN CANNOT DELETE
@@ -3238,6 +3360,7 @@ const syncDeleteLoan =
 
       }
 
+
       // ====================================
       // START TRANSACTION
       // ====================================
@@ -3247,73 +3370,108 @@ const syncDeleteLoan =
 
       session.startTransaction();
 
-      // ====================================
-      // CANCEL LOAN
-      // ====================================
-
-      loan.status =
-        "cancelled";
-
-      loan.deleteSyncId =
-        deleteSyncId;
-
-      loan.deleteDeviceId =
-        deviceId;
-
-      loan.deleteSource =
-        "offline";
-
-      loan.deleteSyncedAt =
-        new Date();
-
-      loan.deletedAt =
-        new Date();
-
-      await loan.save({
-        session
-      });
 
       // ====================================
-      // UPDATE CUSTOMER
+      // SAVE IMPORTANT VALUES BEFORE DELETE
       // ====================================
 
-      await CustomerIdentity.findByIdAndUpdate(
-        loan.customer,
+      const deletedLoanId =
+        loan._id;
+
+      const deletedLoanSyncId =
+        loan.syncId;
+
+      const customerId =
+        loan.customer;
+
+
+      // ====================================
+      // DELETE PAYMENTS RELATED TO LOAN
+      // ====================================
+
+      await DebtPayment.deleteMany(
         {
-          $inc: {
-            activeLoans: -1
-          }
+          owner: req.ownerId,
+          branch: req.branchId,
+          loan: deletedLoanId
         },
         {
           session
         }
       );
 
+
       // ====================================
-      // COMMIT
+      // UPDATE CUSTOMER ACTIVE LOANS
+      // ====================================
+
+      if (customerId) {
+
+        await CustomerIdentity.findByIdAndUpdate(
+          customerId,
+          {
+            $inc: {
+              activeLoans: -1
+            }
+          },
+          {
+            session
+          }
+        );
+
+      }
+
+
+      // ====================================
+      // DELETE LOAN COMPLETELY
+      // ====================================
+
+      await DebtLoan.deleteOne(
+        {
+          _id: deletedLoanId,
+          owner: req.ownerId,
+          branch: req.branchId
+        },
+        {
+          session
+        }
+      );
+
+
+      // ====================================
+      // COMMIT TRANSACTION
       // ====================================
 
       await session.commitTransaction();
 
+
       return res.status(200).json({
+
         success: true,
+
         alreadySynced: false,
+
         message:
-          "Deni limefutwa na offline delete imesync",
+          "Deni limefutwa kabisa kwenye server",
+
         loan: {
+
           _id:
-            loan._id,
+            deletedLoanId,
 
           syncId:
-            loan.syncId,
+            deletedLoanSyncId,
 
           deleteSyncId:
-            loan.deleteSyncId,
+            deleteSyncId,
 
           status:
-            loan.status
+            "deleted"
+
         }
+
       });
+
 
     } catch (error) {
 
@@ -3321,73 +3479,41 @@ const syncDeleteLoan =
         session &&
         session.inTransaction()
       ) {
+
         await session.abortTransaction();
+
       }
 
-      // ====================================
-      // DUPLICATE DELETE
-      // ====================================
-
-      if (
-        error?.code === 11000
-      ) {
-
-        const existingLoan =
-          await DebtLoan.findOne({
-            owner:
-              req.ownerId,
-
-            branch:
-              req.branchId,
-
-            deleteSyncId:
-              req.body.deleteSyncId
-          }).lean();
-
-        if (existingLoan) {
-
-          return res.status(200).json({
-            success: true,
-            alreadySynced: true,
-
-            loan: {
-              _id:
-                existingLoan._id,
-
-              syncId:
-                existingLoan.syncId,
-
-              deleteSyncId:
-                existingLoan.deleteSyncId,
-
-              status:
-                existingLoan.status
-            }
-          });
-
-        }
-      }
 
       console.error(
         "❌ SYNC DELETE LOAN ERROR:",
         error
       );
 
+
       return res.status(500).json({
+
         success: false,
+
         message:
           error?.message ||
           "Delete loan sync failed"
+
       });
+
 
     } finally {
 
       if (session) {
+
         await session.endSession();
+
       }
 
     }
+
   };
+
  module.exports = {
   findOrCreateCustomer,
   checkCredit,
