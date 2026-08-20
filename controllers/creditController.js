@@ -1,4 +1,4 @@
-  const mongoose =
+   const mongoose =
   require("mongoose");
  const CustomerIdentity =
   require("../models/CustomerIdentity");
@@ -885,8 +885,11 @@ const syncLoan =
           owner: req.ownerId,
           branch: req.branchId,
           status: {
-            $ne: "cancelled"
-          }
+         $in: [
+          "active",
+        "overdue"
+       ]
+      }
         })
           .populate(
             "customer",
