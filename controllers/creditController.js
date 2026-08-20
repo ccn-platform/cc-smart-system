@@ -3018,7 +3018,7 @@ const syncRefund = async (req, res) => {
 
     }
   };
- 
+  
   // ====================================
 // DELETE LOAN COMPLETELY
 // ====================================
@@ -3030,8 +3030,32 @@ const deleteDebtLoan =
 
     try {
 
+      const loanId =
+        req.params.id;
+
+
       // ====================================
-      // START TRANSACTION
+      // VALIDATE LOAN ID
+      // ====================================
+
+      if (
+        !loanId ||
+        !mongoose.Types.ObjectId.isValid(
+          loanId
+        )
+      ) {
+
+        return res.status(400).json({
+          success: false,
+          message:
+            "Loan ID si sahihi"
+        });
+
+      }
+
+
+      // ====================================
+      // START SESSION
       // ====================================
 
       session =
@@ -3046,10 +3070,11 @@ const deleteDebtLoan =
 
       const loan =
         await DebtLoan.findOne({
-          _id: req.params.id,
+          _id: loanId,
           owner: req.ownerId,
           branch: req.branchId
-        }).session(session);
+        })
+          .session(session);
 
 
       // ====================================
@@ -3089,15 +3114,35 @@ const deleteDebtLoan =
 
 
       // ====================================
-      // SAVE IMPORTANT VALUES
-      // BEFORE DELETING
+      // SAVE VALUES BEFORE DELETE
       // ====================================
-
-      const loanId =
-        loan._id;
 
       const customerId =
         loan.customer;
+
+      const deletedLoanId =
+        loan._id;
+
+      const deletedLoanSyncId =
+        loan.syncId;
+
+
+      console.log(
+        "🗑️ DELETING LOAN:",
+        {
+          loanId:
+            String(deletedLoanId),
+
+          syncId:
+            deletedLoanSyncId,
+
+          owner:
+            String(req.ownerId),
+
+          branch:
+            String(req.branchId)
+        }
+      );
 
 
       // ====================================
@@ -3106,7 +3151,7 @@ const deleteDebtLoan =
 
       await DebtPayment.deleteMany(
         {
-          loan: loanId,
+          loan: deletedLoanId,
           owner: req.ownerId,
           branch: req.branchId
         },
@@ -3122,17 +3167,28 @@ const deleteDebtLoan =
 
       if (customerId) {
 
-        await CustomerIdentity.findByIdAndUpdate(
-          customerId,
-          {
-            $inc: {
-              activeLoans: -1
-            }
-          },
-          {
+        const customer =
+          await CustomerIdentity.findById(
+            customerId
+          )
+            .session(session);
+
+
+        if (customer) {
+
+          customer.activeLoans =
+            Math.max(
+              0,
+              Number(
+                customer.activeLoans || 0
+              ) - 1
+            );
+
+          await customer.save({
             session
-          }
-        );
+          });
+
+        }
 
       }
 
@@ -3141,16 +3197,30 @@ const deleteDebtLoan =
       // DELETE LOAN COMPLETELY
       // ====================================
 
-      await DebtLoan.deleteOne(
-        {
-          _id: loanId,
-          owner: req.ownerId,
-          branch: req.branchId
-        },
-        {
-          session
-        }
-      );
+      const deletedLoan =
+        await DebtLoan.findOneAndDelete(
+          {
+            _id: deletedLoanId,
+            owner: req.ownerId,
+            branch: req.branchId
+          },
+          {
+            session
+          }
+        );
+
+
+      // ====================================
+      // VERIFY DELETE
+      // ====================================
+
+      if (!deletedLoan) {
+
+        throw new Error(
+          "Deni halikuweza kufutwa"
+        );
+
+      }
 
 
       // ====================================
@@ -3158,6 +3228,12 @@ const deleteDebtLoan =
       // ====================================
 
       await session.commitTransaction();
+
+
+      console.log(
+        "✅ LOAN DELETED COMPLETELY:",
+        String(deletedLoanId)
+      );
 
 
       // ====================================
@@ -3169,7 +3245,20 @@ const deleteDebtLoan =
         success: true,
 
         message:
-          "Deni limefutwa kikamilifu"
+          "Deni limefutwa kikamilifu",
+
+        loan: {
+
+          _id:
+            deletedLoanId,
+
+          syncId:
+            deletedLoanSyncId,
+
+          status:
+            "deleted"
+
+        }
 
       });
 
@@ -3177,7 +3266,7 @@ const deleteDebtLoan =
     } catch (error) {
 
       // ====================================
-      // ROLLBACK IF ERROR
+      // ROLLBACK
       // ====================================
 
       if (
