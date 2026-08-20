@@ -861,9 +861,9 @@ const syncLoan =
     }
 
   };
-
-const getLoanHistory =
+ const getLoanHistory =
   async (req, res) => {
+
     try {
 
       const page =
@@ -873,14 +873,22 @@ const getLoanHistory =
 
       const limit = 5000;
 
-  const loans =
-  await DebtLoan.find({
-    owner: req.ownerId,
-    branch: req.branchId,
-    status: {
-      $ne: "cancelled"
-    }
-  })
+
+      // ====================================
+      // GET LOANS
+      //
+      // HII QUERY INABAKI SAWA
+      // ILI APP YA ZAMANI ISIBADILIWE
+      // ====================================
+
+      const loans =
+        await DebtLoan.find({
+          owner: req.ownerId,
+          branch: req.branchId,
+          status: {
+            $ne: "cancelled"
+          }
+        })
           .populate(
             "customer",
             "fullName phone"
@@ -894,19 +902,87 @@ const getLoanHistory =
           .limit(limit)
           .lean();
 
+
+      // ====================================
+      // NORMALIZE LOANS FOR SYNC
+      //
+      // HII HAIBADILISHI LOAN DATA
+      // INAONGEZA TU syncId KAMA IPO
+      // ====================================
+
+      const normalizedLoans =
+        loans.map(
+          (loan) => {
+
+            return {
+
+              // --------------------------------
+              // DATA ZOTE ZA ZAMANI ZINABAKI
+              // --------------------------------
+
+              ...loan,
+
+
+              // --------------------------------
+              // ENSURE loanId EXISTS
+              //
+              // APP MPYA INAWEZA KUTUMIA
+              // loanId BADALA YA _id
+              //
+              // APP YA ZAMANI BADO ITATUMIA _id
+              // --------------------------------
+
+              loanId:
+                loan.loanId ||
+                String(loan._id),
+
+
+              // --------------------------------
+              // ENSURE syncId
+              //
+              // KAMA DATABASE INA syncId,
+              // ITATUMIKA.
+              //
+              // KAMA HAINA, HATUBADILISHI
+              // RECORD YA DATABASE.
+              // --------------------------------
+
+              syncId:
+                loan.syncId ||
+                loan.loanSyncId ||
+                undefined,
+
+            };
+
+          }
+        );
+
+
+      // ====================================
+      // RESPONSE FORMAT INABAKI ARRAY
+      //
+      // APP YA ZAMANI HAITAVUNJIKA
+      // ====================================
+
       return res.status(200).json(
-        loans
+        normalizedLoans
       );
 
     } catch (error) {
+
+      console.error(
+        "❌ GET LOAN HISTORY ERROR:",
+        error
+      );
 
       return res.status(500).json({
         message:
           error.message
       });
+
     }
+
   };
- 
 // GET SINGLE LOAN
 const getLoanById =
   async (req, res) => {
