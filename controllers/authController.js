@@ -47,10 +47,10 @@ const registerUser = async (req, res) => {
     }
 
     const vodaPrefixes = [
-  "255228",
-  "255345",
-  "255455",
-  "2558543",
+  "25579",
+  "25574",
+  "25575",
+  "25576",
 ];
 
 const isVodacom =
@@ -65,7 +65,7 @@ if (isVodacom) {
 
   return res.status(400).json({
     message:
-      "Namba za aina hii  haziruhusiwi kujisajili kwa sasa mpaka tutakapofanya maboresho tumia namba ya mtandao mwingine. au wasiliana nasi kwa namba 0758078629"
+      "Namba za Vodacom haziruhusiwi kujisajili kwa sasa mpaka tutakapofanya maboresho tumia namba ya mtandao mwingine. au wasiliana nasi kwa namba 0758078629"
   });
 }
     // CHECK DUPLICATE
@@ -728,7 +728,6 @@ const deleteStaff = async (req, res) => {
     });
   }
 };
-
 const updateProfile = async (req, res) => {
   try {
     const {
@@ -742,7 +741,9 @@ const updateProfile = async (req, res) => {
     } = req.body;
 
     const user =
-      await User.findById(req.user._id);
+      await User.findById(
+        req.user._id
+      );
 
     if (!user) {
       return res.status(404).json({
@@ -750,19 +751,30 @@ const updateProfile = async (req, res) => {
       });
     }
 
+    // =========================
+    // UPDATE NAME
+    // =========================
     if (name) {
-      user.name = name.trim();
+      user.name =
+        name.trim();
     }
 
+    // =========================
+    // UPDATE PHONE
+    // =========================
     if (phone) {
       const normalizedPhone =
         normalizePhone(phone);
 
+      // CHECK IF PHONE EXISTS
       const exists =
         await User.findOne({
-          phone: normalizedPhone,
+          phone:
+            normalizedPhone,
+
           _id: {
-            $ne: user._id
+            $ne:
+              user._id
           }
         });
 
@@ -773,40 +785,113 @@ const updateProfile = async (req, res) => {
         });
       }
 
+      // UPDATE USER PHONE
       user.phone =
         normalizedPhone;
+
+      // =========================
+      // IF OWNER,
+      // UPDATE SHOP + MAIN BRANCH
+      // =========================
+      if (
+        user.role === "owner"
+      ) {
+
+        const shop =
+          await Shop.findOne({
+            owner:
+              user._id
+          });
+
+        if (shop) {
+
+          // UPDATE SHOP PHONE
+          await Shop.updateOne(
+            {
+              _id:
+                shop._id
+            },
+            {
+              $set: {
+                phone:
+                  normalizedPhone
+              }
+            }
+          );
+
+          // UPDATE MAIN BRANCH PHONE
+          await Branch.updateOne(
+            {
+              shop:
+                shop._id,
+
+              isMain:
+                true
+            },
+            {
+              $set: {
+                phone:
+                  normalizedPhone
+              }
+            }
+          );
+
+        }
+      }
     }
 
+    // =========================
+    // UPDATE BUSINESS NAME
+    // =========================
     if (
       businessName &&
       user.role === "owner"
     ) {
+
       user.businessName =
         businessName.trim();
 
       await Shop.updateOne(
         {
-          owner: user._id
+          owner:
+            user._id
         },
         {
-          businessName:
-            businessName.trim()
+          $set: {
+            businessName:
+              businessName.trim()
+          }
         }
       );
     }
 
-    if (mkoa !== undefined) {
-      user.mkoa = mkoa;
+    // =========================
+    // UPDATE LOCATION
+    // =========================
+    if (
+      mkoa !== undefined
+    ) {
+      user.mkoa =
+        mkoa;
     }
 
-    if (wilaya !== undefined) {
-      user.wilaya = wilaya;
+    if (
+      wilaya !== undefined
+    ) {
+      user.wilaya =
+        wilaya;
     }
 
-    if (mtaa !== undefined) {
-      user.mtaa = mtaa;
+    if (
+      mtaa !== undefined
+    ) {
+      user.mtaa =
+        mtaa;
     }
 
+    // =========================
+    // UPDATE PASSWORD
+    // =========================
     if (password) {
       user.password =
         await bcrypt.hash(
@@ -815,6 +900,9 @@ const updateProfile = async (req, res) => {
         );
     }
 
+    // =========================
+    // SAVE USER
+    // =========================
     await user.save();
 
     return res.status(200).json({
@@ -822,24 +910,46 @@ const updateProfile = async (req, res) => {
         "Profile updated successfully",
 
       user: {
-        id: user._id,
-        name: user.name,
+        id:
+          user._id,
+
+        name:
+          user.name,
+
         businessName:
           user.businessName,
-        phone: user.phone,
-        role: user.role,
-        mkoa: user.mkoa,
-        wilaya: user.wilaya,
-        mtaa: user.mtaa
+
+        phone:
+          user.phone,
+
+        role:
+          user.role,
+
+        mkoa:
+          user.mkoa,
+
+        wilaya:
+          user.wilaya,
+
+        mtaa:
+          user.mtaa
       }
     });
 
   } catch (error) {
+
+    console.error(
+      "UPDATE PROFILE ERROR:",
+      error
+    );
+
     return res.status(500).json({
-      message: error.message
+      message:
+        error.message
     });
   }
 };
+ 
  const getProfile = async (
   req,
   res
