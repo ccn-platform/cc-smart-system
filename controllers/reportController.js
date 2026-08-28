@@ -585,8 +585,7 @@ return res.status(200).json(report);
     });
   }
 };
-   
-const getDailyReport = async (req, res) => {
+ const getDailyReport = async (req, res) => {
   try {
     // ============================================================
     // SECURITY
@@ -660,6 +659,21 @@ const getDailyReport = async (req, res) => {
     // DebtPayment ina paymentDate.
     //
     // HATUTUMII createdAt hapa.
+    //
+    // MUHIMU ZAIDI:
+    // HATUWEKI status HAPA.
+    //
+    // Kwa sababu:
+    //
+    // PAYMENT:
+    // type   = payment
+    // status = posted
+    //
+    // REFUND:
+    // type   = refund
+    // status = reversed
+    //
+    // Kwa hiyo kila moja itakuwa na filter yake.
     // ============================================================
 
     const debtPaymentTodayFilter = {
@@ -670,8 +684,6 @@ const getDailyReport = async (req, res) => {
         $gte: today,
         $lt: tomorrow,
       },
-
-      status: "posted",
     };
 
     // ============================================================
@@ -900,10 +912,10 @@ const getDailyReport = async (req, res) => {
     // DebtPayment:
     //
     // paymentDate = leo
-    // status = posted
     // type = payment
+    // status = posted
     //
-    // REFUND HAINGII HAPA.
+    // HAPA TUNATAKA PAYMENT HALISI TU.
     // ============================================================
 
     const paymentAgg =
@@ -913,6 +925,8 @@ const getDailyReport = async (req, res) => {
             ...debtPaymentTodayFilter,
 
             type: "payment",
+
+            status: "posted",
           },
         },
 
@@ -951,13 +965,21 @@ const getDailyReport = async (req, res) => {
     // ============================================================
     // REFUNDS — TODAY ONLY
     //
-    // DebtPayment:
+    // MUHIMU:
     //
-    // paymentDate = leo
-    // status = posted
-    // type = refund
+    // Refund yako inahifadhiwa hivi:
     //
-    // REFUND HAIINGII KWENYE PAYMENT.
+    // type:
+    // "refund"
+    //
+    // status:
+    // "reversed"
+    //
+    // amount:
+    // -refundAmount
+    //
+    // Kwa hiyo HATUTAFUTI status = posted.
+    // Tunatafuta status = reversed.
     // ============================================================
 
     const refundAgg =
@@ -967,6 +989,8 @@ const getDailyReport = async (req, res) => {
             ...debtPaymentTodayFilter,
 
             type: "refund",
+
+            status: "reversed",
           },
         },
 
@@ -1618,6 +1642,42 @@ const getDailyReport = async (req, res) => {
 
         paymentCount:
           paymentsCount,
+
+        refundAmount:
+          refunds,
+
+        refundCount:
+          refundsCount,
+      }
+    );
+
+    // ============================================================
+    // DEBUG — REFUND QUERY
+    //
+    // Hii itathibitisha moja kwa moja kama refund
+    // imeingia kwenye report.
+    // ============================================================
+
+    console.log(
+      "🔄 REFUND REPORT FILTER:",
+      {
+        owner:
+          ownerId.toString(),
+
+        branch:
+          branchId.toString(),
+
+        paymentDateFrom:
+          today.toISOString(),
+
+        paymentDateTo:
+          tomorrow.toISOString(),
+
+        type:
+          "refund",
+
+        status:
+          "reversed",
 
         refundAmount:
           refunds,
