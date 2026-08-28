@@ -585,7 +585,7 @@ return res.status(200).json(report);
     });
   }
 };
- 
+  
 const getDailyReport = async (req, res) => {
   try {
     // ============================================================
@@ -600,10 +600,6 @@ const getDailyReport = async (req, res) => {
 
     // ============================================================
     // UTC DATE RANGE
-    //
-    // Report hii ni ya siku ya leo.
-    // Kwa historical report, snapshot ndiyo itahifadhi
-    // values za siku husika.
     // ============================================================
 
     const today = new Date();
@@ -829,9 +825,6 @@ const getDailyReport = async (req, res) => {
 
     // ============================================================
     // LOANS ISSUED — TODAY ONLY
-    //
-    // HII NDIYO totalLoans YA DAILY REPORT.
-    // SIO LOANS ZOTE ZA BRANCH.
     // ============================================================
 
     const loanIssuedAgg =
@@ -875,7 +868,12 @@ const getDailyReport = async (req, res) => {
     // ============================================================
     // PAYMENTS — TODAY ONLY
     //
-    // HAPA TUNAHESABU PAYMENT ZA LEO TU.
+    // MUHIMU:
+    // HAPA TUNAHESABU ONLY:
+    //
+    // type = "payment"
+    //
+    // Refund haitahesabiwa hapa.
     // ============================================================
 
     const paymentAgg =
@@ -884,32 +882,9 @@ const getDailyReport = async (req, res) => {
           $match: {
             ...todayFilter,
 
-            // Usihesabu refund kama normal payment
-            $or: [
-              {
-                type: {
-                  $ne: "refund",
-                },
-              },
+            type: "payment",
 
-              {
-                type: {
-                  $exists: false,
-                },
-              },
-            ],
-
-            transactionType: {
-              $ne: "refund",
-            },
-
-            paymentType: {
-              $ne: "refund",
-            },
-
-            isRefund: {
-              $ne: true,
-            },
+            status: "posted",
           },
         },
 
@@ -946,16 +921,12 @@ const getDailyReport = async (req, res) => {
     // ============================================================
     // REFUNDS — TODAY ONLY
     //
-    // HAPA NDIPO REFUND ILIPOKUWA IKIPOTEA.
+    // MUHIMU:
+    // HAPA TUNAHESABU ONLY:
     //
-    // Tunatafuta refund kwa:
-    // type = refund
-    // transactionType = refund
-    // paymentType = refund
-    // isRefund = true
+    // type = "refund"
     //
-    // Kama schema yako ina field tofauti, hiyo field
-    // itabidi iongezwe hapa.
+    // Refund haiwezi kuingia kwenye payments.
     // ============================================================
 
     const refundAgg =
@@ -964,25 +935,9 @@ const getDailyReport = async (req, res) => {
           $match: {
             ...todayFilter,
 
-            $or: [
-              {
-                type: "refund",
-              },
+            type: "refund",
 
-              {
-                transactionType:
-                  "refund",
-              },
-
-              {
-                paymentType:
-                  "refund",
-              },
-
-              {
-                isRefund: true,
-              },
-            ],
+            status: "posted",
           },
         },
 
@@ -1020,6 +975,8 @@ const getDailyReport = async (req, res) => {
 
     // ============================================================
     // DAILY NET COLLECTION
+    //
+    // Malipo halisi yaliyobaki baada ya refunds.
     // ============================================================
 
     const totalPaid =
@@ -1035,14 +992,7 @@ const getDailyReport = async (req, res) => {
     // ============================================================
     // DAILY LOAN STATUS
     //
-    // MUHIMU:
-    // HAPA TUNATUMIA createdAt YA LEO.
-    //
-    // Kwa hiyo:
-    // totalLoans    = loans zilizotolewa leo
-    // activeLoans   = loans za leo ambazo status yake active
-    // paidLoans     = loans za leo ambazo status yake paid
-    // overdueLoans  = loans za leo ambazo status yake overdue
+    // Loans zilizotolewa leo tu.
     // ============================================================
 
     const dailyLoanStatusAgg =
@@ -1173,11 +1123,7 @@ const getDailyReport = async (req, res) => {
     // ============================================================
     // ALL OUTSTANDING LOANS
     //
-    // HII NDIYO PEKEE TUNAYORUHUSU KUWA GLOBAL.
-    //
-    // "Jumla ya kiasi tunachodai kwa sasa"
-    //
-    // HATUTUMII createdAt TODAY.
+    // GLOBAL — LOANS ZOTE ZINAZODAIWA SASA.
     // ============================================================
 
     const outstandingAgg =
@@ -1240,8 +1186,6 @@ const getDailyReport = async (req, res) => {
 
     // ============================================================
     // CUSTOMERS — TODAY ONLY
-    //
-    // Tunapata unique customers waliokopeshwa leo.
     // ============================================================
 
     const customersAgg =
@@ -1270,6 +1214,8 @@ const getDailyReport = async (req, res) => {
 
     // ============================================================
     // NET CASH FLOW — TODAY ONLY
+    //
+    // Refund inapunguza cash flow.
     // ============================================================
 
     const netCashFlow =
@@ -1317,6 +1263,7 @@ const getDailyReport = async (req, res) => {
     // COLLECTION RATE
     //
     // Inahusiana na loans zilizotolewa leo.
+    // Tunatumia actual payment, sio refund.
     // ============================================================
 
     const collectionRate =
@@ -1430,8 +1377,6 @@ const getDailyReport = async (req, res) => {
 
         // ------------------------------------------------------
         // GLOBAL OUTSTANDING
-        //
-        // HII PEKEE NDIYO YA LOANS ZOTE.
         // ------------------------------------------------------
 
         outstandingBalance:
@@ -1459,6 +1404,10 @@ const getDailyReport = async (req, res) => {
         refunds,
 
         refundsCount,
+
+        // ------------------------------------------------------
+        // NET COLLECTION
+        // ------------------------------------------------------
 
         netCollection,
       },
@@ -1578,14 +1527,11 @@ const getDailyReport = async (req, res) => {
         date:
           today.toISOString(),
 
-        loansIssued:
-          loansIssued,
+        loansIssued,
 
-        loansIssuedCount:
-          loansIssuedCount,
+        loansIssuedCount,
 
-        totalLoans:
-          totalLoans,
+        totalLoans,
 
         totalLoanAmount:
           loansIssued,
@@ -1593,29 +1539,21 @@ const getDailyReport = async (req, res) => {
         payments:
           debtCollected,
 
-        paymentsCount:
-          paymentsCount,
+        paymentsCount,
 
-        refunds:
-          refunds,
+        refunds,
 
-        refundsCount:
-          refundsCount,
+        refundsCount,
 
-        netCollection:
-          netCollection,
+        netCollection,
 
-        outstandingCapital:
-          outstandingCapital,
+        outstandingCapital,
 
-        overdueLoans:
-          overdueLoans,
+        overdueLoans,
 
-        overdueAmount:
-          overdueAmount,
+        overdueAmount,
 
-        customers:
-          customers,
+        customers,
       }
     );
 
