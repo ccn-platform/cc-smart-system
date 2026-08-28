@@ -1,7 +1,7 @@
-     const express = require("express");
+ const express = require("express");
 const router = express.Router();
 
- const {
+const {
   protect,
   branchAccess
 } = require("../middleware/authMiddleware");
@@ -17,7 +17,10 @@ const {
 } = require("../services/subscriptionService");
 
 
-// 🔥 PLAN PRICES
+// ============================================================
+// PLAN PRICES
+// ============================================================
+
 const plans = {
   weekly: 2000,
   monthly: 5200,
@@ -26,41 +29,84 @@ const plans = {
 };
 
 
-// 🔥 INITIATE PAYMENT
+// ============================================================
+// INITIATE PAYMENT
+// ============================================================
+
 router.post(
   "/pay",
   protect,
-  
+
   async (req, res) => {
-  let paymentInitiated = false;
-let branchId;
-  try {
-    const { plan } = req.body;
 
-      if (!plan || !plans[plan]) {
+    let paymentInitiated = false;
+    let branchId;
+
+    try {
+
+      const {
+        plan
+      } = req.body;
+
+
+      // ========================================================
+      // VALIDATE PLAN
+      // ========================================================
+
+      if (
+        !plan ||
+        !plans[plan]
+      ) {
+
         return res.status(400).json({
-          message: "Invalid plan"
+          message:
+            "Invalid plan"
         });
+
       }
- branchId =
-  req.headers["x-branch-id"];
 
-  if (!branchId) {
-  return res.status(400).json({
-    message: "No branch selected"
-  });
-}
 
-const branch =
-  await Branch.findById(
-    branchId
-  );
+      // ========================================================
+      // BRANCH
+      // ========================================================
 
-      if (!branch) {
+      branchId =
+        req.headers["x-branch-id"];
+
+
+      if (
+        !branchId
+      ) {
+
+        return res.status(400).json({
+          message:
+            "No branch selected"
+        });
+
+      }
+
+
+      const branch =
+        await Branch.findById(
+          branchId
+        );
+
+
+      if (
+        !branch
+      ) {
+
         return res.status(404).json({
-          message: "Branch not found"
+          message:
+            "Branch not found"
         });
+
       }
+
+
+      // ========================================================
+      // BLOCK ACTIVE PENDING PAYMENT
+      // ========================================================
 
       if (
         branch.pendingPlan &&
@@ -68,31 +114,69 @@ const branch =
         branch.pendingExpiresAt >
           new Date()
       ) {
-         return res.status(400).json({
-  message:
-    "Una ombi la malipo ambalo bado linaendelea kusubiri. Tafadhali subiri hadi dakika 6 likamilike au muda wake uishe kabla ya kujaribu tena. Ukipata tatizo wasiliana nasi kwa 0758078629."
-});
+
+        return res.status(400).json({
+          message:
+            "Una ombi la malipo ambalo bado linaendelea kusubiri. Tafadhali subiri hadi dakika 6 likamilike au muda wake uishe kabla ya kujaribu tena. Ukipata tatizo wasiliana nasi kwa 0758078629."
+        });
+
       }
+
+
+      // ========================================================
+      // CLEAR EXPIRED PAYMENT
+      // ========================================================
 
       if (
         branch.pendingExpiresAt &&
         branch.pendingExpiresAt <=
           new Date()
       ) {
-        branch.pendingPlan = null;
+
+        branch.pendingPlan =
+          null;
+
         branch.paymentReference =
           null;
+
         branch.pendingExpiresAt =
           null;
+
+        branch.paymentProcessing =
+          false;
+
+        branch.paymentStatus =
+          "idle";
+
+        branch.paymentCompletedAt =
+          null;
+
+        await branch.save();
+
       }
+
+
+      // ========================================================
+      // AMOUNT
+      // ========================================================
 
       const amount =
         plans[plan];
+
+
+      // ========================================================
+      // UNIQUE REFERENCE
+      // ========================================================
 
       const reference =
         `CCN${Date.now()}${Math.floor(
           Math.random() * 1000
         )}`;
+
+
+      // ========================================================
+      // SAVE PENDING PAYMENT
+      // ========================================================
 
       branch.pendingPlan =
         plan;
@@ -100,172 +184,511 @@ const branch =
       branch.paymentReference =
         reference;
 
-    branch.pendingExpiresAt =
-  new Date(
-    Date.now() +
-      6 *
-        60 *
-        1000
-  );
+      branch.pendingExpiresAt =
+        new Date(
+          Date.now() +
+            6 *
+              60 *
+              1000
+        );
+
+      branch.paymentProcessing =
+        false;
+
+      branch.paymentStatus =
+        "pending";
+
+      branch.paymentCompletedAt =
+        null;
+
+
       await branch.save();
- await clickpesa.mobilePush(
-  branch.phone ||
-    req.user.phone,
-  amount,
-  reference
-);
 
- paymentInitiated = true;
 
-return res.json({
-  success: true,
-  reference,
-  subscriptionAmount: amount,
-   message:
-  "Ombi la malipo limetumwa. Tafadhali angalia simu yako, weka namba yako ya siri ili ukamilishe malipo."
-});
+      // ========================================================
+      // CLICKPESA PUSH
+      // ========================================================
 
-  } catch (e) {
-  console.error(e);
+      await clickpesa.mobilePush(
+        branch.phone ||
+          req.user.phone,
+        amount,
+        reference
+      );
 
- if (!paymentInitiated && branchId) {
-  await Branch.findByIdAndUpdate(
-    branchId,
-    {
-      pendingPlan: null,
-      paymentReference: null,
-      pendingExpiresAt: null
+
+      paymentInitiated =
+        true;
+
+
+      // ========================================================
+      // RESPONSE
+      // ========================================================
+
+      return res.json({
+
+        success: true,
+
+        reference,
+
+        subscriptionAmount:
+          amount,
+
+        message:
+          "Ombi la malipo limetumwa. Tafadhali angalia simu yako, weka namba yako ya siri ili ukamilishe malipo."
+
+      });
+
+    } catch (e) {
+
+      console.error(
+        "❌ SUBSCRIPTION PAYMENT INITIATION ERROR:",
+        e
+      );
+
+
+      // ========================================================
+      // CLEAN FAILED INITIATION
+      // ========================================================
+
+      if (
+        !paymentInitiated &&
+        branchId
+      ) {
+
+        try {
+
+          await Branch.findByIdAndUpdate(
+            branchId,
+            {
+
+              pendingPlan:
+                null,
+
+              paymentReference:
+                null,
+
+              pendingExpiresAt:
+                null,
+
+              paymentProcessing:
+                false,
+
+              paymentStatus:
+                "failed",
+
+              paymentCompletedAt:
+                null
+
+            }
+          );
+
+        } catch (
+          cleanupError
+        ) {
+
+          console.error(
+            "❌ PAYMENT CLEANUP ERROR:",
+            cleanupError
+          );
+
+        }
+
+      }
+
+
+      return res.status(400).json({
+
+        message:
+          `${e.message}. kwa tatizo hili la malipo ili kupata msaada wasiliana nasi kwa 0758078629`
+
+      });
+
     }
-  );
-}
-  return res.status(400).json({
-  message:
-    `${e.message}. kwa tatizo hili la malipo  ili kupata msaada wasiliana nasi kwa 0758078629`
-    
-});
-}
+
   }
 );
 
- router.post(
+
+// ============================================================
+// SUBSCRIPTION PAYMENT STATUS
+//
+// GET /subscription/status
+// ============================================================
+
+router.get(
+  "/status",
+  protect,
+
+  async (req, res) => {
+
+    try {
+
+      const branchId =
+        req.headers["x-branch-id"];
+
+
+      if (
+        !branchId
+      ) {
+
+        return res.status(400).json({
+          message:
+            "No branch selected"
+        });
+
+      }
+
+
+      const branch =
+        await Branch.findById(
+          branchId
+        ).lean();
+
+
+      if (
+        !branch
+      ) {
+
+        return res.status(404).json({
+          message:
+            "Branch not found"
+        });
+
+      }
+
+
+      const now =
+        new Date();
+
+
+      const expired =
+        Boolean(
+          branch.pendingExpiresAt &&
+          new Date(
+            branch.pendingExpiresAt
+          ) <= now
+        );
+
+
+      return res.status(200).json({
+
+        success:
+          true,
+
+        paymentStatus:
+          branch.paymentStatus ||
+          "idle",
+
+        pendingPlan:
+          branch.pendingPlan ||
+          null,
+
+        paymentReference:
+          branch.paymentReference ||
+          null,
+
+        paymentCompletedAt:
+          branch.paymentCompletedAt ||
+          null,
+
+        pendingExpiresAt:
+          branch.pendingExpiresAt ||
+          null,
+
+        expired
+
+      });
+
+    } catch (error) {
+
+      console.error(
+        "❌ SUBSCRIPTION STATUS ERROR:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        message:
+          error?.message ||
+          "Failed to check subscription status"
+
+      });
+
+    }
+
+  }
+);
+
+
+// ============================================================
+// CLICKPESA CALLBACK
+// ============================================================
+
+router.post(
   "/callback",
-   async (req, res) => {
-  let branch;
 
-  try {
-     const payload =
-  req.body.data || req.body;
+  async (req, res) => {
 
-const reference =
-  payload.orderReference ||
-  payload.reference ||
-  payload.transaction_reference ||
-  payload.merchant_reference;
+    let branch;
 
-const status =
-  payload.status ||
-  payload.payment_status ||
-  payload.result;
+    try {
+
+      const payload =
+        req.body.data ||
+        req.body;
+
+
+      // ======================================================
+      // REFERENCE
+      // ======================================================
+
+      const reference =
+        payload.orderReference ||
+        payload.reference ||
+        payload.transaction_reference ||
+        payload.merchant_reference;
+
+
+      // ======================================================
+      // STATUS
+      // ======================================================
+
+      const status =
+        payload.status ||
+        payload.payment_status ||
+        payload.result;
+
 
       const normalizedStatus =
-        String(status || "")
+        String(
+          status || ""
+        )
           .toUpperCase();
+
 
       console.log(
         "CALLBACK:",
         req.body
       );
 
+
+      // ======================================================
+      // ONLY SUCCESS PAYMENT ACTIVATES
+      // ======================================================
+
       if (
         ![
           "SUCCESS",
           "SUCCESSFUL",
           "PAID"
-        ].includes(normalizedStatus)
+        ].includes(
+          normalizedStatus
+        )
       ) {
-        return res.sendStatus(200);
+
+        console.log(
+          "⏳ CALLBACK NOT SUCCESS:",
+          {
+            reference,
+            status:
+              normalizedStatus
+          }
+        );
+
+        return res.sendStatus(
+          200
+        );
+
       }
- branch =
-  await Branch.findOneAndUpdate(
-    {
-      paymentReference: reference,
-      pendingPlan: { $ne: null },
-      paymentProcessing: false
-    },
-    {
-      $set: {
-        paymentProcessing: true
+
+
+      // ======================================================
+      // LOCK PAYMENT PROCESSING
+      // ======================================================
+
+      branch =
+        await Branch.findOneAndUpdate(
+
+          {
+
+            paymentReference:
+              reference,
+
+            pendingPlan:
+              {
+                $ne: null
+              },
+
+            paymentProcessing:
+              false
+
+          },
+
+          {
+
+            $set: {
+
+              paymentProcessing:
+                true
+
+            }
+
+          },
+
+          {
+
+            new: true
+
+          }
+
+        );
+
+
+      if (
+        !branch
+      ) {
+
+        console.log(
+          "NO MATCHING PENDING PAYMENT:",
+          reference
+        );
+
+        return res.sendStatus(
+          200
+        );
+
       }
-    },
-    {
-      returnDocument: "after"
-    }
-  );
-if (!branch) {
-  console.log(
-    "NO MATCHING PENDING PAYMENT:",
-    reference
-  );
 
-  return res.sendStatus(200);
-}
 
-const planToActivate =
-  branch.pendingPlan;
+      // ======================================================
+      // PLAN
+      // ======================================================
 
-await activatePlan(
-  branch,
-  planToActivate
-);
+      const planToActivate =
+        branch.pendingPlan;
 
-branch.pendingPlan = null;
-branch.paymentReference = null;
-branch.pendingExpiresAt = null;
-branch.paymentProcessing = false;
 
-await branch.save();
-      console.log(
-        "SUBSCRIPTION ACTIVATED"
+      // ======================================================
+      // ACTIVATE
+      // ======================================================
+
+      await activatePlan(
+        branch,
+        planToActivate
       );
 
-      return res.sendStatus(200);
 
-  } catch (e) {
-  console.error(
-    "CALLBACK ERROR:",
-    e
-  );
+      // ======================================================
+      // MARK SUCCESS
+      // ======================================================
 
-  if (branch) {
-    branch.paymentProcessing = false;
-    await branch.save();
-  }
+      branch.paymentStatus =
+        "success";
 
-  return res.sendStatus(500);
-}
+      branch.paymentCompletedAt =
+        new Date();
+
+      branch.pendingPlan =
+        null;
+
+      branch.paymentReference =
+        null;
+
+      branch.pendingExpiresAt =
+        null;
+
+      branch.paymentProcessing =
+        false;
+
+
+      await branch.save();
+
+
+      console.log(
+        "✅ SUBSCRIPTION ACTIVATED:",
+        {
+          branchId:
+            String(
+              branch._id
+            ),
+
+          plan:
+            planToActivate
+        }
+      );
+
+
+      return res.sendStatus(
+        200
+      );
+
+    } catch (e) {
+
+      console.error(
+        "❌ CALLBACK ERROR:",
+        e
+      );
+
+
+      if (
+        branch
+      ) {
+
+        branch.paymentProcessing =
+          false;
+
+        await branch.save();
+
+      }
+
+
+      return res.sendStatus(
+        500
+      );
+
+    }
+
   }
 );
- 
-// 🔥 TEST
- router.post(
+
+
+// ============================================================
+// TEST ACTIVATION
+// ============================================================
+
+router.post(
   "/activate",
   protect,
   branchAccess,
+
   async (req, res) => {
+
     try {
-      const { plan } = req.body;
+
+      const {
+        plan
+      } = req.body;
+
 
       const branch =
         await Branch.findById(
           req.branchId
         );
 
-      if (!branch) {
+
+      if (
+        !branch
+      ) {
+
         return res.status(404).json({
           message:
             "Branch not found"
         });
+
       }
+
 
       const subscription =
         await activatePlan(
@@ -273,21 +696,33 @@ await branch.save();
           plan
         );
 
-      res.json({
+
+      return res.json({
+
         message:
           "Activated (TEST MODE)",
+
         subscription
+
       });
 
-   } catch (e) {
-  console.error(e);
+    } catch (e) {
 
-  return res.status(400).json({
-    message: e.message
-  });
-}
+      console.error(
+        e
+      );
+
+
+      return res.status(400).json({
+        message:
+          e.message
+      });
+
+    }
+
   }
 );
+
 
 module.exports =
   router;
