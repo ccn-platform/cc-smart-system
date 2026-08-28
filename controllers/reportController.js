@@ -2851,178 +2851,379 @@ return res.status(200).json(report);
 // reportType = "daily"
 // ============================================
 
-const getCurrentCreditReportHistory =
-  async (
-    req,
-    res
-  ) => {
+const getCurrentCreditReportHistory = async (
+  req,
+  res
+) => {
+  try {
 
-    try {
+    // ========================================
+    // SECURITY
+    // ========================================
 
-      // ========================================
-      // SECURITY
-      // ========================================
-
-      if (
-        !req.ownerId ||
-        !req.branchId
-      ) {
-
-        return res.status(401).json({
-          message:
-            "Unauthorized"
-        });
-
-      }
+    if (
+      !req.ownerId ||
+      !req.branchId
+    ) {
+      return res.status(401).json({
+        message: "Unauthorized"
+      });
+    }
 
 
-      // ========================================
-      // OBJECT IDS
-      // ========================================
+    // ========================================
+    // VALIDATE OBJECT IDS
+    // ========================================
 
-      const ownerId =
-        new mongoose.Types.ObjectId(
-          req.ownerId
-        );
-
-      const branchId =
-        new mongoose.Types.ObjectId(
-          req.branchId
-        );
-
-
-      // ========================================
-      // TODAY UTC
-      // ========================================
-
-      const today =
-        getDateKey();
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        req.ownerId
+      ) ||
+      !mongoose.Types.ObjectId.isValid(
+        req.branchId
+      )
+    ) {
+      return res.status(400).json({
+        message: "Invalid owner or branch ID"
+      });
+    }
 
 
-      // ========================================
-      // TODAY START
-      // ========================================
+    // ========================================
+    // OBJECT IDS
+    // ========================================
 
-      const todayStart =
-        new Date(
-          `${today}T00:00:00.000Z`
-        );
+    const ownerId =
+      new mongoose.Types.ObjectId(
+        req.ownerId
+      );
 
-
-      // ========================================
-      // TOMORROW
-      // ========================================
-
-      const tomorrow =
-        new Date(
-          todayStart
-        );
-
-      tomorrow.setUTCDate(
-        tomorrow.getUTCDate() + 1
+    const branchId =
+      new mongoose.Types.ObjectId(
+        req.branchId
       );
 
 
-      // ========================================
-      // BUILD LIVE REPORT
-      // ========================================
+    // ========================================
+    // TODAY
+    //
+    // getDateKey() should return:
+    //
+    // YYYY-MM-DD
+    //
+    // Example:
+    // 2026-08-28
+    // ========================================
 
-      const report =
-        await buildCreditHistoryReport(
-          ownerId,
-          branchId,
-          today
-        );
-
-
-      // ========================================
-      // SAVE TODAY SNAPSHOT
-      // ========================================
-
-      const savedHistory =
-        await ReportHistory.findOneAndUpdate(
-
-          {
-            owner: ownerId,
-            branch: branchId,
-            reportType: "credit_daily",
-            periodStart: todayStart,
-            periodEnd: tomorrow
-          },
-
-          {
-            $set: {
-              owner: ownerId,
-              branch: branchId,
-              reportType: "credit_daily",
-              periodStart: todayStart,
-              periodEnd: tomorrow,
-              report
-            }
-          },
-
-          {
-            upsert: true,
-            new: true,
-            setDefaultsOnInsert: true
-          }
-
-        );
+    const today =
+      getDateKey();
 
 
-      // ========================================
-      // MOBILE RESPONSE
-      // ========================================
+    // ========================================
+    // TODAY START
+    // ========================================
 
-      return res.status(200).json({
+    const todayStart =
+      new Date(
+        `${today}T00:00:00.000Z`
+      );
 
-        reports: [
 
-          {
-            id:
-              `${req.branchId}_${today}`,
+    // ========================================
+    // TOMORROW
+    // ========================================
 
-            date:
-              today,
+    const tomorrow =
+      new Date(
+        todayStart
+      );
 
-            // IMPORTANT:
-            // Mobile expects "daily"
-            reportType:
-              "daily",
+    tomorrow.setUTCDate(
+      tomorrow.getUTCDate() + 1
+    );
 
-            branchId:
-              String(
-                req.branchId
-              ),
 
-            createdAt:
-              savedHistory?.createdAt ||
-              new Date().toISOString(),
+    console.log(
+      "📊 GET CURRENT CREDIT REPORT HISTORY:",
+      {
+        ownerId:
+          String(ownerId),
 
-            report
+        branchId:
+          String(branchId),
 
-          }
+        today,
 
-        ]
+        todayStart:
+          todayStart.toISOString(),
 
+        tomorrow:
+          tomorrow.toISOString()
+      }
+    );
+
+
+    // ========================================
+    // BUILD LIVE REPORT
+    // ========================================
+
+    const report =
+      await buildCreditHistoryReport(
+        ownerId,
+        branchId,
+        today
+      );
+
+
+    // ========================================
+    // SAFETY
+    // ========================================
+
+    if (
+      !report
+    ) {
+      return res.status(500).json({
+        message:
+          "Failed to build credit report"
       });
+    }
 
 
-    } catch (error) {
+    console.log(
+      "✅ LIVE CREDIT REPORT BUILT:",
+      {
+        branchId:
+          String(branchId),
+
+        date:
+          today
+      }
+    );
+
+
+    // ========================================
+    // SAVE / UPDATE TODAY SNAPSHOT
+    //
+    // IMPORTANT:
+    //
+    // Do NOT create duplicate reports
+    // for the same branch + date.
+    //
+    // One report per:
+    //
+    // owner
+    // branch
+    // credit_daily
+    // periodStart
+    // periodEnd
+    // ========================================
+
+    const savedHistory =
+      await ReportHistory.findOneAndUpdate(
+
+        {
+          owner:
+            ownerId,
+
+          branch:
+            branchId,
+
+          reportType:
+            "credit_daily",
+
+          periodStart:
+            todayStart,
+
+          periodEnd:
+            tomorrow
+        },
+
+        {
+          $set: {
+
+            owner:
+              ownerId,
+
+            branch:
+              branchId,
+
+            reportType:
+              "credit_daily",
+
+            periodStart:
+              todayStart,
+
+            periodEnd:
+              tomorrow,
+
+            report:
+              report
+
+          }
+        },
+
+        {
+          upsert:
+            true,
+
+          new:
+            true,
+
+          setDefaultsOnInsert:
+            true
+        }
+      );
+
+
+    // ========================================
+    // SAFETY CHECK
+    // ========================================
+
+    if (
+      !savedHistory
+    ) {
 
       console.error(
-        "GET CURRENT CREDIT REPORT HISTORY ERROR:",
-        error
+        "❌ FAILED TO SAVE CREDIT REPORT HISTORY"
       );
 
       return res.status(500).json({
         message:
-          error.message
+          "Failed to save report history"
       });
 
     }
 
-  };
+
+    // ========================================
+    // MOBILE REPORT ID
+    //
+    // We intentionally return a stable ID:
+    //
+    // branchId_date
+    //
+    // Example:
+    //
+    // 68abc123_2026-08-28
+    //
+    // This allows mobile to safely identify
+    // today's report.
+    // ========================================
+
+    const mobileReportId =
+      `${String(
+        req.branchId
+      )}_${today}`;
+
+
+    // ========================================
+    // FINAL RESPONSE
+    //
+    // IMPORTANT:
+    //
+    // Mobile expects:
+    //
+    // {
+    //   reports: [
+    //     {
+    //       id,
+    //       date,
+    //       reportType,
+    //       branchId,
+    //       createdAt,
+    //       report
+    //     }
+    //   ]
+    // }
+    //
+    // reportType = "daily"
+    // ========================================
+
+    const responseReport = {
+
+      id:
+        mobileReportId,
+
+      date:
+        today,
+
+      reportType:
+        "daily",
+
+      branchId:
+        String(
+          req.branchId
+        ),
+
+      createdAt:
+        savedHistory.createdAt ||
+        new Date(),
+
+      updatedAt:
+        savedHistory.updatedAt ||
+        new Date(),
+
+      report:
+        savedHistory.report ||
+        report
+    };
+
+
+    // ========================================
+    // LOG FINAL RESPONSE
+    // ========================================
+
+    console.log(
+      "✅ CURRENT CREDIT REPORT HISTORY READY:",
+      {
+        id:
+          responseReport.id,
+
+        date:
+          responseReport.date,
+
+        branchId:
+          responseReport.branchId,
+
+        reportType:
+          responseReport.reportType
+      }
+    );
+
+
+    // ========================================
+    // RETURN
+    // ========================================
+
+    return res.status(200).json({
+
+      reports: [
+        responseReport
+      ]
+
+    });
+
+
+  } catch (error) {
+
+    // ========================================
+    // ERROR
+    // ========================================
+
+    console.error(
+      "❌ GET CURRENT CREDIT REPORT HISTORY ERROR:",
+      error
+    );
+
+
+    return res.status(500).json({
+      message:
+        error?.message ||
+        "Failed to get current credit report history"
+    });
+
+  }
+};
 
  
  // ============================================
