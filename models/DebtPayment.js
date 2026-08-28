@@ -47,6 +47,15 @@ const debtPaymentSchema =
         type: Date,
         default: Date.now
       },
+      type: {
+  type: String,
+  enum: [
+    "payment",
+    "refund"
+  ],
+  default: "payment",
+  index: true
+},
 
       paymentMethod: {
         type: String,
