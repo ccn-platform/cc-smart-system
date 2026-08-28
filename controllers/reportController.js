@@ -585,8 +585,8 @@ return res.status(200).json(report);
     });
   }
 };
-
-  const getDailyReport = async (req, res) => {
+ 
+const getDailyReport = async (req, res) => {
   try {
     // ============================================================
     // SECURITY
@@ -599,7 +599,11 @@ return res.status(200).json(report);
     }
 
     // ============================================================
-    // UTC TODAY
+    // UTC DATE RANGE
+    //
+    // Report hii ni ya siku ya leo.
+    // Kwa historical report, snapshot ndiyo itahifadhi
+    // values za siku husika.
     // ============================================================
 
     const today = new Date();
@@ -632,20 +636,28 @@ return res.status(200).json(report);
       );
 
     // ============================================================
-    // SALES
+    // COMMON DATE FILTER
+    // ============================================================
+
+    const todayFilter = {
+      owner: ownerId,
+      branch: branchId,
+
+      createdAt: {
+        $gte: today,
+        $lt: tomorrow,
+      },
+    };
+
+    // ============================================================
+    // SALES — TODAY ONLY
     // ============================================================
 
     const salesAgg =
       await Sale.aggregate([
         {
           $match: {
-            owner: ownerId,
-            branch: branchId,
-
-            createdAt: {
-              $gte: today,
-              $lt: tomorrow,
-            },
+            ...todayFilter,
           },
         },
 
@@ -654,11 +666,21 @@ return res.status(200).json(report);
             _id: null,
 
             totalSales: {
-              $sum: "$totalAmount",
+              $sum: {
+                $ifNull: [
+                  "$totalAmount",
+                  0,
+                ],
+              },
             },
 
             totalSalesProfit: {
-              $sum: "$totalProfit",
+              $sum: {
+                $ifNull: [
+                  "$totalProfit",
+                  0,
+                ],
+              },
             },
 
             count: {
@@ -684,20 +706,14 @@ return res.status(200).json(report);
       );
 
     // ============================================================
-    // PURCHASES / ORDERS
+    // PURCHASES / ORDERS — TODAY ONLY
     // ============================================================
 
     const ordersAgg =
       await Order.aggregate([
         {
           $match: {
-            owner: ownerId,
-            branch: branchId,
-
-            createdAt: {
-              $gte: today,
-              $lt: tomorrow,
-            },
+            ...todayFilter,
           },
         },
 
@@ -706,15 +722,30 @@ return res.status(200).json(report);
             _id: null,
 
             totalBuy: {
-              $sum: "$buyTotal",
+              $sum: {
+                $ifNull: [
+                  "$buyTotal",
+                  0,
+                ],
+              },
             },
 
             totalSellValue: {
-              $sum: "$sellTotal",
+              $sum: {
+                $ifNull: [
+                  "$sellTotal",
+                  0,
+                ],
+              },
             },
 
             totalOrderProfit: {
-              $sum: "$totalProfit",
+              $sum: {
+                $ifNull: [
+                  "$totalProfit",
+                  0,
+                ],
+              },
             },
 
             count: {
@@ -745,22 +776,16 @@ return res.status(200).json(report);
       );
 
     // ============================================================
-    // CASH
+    // CASH — TODAY ONLY
     // ============================================================
 
     const cashAgg =
       await CashEntry.aggregate([
         {
           $match: {
-            owner: ownerId,
-            branch: branchId,
+            ...todayFilter,
 
             status: "active",
-
-            createdAt: {
-              $gte: today,
-              $lt: tomorrow,
-            },
           },
         },
 
@@ -769,7 +794,12 @@ return res.status(200).json(report);
             _id: "$type",
 
             total: {
-              $sum: "$amount",
+              $sum: {
+                $ifNull: [
+                  "$amount",
+                  0,
+                ],
+              },
             },
           },
         },
@@ -798,20 +828,17 @@ return res.status(200).json(report);
     });
 
     // ============================================================
-    // LOANS ISSUED TODAY
+    // LOANS ISSUED — TODAY ONLY
+    //
+    // HII NDIYO totalLoans YA DAILY REPORT.
+    // SIO LOANS ZOTE ZA BRANCH.
     // ============================================================
 
     const loanIssuedAgg =
       await DebtLoan.aggregate([
         {
           $match: {
-            owner: ownerId,
-            branch: branchId,
-
-            createdAt: {
-              $gte: today,
-              $lt: tomorrow,
-            },
+            ...todayFilter,
           },
         },
 
@@ -820,7 +847,12 @@ return res.status(200).json(report);
             _id: null,
 
             totalIssued: {
-              $sum: "$principalAmount",
+              $sum: {
+                $ifNull: [
+                  "$principalAmount",
+                  0,
+                ],
+              },
             },
 
             count: {
@@ -841,19 +873,42 @@ return res.status(200).json(report);
       );
 
     // ============================================================
-    // PAYMENTS TODAY
+    // PAYMENTS — TODAY ONLY
+    //
+    // HAPA TUNAHESABU PAYMENT ZA LEO TU.
     // ============================================================
 
     const paymentAgg =
       await DebtPayment.aggregate([
         {
           $match: {
-            owner: ownerId,
-            branch: branchId,
+            ...todayFilter,
 
-            createdAt: {
-              $gte: today,
-              $lt: tomorrow,
+            // Usihesabu refund kama normal payment
+            $or: [
+              {
+                type: {
+                  $ne: "refund",
+                },
+              },
+
+              {
+                type: {
+                  $exists: false,
+                },
+              },
+            ],
+
+            transactionType: {
+              $ne: "refund",
+            },
+
+            paymentType: {
+              $ne: "refund",
+            },
+
+            isRefund: {
+              $ne: true,
             },
           },
         },
@@ -863,7 +918,12 @@ return res.status(200).json(report);
             _id: null,
 
             totalCollected: {
-              $sum: "$amount",
+              $sum: {
+                $ifNull: [
+                  "$amount",
+                  0,
+                ],
+              },
             },
 
             count: {
@@ -884,19 +944,112 @@ return res.status(200).json(report);
       );
 
     // ============================================================
-    // ALL LOANS FOR CURRENT STATUS
+    // REFUNDS — TODAY ONLY
     //
-    // HAPA HATUTUMII createdAt TODAY.
+    // HAPA NDIPO REFUND ILIPOKUWA IKIPOTEA.
     //
-    // Tunataka kujua hali ya loans zote za branch.
+    // Tunatafuta refund kwa:
+    // type = refund
+    // transactionType = refund
+    // paymentType = refund
+    // isRefund = true
+    //
+    // Kama schema yako ina field tofauti, hiyo field
+    // itabidi iongezwe hapa.
     // ============================================================
 
-    const loanStatusAgg =
+    const refundAgg =
+      await DebtPayment.aggregate([
+        {
+          $match: {
+            ...todayFilter,
+
+            $or: [
+              {
+                type: "refund",
+              },
+
+              {
+                transactionType:
+                  "refund",
+              },
+
+              {
+                paymentType:
+                  "refund",
+              },
+
+              {
+                isRefund: true,
+              },
+            ],
+          },
+        },
+
+        {
+          $group: {
+            _id: null,
+
+            totalRefunds: {
+              $sum: {
+                $abs: {
+                  $ifNull: [
+                    "$amount",
+                    0,
+                  ],
+                },
+              },
+            },
+
+            count: {
+              $sum: 1,
+            },
+          },
+        },
+      ]);
+
+    const refunds =
+      Number(
+        refundAgg[0]?.totalRefunds || 0
+      );
+
+    const refundsCount =
+      Number(
+        refundAgg[0]?.count || 0
+      );
+
+    // ============================================================
+    // DAILY NET COLLECTION
+    // ============================================================
+
+    const totalPaid =
+      debtCollected;
+
+    const totalPayments =
+      paymentsCount;
+
+    const netCollection =
+      totalPaid -
+      refunds;
+
+    // ============================================================
+    // DAILY LOAN STATUS
+    //
+    // MUHIMU:
+    // HAPA TUNATUMIA createdAt YA LEO.
+    //
+    // Kwa hiyo:
+    // totalLoans    = loans zilizotolewa leo
+    // activeLoans   = loans za leo ambazo status yake active
+    // paidLoans     = loans za leo ambazo status yake paid
+    // overdueLoans  = loans za leo ambazo status yake overdue
+    // ============================================================
+
+    const dailyLoanStatusAgg =
       await DebtLoan.aggregate([
         {
           $match: {
-            owner: ownerId,
-            branch: branchId,
+            ...todayFilter,
           },
         },
 
@@ -912,15 +1065,6 @@ return res.status(200).json(report);
               $sum: {
                 $ifNull: [
                   "$principalAmount",
-                  0,
-                ],
-              },
-            },
-
-            totalPaid: {
-              $sum: {
-                $ifNull: [
-                  "$paidAmount",
                   0,
                 ],
               },
@@ -970,63 +1114,24 @@ return res.status(200).json(report);
                 ],
               },
             },
-          },
-        },
-      ]);
 
-    const totalLoans =
-      Number(
-        loanStatusAgg[0]?.totalLoans || 0
-      );
-
-    const totalPrincipal =
-      Number(
-        loanStatusAgg[0]?.totalPrincipal || 0
-      );
-
-    const loanPaidAmount =
-      Number(
-        loanStatusAgg[0]?.totalPaid || 0
-      );
-
-    const activeLoans =
-      Number(
-        loanStatusAgg[0]?.activeLoans || 0
-      );
-
-    const paidLoans =
-      Number(
-        loanStatusAgg[0]?.paidLoans || 0
-      );
-
-    const overdueLoans =
-      Number(
-        loanStatusAgg[0]?.overdueLoans || 0
-      );
-
-    // ============================================================
-    // OVERDUE AMOUNT
-    // ============================================================
-
-    const overdueAgg =
-      await DebtLoan.aggregate([
-        {
-          $match: {
-            owner: ownerId,
-            branch: branchId,
-
-            status: "overdue",
-          },
-        },
-
-        {
-          $group: {
-            _id: null,
-
-            amount: {
+            overdueAmount: {
               $sum: {
-                $ifNull: [
-                  "$principalAmount",
+                $cond: [
+                  {
+                    $eq: [
+                      "$status",
+                      "overdue",
+                    ],
+                  },
+
+                  {
+                    $ifNull: [
+                      "$remainingAmount",
+                      "$principalAmount",
+                    ],
+                  },
+
                   0,
                 ],
               },
@@ -1035,35 +1140,115 @@ return res.status(200).json(report);
         },
       ]);
 
+    const totalLoans =
+      Number(
+        dailyLoanStatusAgg[0]?.totalLoans || 0
+      );
+
+    const dailyLoanPrincipal =
+      Number(
+        dailyLoanStatusAgg[0]?.totalPrincipal || 0
+      );
+
+    const activeLoans =
+      Number(
+        dailyLoanStatusAgg[0]?.activeLoans || 0
+      );
+
+    const paidLoans =
+      Number(
+        dailyLoanStatusAgg[0]?.paidLoans || 0
+      );
+
+    const overdueLoans =
+      Number(
+        dailyLoanStatusAgg[0]?.overdueLoans || 0
+      );
+
     const overdueAmount =
       Number(
-        overdueAgg[0]?.amount || 0
+        dailyLoanStatusAgg[0]?.overdueAmount || 0
       );
 
     // ============================================================
-    // OUTSTANDING CAPITAL
+    // ALL OUTSTANDING LOANS
+    //
+    // HII NDIYO PEKEE TUNAYORUHUSU KUWA GLOBAL.
+    //
+    // "Jumla ya kiasi tunachodai kwa sasa"
+    //
+    // HATUTUMII createdAt TODAY.
     // ============================================================
+
+    const outstandingAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+
+            status: {
+              $in: [
+                "active",
+                "overdue",
+              ],
+            },
+          },
+        },
+
+        {
+          $group: {
+            _id: null,
+
+            totalPrincipal: {
+              $sum: {
+                $ifNull: [
+                  "$principalAmount",
+                  0,
+                ],
+              },
+            },
+
+            totalPaid: {
+              $sum: {
+                $ifNull: [
+                  "$paidAmount",
+                  0,
+                ],
+              },
+            },
+          },
+        },
+      ]);
+
+    const allOutstandingPrincipal =
+      Number(
+        outstandingAgg[0]?.totalPrincipal || 0
+      );
+
+    const allOutstandingPaid =
+      Number(
+        outstandingAgg[0]?.totalPaid || 0
+      );
 
     const outstandingCapital =
       Math.max(
-        totalPrincipal -
-          loanPaidAmount,
+        allOutstandingPrincipal -
+          allOutstandingPaid,
         0
       );
 
     // ============================================================
-    // CUSTOMERS
+    // CUSTOMERS — TODAY ONLY
     //
-    // Tunajaribu kupata unique customer count
-    // kupitia customerId.
+    // Tunapata unique customers waliokopeshwa leo.
     // ============================================================
 
     const customersAgg =
       await DebtLoan.aggregate([
         {
           $match: {
-            owner: ownerId,
-            branch: branchId,
+            ...todayFilter,
           },
         },
 
@@ -1084,43 +1269,19 @@ return res.status(200).json(report);
       );
 
     // ============================================================
-    // COLLECTION VALUES
-    // ============================================================
-
-    const totalPaid =
-      Number(
-        debtCollected
-      );
-
-    const totalPayments =
-      Number(
-        paymentsCount
-      );
-
-    // ============================================================
-    // NET COLLECTION
-    // ============================================================
-
-    const refunds =
-      0;
-
-    const netCollection =
-      totalPaid -
-      refunds;
-
-    // ============================================================
-    // NET CASH FLOW
+    // NET CASH FLOW — TODAY ONLY
     // ============================================================
 
     const netCashFlow =
       totalSales +
       cashIncome +
       debtCollected -
+      refunds -
       totalExpense -
       totalBuy;
 
     // ============================================================
-    // BUSINESS PROFIT
+    // BUSINESS PROFIT — TODAY ONLY
     // ============================================================
 
     const totalBusinessProfit =
@@ -1154,6 +1315,8 @@ return res.status(200).json(report);
 
     // ============================================================
     // COLLECTION RATE
+    //
+    // Inahusiana na loans zilizotolewa leo.
     // ============================================================
 
     const collectionRate =
@@ -1170,56 +1333,70 @@ return res.status(200).json(report);
     // ============================================================
 
     const report = {
-      // ----------------------------------------------------------
+      // ========================================================
       // DATE
-      // ----------------------------------------------------------
+      // ========================================================
 
       date: today,
 
-      // ----------------------------------------------------------
-      // SALES
-      // ----------------------------------------------------------
+      // ========================================================
+      // SALES — TODAY
+      // ========================================================
 
       sales: {
         totalSales,
+
         totalSalesProfit,
-        count: salesCount,
+
+        count:
+          salesCount,
       },
 
-      // ----------------------------------------------------------
-      // PURCHASES
-      // ----------------------------------------------------------
+      // ========================================================
+      // PURCHASES — TODAY
+      // ========================================================
 
       purchases: {
         totalBuy,
+
         totalSellValue,
+
         totalOrderProfit,
+
         remainingPurchaseProfit,
-        count: orderCount,
+
+        count:
+          orderCount,
       },
 
-      // ----------------------------------------------------------
-      // CASH
-      // ----------------------------------------------------------
+      // ========================================================
+      // CASH — TODAY
+      // ========================================================
 
       cash: {
         cashIncome,
+
         totalExpense,
       },
 
-      // ----------------------------------------------------------
+      // ========================================================
       // CREDIT
-      // ----------------------------------------------------------
+      // ========================================================
 
       credit: {
-        // loans issued TODAY
+        // ------------------------------------------------------
+        // LOANS ISSUED TODAY
+        // ------------------------------------------------------
+
         loansIssued,
 
-        // number of loans issued TODAY
         loansCount:
           loansIssuedCount,
 
-        // payments TODAY
+        // ------------------------------------------------------
+        // PAYMENTS TODAY
+        // ------------------------------------------------------
+
         debtCollected,
 
         paymentsCollected:
@@ -1227,7 +1404,10 @@ return res.status(200).json(report);
 
         paymentsCount,
 
-        // current loan status
+        // ------------------------------------------------------
+        // LOAN COUNTS TODAY
+        // ------------------------------------------------------
+
         totalLoans,
 
         loanCount:
@@ -1242,9 +1422,18 @@ return res.status(200).json(report);
 
         overdueLoans,
 
+        // ------------------------------------------------------
+        // OVERDUE AMOUNT TODAY
+        // ------------------------------------------------------
+
         overdueAmount,
 
-        // current outstanding capital
+        // ------------------------------------------------------
+        // GLOBAL OUTSTANDING
+        //
+        // HII PEKEE NDIYO YA LOANS ZOTE.
+        // ------------------------------------------------------
+
         outstandingBalance:
           outstandingCapital,
 
@@ -1253,24 +1442,36 @@ return res.status(200).json(report);
         totalOutstandingCapital:
           outstandingCapital,
 
-        // total principal
+        // ------------------------------------------------------
+        // TODAY'S LOAN AMOUNT
+        // ------------------------------------------------------
+
         totalLoanAmount:
-          totalPrincipal,
+          dailyLoanPrincipal,
 
         amountIssued:
           loansIssued,
 
+        // ------------------------------------------------------
+        // REFUNDS TODAY
+        // ------------------------------------------------------
+
         refunds,
+
+        refundsCount,
 
         netCollection,
       },
 
-      // ----------------------------------------------------------
+      // ========================================================
       // SUMMARY
-      // ----------------------------------------------------------
+      // ========================================================
 
       summary: {
-        // loan statistics
+        // ------------------------------------------------------
+        // TODAY LOANS
+        // ------------------------------------------------------
+
         totalLoans,
 
         loanCount:
@@ -1285,7 +1486,10 @@ return res.status(200).json(report);
         amountIssued:
           loansIssued,
 
-        // payment statistics
+        // ------------------------------------------------------
+        // TODAY PAYMENTS
+        // ------------------------------------------------------
+
         totalPaid,
 
         totalPayments,
@@ -1295,10 +1499,16 @@ return res.status(200).json(report);
 
         paymentsCount,
 
-        // customers
+        // ------------------------------------------------------
+        // TODAY CUSTOMERS
+        // ------------------------------------------------------
+
         customers,
 
-        // loan status
+        // ------------------------------------------------------
+        // TODAY LOAN STATUS
+        // ------------------------------------------------------
+
         activeLoans,
 
         paidLoans,
@@ -1311,7 +1521,10 @@ return res.status(200).json(report);
 
         overdueAmount,
 
-        // outstanding
+        // ------------------------------------------------------
+        // GLOBAL OUTSTANDING
+        // ------------------------------------------------------
+
         totalOutstandingCapital:
           outstandingCapital,
 
@@ -1321,10 +1534,22 @@ return res.status(200).json(report);
         outstandingBalance:
           outstandingCapital,
 
-        // collections
+        // ------------------------------------------------------
+        // TODAY COLLECTION
+        // ------------------------------------------------------
+
+        refunds,
+
+        refundsCount,
+
         netCollection,
 
-        // business calculations
+        collectionRate,
+
+        // ------------------------------------------------------
+        // BUSINESS
+        // ------------------------------------------------------
+
         netCashFlow,
 
         totalBusinessProfit,
@@ -1353,19 +1578,44 @@ return res.status(200).json(report);
         date:
           today.toISOString(),
 
-        sales: report.sales,
+        loansIssued:
+          loansIssued,
 
-        purchases:
-          report.purchases,
+        loansIssuedCount:
+          loansIssuedCount,
 
-        cash:
-          report.cash,
+        totalLoans:
+          totalLoans,
 
-        credit:
-          report.credit,
+        totalLoanAmount:
+          loansIssued,
 
-        summary:
-          report.summary,
+        payments:
+          debtCollected,
+
+        paymentsCount:
+          paymentsCount,
+
+        refunds:
+          refunds,
+
+        refundsCount:
+          refundsCount,
+
+        netCollection:
+          netCollection,
+
+        outstandingCapital:
+          outstandingCapital,
+
+        overdueLoans:
+          overdueLoans,
+
+        overdueAmount:
+          overdueAmount,
+
+        customers:
+          customers,
       }
     );
 
@@ -1391,6 +1641,8 @@ return res.status(200).json(report);
   }
 };
  
+
+  
 const getMonthlyReport = async (req, res) => {
   try {
     // SECURITY
