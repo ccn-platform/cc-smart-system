@@ -2325,44 +2325,49 @@ const refundPayment =
         });
 
         // 🔥 HIFADHI REFUND KWENYE PAYMENT HISTORY
-        await DebtPayment.create(
-          [
-            {
-              owner:
-                req.ownerId,
+     await DebtPayment.create(
+  [
+    {
+      owner: req.ownerId,
+      branch: req.branchId,
 
-              branch:
-                req.branchId,
+      loan: loan._id,
 
-              loan:
-                loan._id,
+      customer: loan.customer,
 
-              customer:
-                loan.customer,
+      amount: -refundAmount,
 
-              amount:
-                -refundAmount,
+      type: "refund",
 
-              paymentMethod:
-                "cash",
+      paymentMethod: "cash",
 
-              reference:
-                "REFUND",
+      channel: "online",
 
-              note:
-                "Malipo yamerudishwa kwenye deni",
+      reference: "REFUND",
 
-              receivedBy:
-                req.user.id,
+      note: "Malipo yamerudishwa kwenye deni",
 
-              status:
-                "reversed"
-            }
-          ],
-          {
-            session
-          }
-        );
+      receivedBy: req.user.id,
+
+      status: "reversed",
+
+      paymentDate: new Date(),
+
+      source: "online",
+
+      syncStatus: "synced",
+
+      lastSyncedAt: new Date(),
+
+      syncError: "",
+
+      queuedAt: null
+    }
+  ],
+  {
+    session
+  }
+);
 
         await session.commitTransaction();
 
@@ -2626,80 +2631,100 @@ const syncRefund = async (req, res) => {
         session
       });
 
-      // --------------------------------
-      // SAVE REFUND HISTORY
-      // --------------------------------
+    // --------------------------------
+// SAVE REFUND HISTORY
+// --------------------------------
 
-      const refund =
-        await DebtPayment.create(
-          [
-            {
-              owner:
-                req.ownerId,
+const refund =
+  await DebtPayment.create(
+    [
+      {
+        owner:
+          req.ownerId,
 
-              branch:
-                req.branchId,
+        branch:
+          req.branchId,
 
-              loan:
-                loan._id,
+        loan:
+          loan._id,
 
-              customer:
-                loan.customer,
+        customer:
+          loan.customer,
 
-              amount:
-                -refundAmount,
+        // --------------------------------
+        // REFUND AMOUNT
+        // --------------------------------
 
-              paymentDate:
+        amount:
+          -refundAmount,
+
+        // --------------------------------
+        // PAYMENT TYPE
+        // --------------------------------
+
+        type:
+          "refund",
+
+        paymentDate:
+          paymentDate
+            ? new Date(
                 paymentDate
-                  ? new Date(
-                      paymentDate
-                    )
-                  : new Date(),
+              )
+            : new Date(),
 
-              paymentMethod:
-                "cash",
+        paymentMethod:
+          "cash",
 
-              channel:
-                "offline_sync",
+        channel:
+          "offline_sync",
 
-              reference:
-                "REFUND",
+        reference:
+          "REFUND",
 
-              note:
-                "Malipo yamerudishwa kwenye deni",
+        note:
+          "Malipo yamerudishwa kwenye deni",
 
-              receivedBy:
-                req.user.id,
+        receivedBy:
+          req.user.id,
 
-              // OFFLINE SYNC
-              syncId,
+        // --------------------------------
+        // OFFLINE SYNC
+        // --------------------------------
 
-              syncStatus:
-                "synced",
+        syncId:
 
-              source:
-                "offline",
+          syncId,
 
-              deviceId,
+        syncStatus:
+          "synced",
 
-              lastSyncedAt:
-                new Date(),
+        source:
+          "offline",
 
-              syncError:
-                "",
+        deviceId:
+          deviceId,
 
-              queuedAt:
-                null,
+        lastSyncedAt:
+          new Date(),
 
-              status:
-                "reversed"
-            }
-          ],
-          {
-            session
-          }
-        );
+        syncError:
+          "",
 
+        queuedAt:
+          null,
+
+        // --------------------------------
+        // STATUS
+        // --------------------------------
+
+        status:
+          "reversed"
+      }
+    ],
+    {
+      session
+    }
+  );
       // --------------------------------
       // COMMIT
       // --------------------------------
