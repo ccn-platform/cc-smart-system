@@ -1,4 +1,4 @@
-      const mongoose = require("mongoose");
+       const mongoose = require("mongoose");
   const Sale =
 require("../models/Sale");
 
@@ -59,6 +59,338 @@ const saveReportHistory = async (
   }
 };
  
+// ============================================
+// REPORT DATE KEY
+// ============================================
+
+const getDateKey =
+  (date = new Date()) => {
+
+    const year =
+      date.getUTCFullYear();
+
+    const month =
+      String(
+        date.getUTCMonth() + 1
+      ).padStart(
+        2,
+        "0"
+      );
+
+    const day =
+      String(
+        date.getUTCDate()
+      ).padStart(
+        2,
+        "0"
+      );
+
+    return `${year}-${month}-${day}`;
+
+  };
+
+
+// ============================================
+// BUILD CREDIT HISTORY REPORT
+//
+// FORMAT COMPATIBLE WITH MOBILE APP
+// ============================================
+
+const buildCreditHistoryReport =
+  async (
+    ownerId,
+    branchId,
+    date
+  ) => {
+
+    const start =
+      new Date(
+        `${date}T00:00:00.000Z`
+      );
+
+    const end =
+      new Date(start);
+
+    end.setUTCDate(
+      end.getUTCDate() + 1
+    );
+
+
+    // ========================================
+    // LOANS CREATED ON THIS DATE
+    // ========================================
+
+    const loansAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+
+            totalLoans: {
+              $sum: 1
+            },
+
+            totalLoanAmount: {
+              $sum: "$principalAmount"
+            }
+          }
+        }
+      ]);
+
+
+    // ========================================
+    // PAYMENTS ON THIS DATE
+    // ========================================
+
+    const paymentsAgg =
+      await DebtPayment.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            createdAt: {
+              $gte: start,
+              $lt: end
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+
+            totalPayments: {
+              $sum: 1
+            },
+
+            totalPaid: {
+              $sum: "$amount"
+            }
+          }
+        }
+      ]);
+
+
+    // ========================================
+    // ACTIVE LOANS
+    //
+    // CURRENT STATUS
+    // ========================================
+
+    const activeLoans =
+      await DebtLoan.countDocuments({
+        owner: ownerId,
+        branch: branchId,
+        status: "active"
+      });
+
+
+    // ========================================
+    // PAID LOANS
+    // ========================================
+
+    const paidLoans =
+      await DebtLoan.countDocuments({
+        owner: ownerId,
+        branch: branchId,
+        status: "paid"
+      });
+
+
+    // ========================================
+    // OVERDUE LOANS
+    // ========================================
+
+    const overdueLoans =
+      await DebtLoan.countDocuments({
+        owner: ownerId,
+        branch: branchId,
+        status: "overdue"
+      });
+
+
+    // ========================================
+    // OUTSTANDING
+    // ========================================
+
+    const outstandingAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+
+            status: {
+              $in: [
+                "active",
+                "overdue"
+              ]
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+
+            totalOutstandingCapital: {
+              $sum: "$balanceAmount"
+            }
+          }
+        }
+      ]);
+
+
+    // ========================================
+    // OVERDUE AMOUNT
+    // ========================================
+
+    const overdueAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+            status: "overdue"
+          }
+        },
+        {
+          $group: {
+            _id: null,
+
+            overdueAmount: {
+              $sum: "$balanceAmount"
+            }
+          }
+        }
+      ]);
+
+
+    // ========================================
+    // CUSTOMERS
+    //
+    // Using unique customers from loans
+    // ========================================
+
+    const customersAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId
+          }
+        },
+        {
+          $group: {
+            _id: "$customer"
+          }
+        },
+        {
+          $count: "total"
+        }
+      ]);
+
+
+    // ========================================
+    // VALUES
+    // ========================================
+
+    const totalLoans =
+      loansAgg[0]?.totalLoans || 0;
+
+    const totalLoanAmount =
+      loansAgg[0]?.totalLoanAmount || 0;
+
+    const totalPayments =
+      paymentsAgg[0]?.totalPayments || 0;
+
+    const totalPaid =
+      paymentsAgg[0]?.totalPaid || 0;
+
+    const totalOutstandingCapital =
+      outstandingAgg[0]
+        ?.totalOutstandingCapital || 0;
+
+    const overdueAmount =
+      overdueAgg[0]
+        ?.overdueAmount || 0;
+
+    const customers =
+      customersAgg[0]?.total || 0;
+
+
+    // ========================================
+    // FINAL REPORT
+    // ========================================
+
+    return {
+
+      summary: {
+
+        totalLoans,
+
+        totalPaid,
+
+        totalLoanAmount,
+
+        totalPayments,
+
+        totalRefundAmount: 0,
+
+        netCollection:
+          totalPaid,
+
+        totalOutstandingCapital,
+
+        totalBalance:
+          totalOutstandingCapital,
+
+        customers,
+
+        activeLoans,
+
+        paidLoans,
+
+        overdueLoans,
+
+        overdueAmount
+
+      },
+
+
+      credit: {
+
+        loansIssued:
+          totalLoans,
+
+        amountIssued:
+          totalLoanAmount,
+
+        paymentsCollected:
+          totalPaid,
+
+        refunds: 0,
+
+        netCollection:
+          totalPaid,
+
+        outstandingBalance:
+          totalOutstandingCapital
+
+      }
+
+    };
+
+  };
+
   const getInventoryReport = async (req, res) => {
   try {
     // SECURITY
@@ -1646,7 +1978,434 @@ return res.status(200).json(report);
     });
   }
 };
+
+// ============================================
+// GET CURRENT CREDIT REPORT HISTORY
+//
+// USED BY MOBILE APP
+//
+// GET /reports/credit-history
+// ============================================
+
+const getCurrentCreditReportHistory =
+  async (
+    req,
+    res
+  ) => {
+
+    try {
+
+      // ========================================
+      // SECURITY
+      // ========================================
+
+      if (
+        !req.ownerId ||
+        !req.branchId
+      ) {
+
+        return res.status(401).json({
+          message:
+            "Unauthorized"
+        });
+
+      }
+
+
+      const ownerId =
+        new mongoose.Types.ObjectId(
+          req.ownerId
+        );
+
+
+      const branchId =
+        new mongoose.Types.ObjectId(
+          req.branchId
+        );
+
+
+      // ========================================
+      // TODAY
+      // ========================================
+
+      const today =
+        getDateKey();
+
+
+      // ========================================
+      // BUILD LIVE REPORT
+      // ========================================
+
+      const report =
+        await buildCreditHistoryReport(
+          ownerId,
+          branchId,
+          today
+        );
+
+
+      // ========================================
+      // RESPONSE FORMAT
+      //
+      // MUST MATCH MOBILE SCREEN
+      // ========================================
+
+      const response = {
+
+        id:
+          `${req.branchId}_${today}`,
+
+        date:
+          today,
+
+        reportType:
+          "daily",
+
+        branchId:
+          String(
+            req.branchId
+          ),
+
+        createdAt:
+          new Date().toISOString(),
+
+        report
+
+      };
+
+
+      // ========================================
+      // SAVE TODAY SNAPSHOT
+      //
+      // So online report can also become history
+      // ========================================
+
+      const todayStart =
+        new Date(
+          `${today}T00:00:00.000Z`
+        );
+
+
+      const tomorrow =
+        new Date(
+          todayStart
+        );
+
+      tomorrow.setUTCDate(
+        tomorrow.getUTCDate() + 1
+      );
+
+
+      await ReportHistory.findOneAndUpdate(
+
+        {
+
+          owner:
+            req.ownerId,
+
+          branch:
+            req.branchId,
+
+          reportType:
+            "credit_daily",
+
+          periodStart:
+            todayStart,
+
+          periodEnd:
+            tomorrow
+
+        },
+
+        {
+
+          owner:
+            req.ownerId,
+
+          branch:
+            req.branchId,
+
+          reportType:
+            "credit_daily",
+
+          periodStart:
+            todayStart,
+
+          periodEnd:
+            tomorrow,
+
+          report
+
+        },
+
+        {
+
+          upsert:
+            true,
+
+          new:
+            true,
+
+          setDefaultsOnInsert:
+            true
+
+        }
+
+      );
+
+
+      return res.status(200).json({
+
+        reports: [
+          response
+        ]
+
+      });
+
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "GET CURRENT CREDIT REPORT HISTORY ERROR:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        message:
+          error.message
+
+      });
+
+    }
+
+  };
  
+  // ============================================
+// GET CREDIT REPORT BY DATE
+//
+// USED BY HISTORY DETAILS SCREEN
+//
+// GET /reports/credit-history/:date
+// ============================================
+
+const getCreditReportHistoryByDate =
+  async (
+    req,
+    res
+  ) => {
+
+    try {
+
+      // ========================================
+      // SECURITY
+      // ========================================
+
+      if (
+        !req.ownerId ||
+        !req.branchId
+      ) {
+
+        return res.status(401).json({
+
+          message:
+            "Unauthorized"
+
+        });
+
+      }
+
+
+      const selectedDate =
+        String(
+          req.params.date
+        );
+
+
+      // ========================================
+      // DATE VALIDATION
+      // ========================================
+
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(
+          selectedDate
+        )
+      ) {
+
+        return res.status(400).json({
+
+          message:
+            "Invalid report date"
+
+        });
+
+      }
+
+
+      const ownerId =
+        new mongoose.Types.ObjectId(
+          req.ownerId
+        );
+
+
+      const branchId =
+        new mongoose.Types.ObjectId(
+          req.branchId
+        );
+
+
+      const today =
+        getDateKey();
+
+
+      // ========================================
+      // TODAY
+      //
+      // BUILD LIVE REPORT
+      // ========================================
+
+      if (
+        selectedDate ===
+        today
+      ) {
+
+        const report =
+          await buildCreditHistoryReport(
+            ownerId,
+            branchId,
+            selectedDate
+          );
+
+
+        return res.status(200).json({
+
+          id:
+            `${req.branchId}_${selectedDate}`,
+
+          date:
+            selectedDate,
+
+          reportType:
+            "daily",
+
+          branchId:
+            String(
+              req.branchId
+            ),
+
+          createdAt:
+            new Date().toISOString(),
+
+          report
+
+        });
+
+      }
+
+
+      // ========================================
+      // HISTORICAL REPORT
+      // ========================================
+
+      const start =
+        new Date(
+          `${selectedDate}T00:00:00.000Z`
+        );
+
+
+      const end =
+        new Date(start);
+
+      end.setUTCDate(
+        end.getUTCDate() + 1
+      );
+
+
+      const history =
+        await ReportHistory.findOne({
+
+          owner:
+            req.ownerId,
+
+          branch:
+            req.branchId,
+
+          reportType:
+            "credit_daily",
+
+          periodStart:
+            start,
+
+          periodEnd:
+            end
+
+        }).lean();
+
+
+      if (
+        !history
+      ) {
+
+        return res.status(404).json({
+
+          message:
+            "Report not found"
+
+        });
+
+      }
+
+
+      return res.status(200).json({
+
+        id:
+          String(
+            history._id
+          ),
+
+        date:
+          selectedDate,
+
+        reportType:
+          "daily",
+
+        branchId:
+          String(
+            req.branchId
+          ),
+
+        createdAt:
+          history.createdAt,
+
+        report:
+          history.report
+
+      });
+
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "GET CREDIT REPORT BY DATE ERROR:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        message:
+          error.message
+
+      });
+
+    }
+
+  };
  const getExpenseReport = async (req, res) => {
   try {
     // SECURITY
@@ -1946,5 +2705,9 @@ const getReportHistoryById = async (req, res) => {
   getTopProductsReport,
   getCreditReport,
   getExpenseReport,
+   getCurrentCreditReportHistory,
+
+  getCreditReportHistoryByDate,
+
   getInventoryReport
 };
