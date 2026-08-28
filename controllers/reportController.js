@@ -864,13 +864,7 @@ const report = {
   }
 };
 
-await saveReportHistory(
-  req,
-  "daily",
-  report,
-  today,
-  tomorrow
-);
+ 
 
 return res.status(200).json(report);
 
