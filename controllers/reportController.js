@@ -585,7 +585,7 @@ return res.status(200).json(report);
     });
   }
 };
-  
+   
 const getDailyReport = async (req, res) => {
   try {
     // ============================================================
@@ -633,6 +633,14 @@ const getDailyReport = async (req, res) => {
 
     // ============================================================
     // COMMON DATE FILTER
+    //
+    // Inatumika kwa:
+    // Sale
+    // Order
+    // CashEntry
+    // DebtLoan
+    //
+    // Hizi zinatumia createdAt.
     // ============================================================
 
     const todayFilter = {
@@ -643,6 +651,27 @@ const getDailyReport = async (req, res) => {
         $gte: today,
         $lt: tomorrow,
       },
+    };
+
+    // ============================================================
+    // DEBT PAYMENT DATE FILTER
+    //
+    // MUHIMU:
+    // DebtPayment ina paymentDate.
+    //
+    // HATUTUMII createdAt hapa.
+    // ============================================================
+
+    const debtPaymentTodayFilter = {
+      owner: ownerId,
+      branch: branchId,
+
+      paymentDate: {
+        $gte: today,
+        $lt: tomorrow,
+      },
+
+      status: "posted",
     };
 
     // ============================================================
@@ -868,23 +897,22 @@ const getDailyReport = async (req, res) => {
     // ============================================================
     // PAYMENTS — TODAY ONLY
     //
-    // MUHIMU:
-    // HAPA TUNAHESABU ONLY:
+    // DebtPayment:
     //
-    // type = "payment"
+    // paymentDate = leo
+    // status = posted
+    // type = payment
     //
-    // Refund haitahesabiwa hapa.
+    // REFUND HAINGII HAPA.
     // ============================================================
 
     const paymentAgg =
       await DebtPayment.aggregate([
         {
           $match: {
-            ...todayFilter,
+            ...debtPaymentTodayFilter,
 
             type: "payment",
-
-            status: "posted",
           },
         },
 
@@ -894,10 +922,12 @@ const getDailyReport = async (req, res) => {
 
             totalCollected: {
               $sum: {
-                $ifNull: [
-                  "$amount",
-                  0,
-                ],
+                $abs: {
+                  $ifNull: [
+                    "$amount",
+                    0,
+                  ],
+                },
               },
             },
 
@@ -921,23 +951,22 @@ const getDailyReport = async (req, res) => {
     // ============================================================
     // REFUNDS — TODAY ONLY
     //
-    // MUHIMU:
-    // HAPA TUNAHESABU ONLY:
+    // DebtPayment:
     //
-    // type = "refund"
+    // paymentDate = leo
+    // status = posted
+    // type = refund
     //
-    // Refund haiwezi kuingia kwenye payments.
+    // REFUND HAIINGII KWENYE PAYMENT.
     // ============================================================
 
     const refundAgg =
       await DebtPayment.aggregate([
         {
           $match: {
-            ...todayFilter,
+            ...debtPaymentTodayFilter,
 
             type: "refund",
-
-            status: "posted",
           },
         },
 
@@ -976,7 +1005,7 @@ const getDailyReport = async (req, res) => {
     // ============================================================
     // DAILY NET COLLECTION
     //
-    // Malipo halisi yaliyobaki baada ya refunds.
+    // Payment - Refund
     // ============================================================
 
     const totalPaid =
@@ -1215,7 +1244,8 @@ const getDailyReport = async (req, res) => {
     // ============================================================
     // NET CASH FLOW — TODAY ONLY
     //
-    // Refund inapunguza cash flow.
+    // Payment inaongeza cash
+    // Refund inapunguza cash
     // ============================================================
 
     const netCashFlow =
@@ -1262,8 +1292,8 @@ const getDailyReport = async (req, res) => {
     // ============================================================
     // COLLECTION RATE
     //
-    // Inahusiana na loans zilizotolewa leo.
-    // Tunatumia actual payment, sio refund.
+    // Hii inatumia payment halisi.
+    // Refund haiongezi collection rate.
     // ============================================================
 
     const collectionRate =
@@ -1527,6 +1557,7 @@ const getDailyReport = async (req, res) => {
         date:
           today.toISOString(),
 
+        // LOANS
         loansIssued,
 
         loansIssuedCount,
@@ -1536,24 +1567,63 @@ const getDailyReport = async (req, res) => {
         totalLoanAmount:
           loansIssued,
 
+        // PAYMENTS
         payments:
           debtCollected,
 
         paymentsCount,
 
+        // REFUNDS
         refunds,
 
         refundsCount,
 
+        // NET
         netCollection,
 
+        // OUTSTANDING
         outstandingCapital,
 
+        // OVERDUE
         overdueLoans,
 
         overdueAmount,
 
+        // CUSTOMERS
         customers,
+      }
+    );
+
+    // ============================================================
+    // DEBUG — DEBT PAYMENTS
+    //
+    // Hii itakusaidia kuona kama database ina
+    // payment/refund ya leo.
+    // ============================================================
+
+    console.log(
+      "💰 DEBT PAYMENT REPORT FILTER:",
+      {
+        owner: ownerId.toString(),
+        branch: branchId.toString(),
+
+        from:
+          today.toISOString(),
+
+        to:
+          tomorrow.toISOString(),
+
+        paymentAmount:
+          debtCollected,
+
+        paymentCount:
+          paymentsCount,
+
+        refundAmount:
+          refunds,
+
+        refundCount:
+          refundsCount,
       }
     );
 
@@ -1578,8 +1648,6 @@ const getDailyReport = async (req, res) => {
     });
   }
 };
- 
-
   
 const getMonthlyReport = async (req, res) => {
   try {
