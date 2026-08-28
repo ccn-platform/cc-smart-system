@@ -588,21 +588,38 @@ return res.status(200).json(report);
 
   const getDailyReport = async (req, res) => {
   try {
+    // ============================================================
     // SECURITY
+    // ============================================================
+
     if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
-        message: "Unauthorized"
+        message: "Unauthorized",
       });
     }
 
-    // USE UTC
+    // ============================================================
+    // UTC TODAY
+    // ============================================================
+
     const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+
+    today.setUTCHours(
+      0,
+      0,
+      0,
+      0
+    );
 
     const tomorrow = new Date(today);
+
     tomorrow.setUTCDate(
       today.getUTCDate() + 1
     );
+
+    // ============================================================
+    // IDS
+    // ============================================================
 
     const ownerId =
       new mongoose.Types.ObjectId(
@@ -614,197 +631,497 @@ return res.status(200).json(report);
         req.branchId
       );
 
+    // ============================================================
     // SALES
+    // ============================================================
+
     const salesAgg =
       await Sale.aggregate([
         {
           $match: {
             owner: ownerId,
             branch: branchId,
+
             createdAt: {
               $gte: today,
-              $lt: tomorrow
-            }
-          }
+              $lt: tomorrow,
+            },
+          },
         },
+
         {
           $group: {
             _id: null,
+
             totalSales: {
-              $sum: "$totalAmount"
+              $sum: "$totalAmount",
             },
-            totalProfit: {
-              $sum: "$totalProfit"
+
+            totalSalesProfit: {
+              $sum: "$totalProfit",
             },
+
             count: {
-              $sum: 1
-            }
-          }
-        }
+              $sum: 1,
+            },
+          },
+        },
       ]);
 
     const totalSales =
-      salesAgg[0]?.totalSales || 0;
+      Number(
+        salesAgg[0]?.totalSales || 0
+      );
 
     const totalSalesProfit =
-      salesAgg[0]?.totalProfit || 0;
+      Number(
+        salesAgg[0]?.totalSalesProfit || 0
+      );
 
     const salesCount =
-      salesAgg[0]?.count || 0;
+      Number(
+        salesAgg[0]?.count || 0
+      );
 
-    // PURCHASES
+    // ============================================================
+    // PURCHASES / ORDERS
+    // ============================================================
+
     const ordersAgg =
       await Order.aggregate([
         {
           $match: {
             owner: ownerId,
             branch: branchId,
+
             createdAt: {
               $gte: today,
-              $lt: tomorrow
-            }
-          }
+              $lt: tomorrow,
+            },
+          },
         },
+
         {
           $group: {
             _id: null,
+
             totalBuy: {
-              $sum: "$buyTotal"
+              $sum: "$buyTotal",
             },
+
             totalSellValue: {
-              $sum: "$sellTotal"
+              $sum: "$sellTotal",
             },
+
             totalOrderProfit: {
-              $sum: "$totalProfit"
+              $sum: "$totalProfit",
             },
+
             count: {
-              $sum: 1
-            }
-          }
-        }
+              $sum: 1,
+            },
+          },
+        },
       ]);
 
     const totalBuy =
-      ordersAgg[0]?.totalBuy || 0;
+      Number(
+        ordersAgg[0]?.totalBuy || 0
+      );
 
     const totalSellValue =
-      ordersAgg[0]?.totalSellValue || 0;
+      Number(
+        ordersAgg[0]?.totalSellValue || 0
+      );
 
     const totalOrderProfit =
-      ordersAgg[0]?.totalOrderProfit || 0;
+      Number(
+        ordersAgg[0]?.totalOrderProfit || 0
+      );
 
     const orderCount =
-      ordersAgg[0]?.count || 0;
+      Number(
+        ordersAgg[0]?.count || 0
+      );
 
+    // ============================================================
     // CASH
+    // ============================================================
+
     const cashAgg =
       await CashEntry.aggregate([
         {
           $match: {
             owner: ownerId,
             branch: branchId,
+
             status: "active",
+
             createdAt: {
               $gte: today,
-              $lt: tomorrow
-            }
-          }
+              $lt: tomorrow,
+            },
+          },
         },
+
         {
           $group: {
             _id: "$type",
+
             total: {
-              $sum: "$amount"
-            }
-          }
-        }
+              $sum: "$amount",
+            },
+          },
+        },
       ]);
 
     let cashIncome = 0;
     let totalExpense = 0;
 
-    cashAgg.forEach((c) => {
-      if (c._id === "income") {
-        cashIncome = c.total;
+    cashAgg.forEach((item) => {
+      const amount =
+        Number(
+          item?.total || 0
+        );
+
+      if (
+        item?._id === "income"
+      ) {
+        cashIncome += amount;
       }
 
-      if (c._id === "expense") {
-        totalExpense = c.total;
+      if (
+        item?._id === "expense"
+      ) {
+        totalExpense += amount;
       }
     });
 
-    // LOANS
-    const loanAgg =
+    // ============================================================
+    // LOANS ISSUED TODAY
+    // ============================================================
+
+    const loanIssuedAgg =
       await DebtLoan.aggregate([
         {
           $match: {
             owner: ownerId,
             branch: branchId,
+
             createdAt: {
               $gte: today,
-              $lt: tomorrow
-            }
-          }
+              $lt: tomorrow,
+            },
+          },
         },
+
         {
           $group: {
             _id: null,
+
             totalIssued: {
-              $sum:
-                "$principalAmount"
-            }
-          }
-        }
+              $sum: "$principalAmount",
+            },
+
+            count: {
+              $sum: 1,
+            },
+          },
+        },
       ]);
 
     const loansIssued =
-      loanAgg[0]?.totalIssued || 0;
+      Number(
+        loanIssuedAgg[0]?.totalIssued || 0
+      );
 
-    // PAYMENTS
+    const loansIssuedCount =
+      Number(
+        loanIssuedAgg[0]?.count || 0
+      );
+
+    // ============================================================
+    // PAYMENTS TODAY
+    // ============================================================
+
     const paymentAgg =
       await DebtPayment.aggregate([
         {
           $match: {
             owner: ownerId,
             branch: branchId,
+
             createdAt: {
               $gte: today,
-              $lt: tomorrow
-            }
-          }
+              $lt: tomorrow,
+            },
+          },
         },
+
         {
           $group: {
             _id: null,
+
             totalCollected: {
-              $sum: "$amount"
-            }
-          }
-        }
+              $sum: "$amount",
+            },
+
+            count: {
+              $sum: 1,
+            },
+          },
+        },
       ]);
 
     const debtCollected =
-      paymentAgg[0]
-        ?.totalCollected || 0;
+      Number(
+        paymentAgg[0]?.totalCollected || 0
+      );
 
-    // OVERDUE
-    const overdueCount =
-      await DebtLoan.countDocuments({
-        owner: ownerId,
-        branch: branchId,
-        status: "overdue"
-      });
+    const paymentsCount =
+      Number(
+        paymentAgg[0]?.count || 0
+      );
 
-    // CALCULATIONS
-    const netPosition =
+    // ============================================================
+    // ALL LOANS FOR CURRENT STATUS
+    //
+    // HAPA HATUTUMII createdAt TODAY.
+    //
+    // Tunataka kujua hali ya loans zote za branch.
+    // ============================================================
+
+    const loanStatusAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+          },
+        },
+
+        {
+          $group: {
+            _id: null,
+
+            totalLoans: {
+              $sum: 1,
+            },
+
+            totalPrincipal: {
+              $sum: {
+                $ifNull: [
+                  "$principalAmount",
+                  0,
+                ],
+              },
+            },
+
+            totalPaid: {
+              $sum: {
+                $ifNull: [
+                  "$paidAmount",
+                  0,
+                ],
+              },
+            },
+
+            activeLoans: {
+              $sum: {
+                $cond: [
+                  {
+                    $eq: [
+                      "$status",
+                      "active",
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+
+            paidLoans: {
+              $sum: {
+                $cond: [
+                  {
+                    $eq: [
+                      "$status",
+                      "paid",
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+
+            overdueLoans: {
+              $sum: {
+                $cond: [
+                  {
+                    $eq: [
+                      "$status",
+                      "overdue",
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+          },
+        },
+      ]);
+
+    const totalLoans =
+      Number(
+        loanStatusAgg[0]?.totalLoans || 0
+      );
+
+    const totalPrincipal =
+      Number(
+        loanStatusAgg[0]?.totalPrincipal || 0
+      );
+
+    const loanPaidAmount =
+      Number(
+        loanStatusAgg[0]?.totalPaid || 0
+      );
+
+    const activeLoans =
+      Number(
+        loanStatusAgg[0]?.activeLoans || 0
+      );
+
+    const paidLoans =
+      Number(
+        loanStatusAgg[0]?.paidLoans || 0
+      );
+
+    const overdueLoans =
+      Number(
+        loanStatusAgg[0]?.overdueLoans || 0
+      );
+
+    // ============================================================
+    // OVERDUE AMOUNT
+    // ============================================================
+
+    const overdueAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+
+            status: "overdue",
+          },
+        },
+
+        {
+          $group: {
+            _id: null,
+
+            amount: {
+              $sum: {
+                $ifNull: [
+                  "$principalAmount",
+                  0,
+                ],
+              },
+            },
+          },
+        },
+      ]);
+
+    const overdueAmount =
+      Number(
+        overdueAgg[0]?.amount || 0
+      );
+
+    // ============================================================
+    // OUTSTANDING CAPITAL
+    // ============================================================
+
+    const outstandingCapital =
+      Math.max(
+        totalPrincipal -
+          loanPaidAmount,
+        0
+      );
+
+    // ============================================================
+    // CUSTOMERS
+    //
+    // Tunajaribu kupata unique customer count
+    // kupitia customerId.
+    // ============================================================
+
+    const customersAgg =
+      await DebtLoan.aggregate([
+        {
+          $match: {
+            owner: ownerId,
+            branch: branchId,
+          },
+        },
+
+        {
+          $group: {
+            _id: "$customer",
+          },
+        },
+
+        {
+          $count: "count",
+        },
+      ]);
+
+    const customers =
+      Number(
+        customersAgg[0]?.count || 0
+      );
+
+    // ============================================================
+    // COLLECTION VALUES
+    // ============================================================
+
+    const totalPaid =
+      Number(
+        debtCollected
+      );
+
+    const totalPayments =
+      Number(
+        paymentsCount
+      );
+
+    // ============================================================
+    // NET COLLECTION
+    // ============================================================
+
+    const refunds =
+      0;
+
+    const netCollection =
+      totalPaid -
+      refunds;
+
+    // ============================================================
+    // NET CASH FLOW
+    // ============================================================
+
+    const netCashFlow =
       totalSales +
       cashIncome +
       debtCollected -
       totalExpense -
       totalBuy;
-const remainingPurchaseProfit =
-  totalOrderProfit -
-  totalExpense;
+
+    // ============================================================
+    // BUSINESS PROFIT
+    // ============================================================
 
     const totalBusinessProfit =
       totalSalesProfit +
@@ -816,8 +1133,10 @@ const remainingPurchaseProfit =
 
     const profitMargin =
       totalBusinessProfit > 0
-        ? (netProfit /
-            totalBusinessProfit) *
+        ? (
+            netProfit /
+            totalBusinessProfit
+          ) *
           100
         : 0;
 
@@ -826,61 +1145,251 @@ const remainingPurchaseProfit =
         ? "BIASHARA INA FAIDA"
         : "BIASHARA INA HASARA";
 
+    // ============================================================
+    // PURCHASE PROFIT
+    // ============================================================
+
+    const remainingPurchaseProfit =
+      totalOrderProfit;
+
+    // ============================================================
+    // COLLECTION RATE
+    // ============================================================
+
+    const collectionRate =
+      loansIssued > 0
+        ? (
+            debtCollected /
+            loansIssued
+          ) *
+          100
+        : 0;
+
+    // ============================================================
     // RESPONSE
-const report = {
-  date: today,
+    // ============================================================
 
-  sales: {
-    totalSales,
-    totalSalesProfit,
-    count: salesCount
-  },
+    const report = {
+      // ----------------------------------------------------------
+      // DATE
+      // ----------------------------------------------------------
 
-  purchases: {
-    totalBuy,
-    totalSellValue,
-    totalOrderProfit,
-    remainingPurchaseProfit,
-    count: orderCount
-  },
+      date: today,
 
-  cash: {
-    cashIncome,
-    totalExpense
-  },
+      // ----------------------------------------------------------
+      // SALES
+      // ----------------------------------------------------------
 
-  credit: {
-    loansIssued,
-    debtCollected,
-    overdueCount
-  },
+      sales: {
+        totalSales,
+        totalSalesProfit,
+        count: salesCount,
+      },
 
-  summary: {
-    netCashFlow: netPosition,
-    totalBusinessProfit,
-    netProfit,
-    profitMargin,
-    profitStatus
-  }
-};
+      // ----------------------------------------------------------
+      // PURCHASES
+      // ----------------------------------------------------------
 
- 
+      purchases: {
+        totalBuy,
+        totalSellValue,
+        totalOrderProfit,
+        remainingPurchaseProfit,
+        count: orderCount,
+      },
 
-return res.status(200).json(report);
+      // ----------------------------------------------------------
+      // CASH
+      // ----------------------------------------------------------
+
+      cash: {
+        cashIncome,
+        totalExpense,
+      },
+
+      // ----------------------------------------------------------
+      // CREDIT
+      // ----------------------------------------------------------
+
+      credit: {
+        // loans issued TODAY
+        loansIssued,
+
+        // number of loans issued TODAY
+        loansCount:
+          loansIssuedCount,
+
+        // payments TODAY
+        debtCollected,
+
+        paymentsCollected:
+          debtCollected,
+
+        paymentsCount,
+
+        // current loan status
+        totalLoans,
+
+        loanCount:
+          totalLoans,
+
+        activeLoans,
+
+        paidLoans,
+
+        overdueCount:
+          overdueLoans,
+
+        overdueLoans,
+
+        overdueAmount,
+
+        // current outstanding capital
+        outstandingBalance:
+          outstandingCapital,
+
+        outstandingCapital,
+
+        totalOutstandingCapital:
+          outstandingCapital,
+
+        // total principal
+        totalLoanAmount:
+          totalPrincipal,
+
+        amountIssued:
+          loansIssued,
+
+        refunds,
+
+        netCollection,
+      },
+
+      // ----------------------------------------------------------
+      // SUMMARY
+      // ----------------------------------------------------------
+
+      summary: {
+        // loan statistics
+        totalLoans,
+
+        loanCount:
+          totalLoans,
+
+        loansCount:
+          totalLoans,
+
+        totalLoanAmount:
+          loansIssued,
+
+        amountIssued:
+          loansIssued,
+
+        // payment statistics
+        totalPaid,
+
+        totalPayments,
+
+        totalPaymentsCollected:
+          totalPaid,
+
+        paymentsCount,
+
+        // customers
+        customers,
+
+        // loan status
+        activeLoans,
+
+        paidLoans,
+
+        overdueLoans:
+          overdueLoans,
+
+        overdueCount:
+          overdueLoans,
+
+        overdueAmount,
+
+        // outstanding
+        totalOutstandingCapital:
+          outstandingCapital,
+
+        totalBalance:
+          outstandingCapital,
+
+        outstandingBalance:
+          outstandingCapital,
+
+        // collections
+        netCollection,
+
+        // business calculations
+        netCashFlow,
+
+        totalBusinessProfit,
+
+        netProfit,
+
+        profitMargin,
+
+        profitStatus,
+      },
+    };
+
+    // ============================================================
+    // LOG
+    // ============================================================
+
+    console.log(
+      "📊 DAILY REPORT:",
+      {
+        ownerId:
+          req.ownerId,
+
+        branchId:
+          req.branchId,
+
+        date:
+          today.toISOString(),
+
+        sales: report.sales,
+
+        purchases:
+          report.purchases,
+
+        cash:
+          report.cash,
+
+        credit:
+          report.credit,
+
+        summary:
+          report.summary,
+      }
+    );
+
+    // ============================================================
+    // RESPONSE
+    // ============================================================
+
+    return res.status(200).json(
+      report
+    );
 
   } catch (error) {
-    console.log(
-      "DAILY REPORT ERROR:",
+    console.error(
+      "❌ DAILY REPORT ERROR:",
       error
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       message:
-        error.message
+        error?.message ||
+        "Failed to generate daily report",
     });
   }
 };
-
  
 const getMonthlyReport = async (req, res) => {
   try {
