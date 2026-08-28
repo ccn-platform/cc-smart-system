@@ -21,7 +21,7 @@ require("../models/Product");
 const ReportHistory =
 require("../models/ReportHistory");
 
-const saveReportHistory = async (
+ const saveReportHistory = async (
   req,
   reportType,
   report,
@@ -29,33 +29,66 @@ const saveReportHistory = async (
   periodEnd = null
 ) => {
   try {
-    await ReportHistory.findOneAndUpdate(
-      {
-        owner: req.ownerId,
-        branch: req.branchId,
-        reportType,
-        periodStart,
-        periodEnd
-      },
-      {
-        owner: req.ownerId,
-        branch: req.branchId,
-        reportType,
-        periodStart,
-        periodEnd,
-        report
-      },
-      {
-        upsert: true,
-        new: true,
-        setDefaultsOnInsert: true
-      }
-    );
+
+    if (
+      !req.ownerId ||
+      !req.branchId
+    ) {
+      return null;
+    }
+
+    const ownerId =
+      new mongoose.Types.ObjectId(
+        req.ownerId
+      );
+
+    const branchId =
+      new mongoose.Types.ObjectId(
+        req.branchId
+      );
+
+    const history =
+      await ReportHistory.findOneAndUpdate(
+
+        {
+          owner: ownerId,
+          branch: branchId,
+          reportType,
+          periodStart,
+          periodEnd
+        },
+
+        {
+          $set: {
+            owner: ownerId,
+            branch: branchId,
+            reportType,
+            periodStart,
+            periodEnd,
+            report
+          }
+        },
+
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true
+        }
+
+      );
+
+    return history;
+
   } catch (err) {
+
     console.error(
       "SAVE REPORT HISTORY:",
-      err.message
+      err
     );
+
+    // History failure is not allowed
+    // to break the actual report API.
+    return null;
   }
 };
  
@@ -1978,13 +2011,23 @@ return res.status(200).json(report);
     });
   }
 };
-
-// ============================================
+ 
+ 
+ 
+ // ============================================
 // GET CURRENT CREDIT REPORT HISTORY
 //
-// USED BY MOBILE APP
-//
 // GET /reports/credit-history
+//
+// TODAY:
+// - Build LIVE credit report
+// - Save/update today's snapshot
+//
+// DATABASE:
+// reportType = "credit_daily"
+//
+// MOBILE:
+// reportType = "daily"
 // ============================================
 
 const getCurrentCreditReportHistory =
@@ -2012,11 +2055,14 @@ const getCurrentCreditReportHistory =
       }
 
 
+      // ========================================
+      // OBJECT IDS
+      // ========================================
+
       const ownerId =
         new mongoose.Types.ObjectId(
           req.ownerId
         );
-
 
       const branchId =
         new mongoose.Types.ObjectId(
@@ -2025,11 +2071,35 @@ const getCurrentCreditReportHistory =
 
 
       // ========================================
-      // TODAY
+      // TODAY UTC
       // ========================================
 
       const today =
         getDateKey();
+
+
+      // ========================================
+      // TODAY START
+      // ========================================
+
+      const todayStart =
+        new Date(
+          `${today}T00:00:00.000Z`
+        );
+
+
+      // ========================================
+      // TOMORROW
+      // ========================================
+
+      const tomorrow =
+        new Date(
+          todayStart
+        );
+
+      tomorrow.setUTCDate(
+        tomorrow.getUTCDate() + 1
+      );
 
 
       // ========================================
@@ -2045,151 +2115,109 @@ const getCurrentCreditReportHistory =
 
 
       // ========================================
-      // RESPONSE FORMAT
-      //
-      // MUST MATCH MOBILE SCREEN
-      // ========================================
-
-      const response = {
-
-        id:
-          `${req.branchId}_${today}`,
-
-        date:
-          today,
-
-        reportType:
-          "daily",
-
-        branchId:
-          String(
-            req.branchId
-          ),
-
-        createdAt:
-          new Date().toISOString(),
-
-        report
-
-      };
-
-
-      // ========================================
       // SAVE TODAY SNAPSHOT
-      //
-      // So online report can also become history
       // ========================================
 
-      const todayStart =
-        new Date(
-          `${today}T00:00:00.000Z`
+      const savedHistory =
+        await ReportHistory.findOneAndUpdate(
+
+          {
+            owner: ownerId,
+            branch: branchId,
+            reportType: "credit_daily",
+            periodStart: todayStart,
+            periodEnd: tomorrow
+          },
+
+          {
+            $set: {
+              owner: ownerId,
+              branch: branchId,
+              reportType: "credit_daily",
+              periodStart: todayStart,
+              periodEnd: tomorrow,
+              report
+            }
+          },
+
+          {
+            upsert: true,
+            new: true,
+            setDefaultsOnInsert: true
+          }
+
         );
 
 
-      const tomorrow =
-        new Date(
-          todayStart
-        );
-
-      tomorrow.setUTCDate(
-        tomorrow.getUTCDate() + 1
-      );
-
-
-      await ReportHistory.findOneAndUpdate(
-
-        {
-
-          owner:
-            req.ownerId,
-
-          branch:
-            req.branchId,
-
-          reportType:
-            "credit_daily",
-
-          periodStart:
-            todayStart,
-
-          periodEnd:
-            tomorrow
-
-        },
-
-        {
-
-          owner:
-            req.ownerId,
-
-          branch:
-            req.branchId,
-
-          reportType:
-            "credit_daily",
-
-          periodStart:
-            todayStart,
-
-          periodEnd:
-            tomorrow,
-
-          report
-
-        },
-
-        {
-
-          upsert:
-            true,
-
-          new:
-            true,
-
-          setDefaultsOnInsert:
-            true
-
-        }
-
-      );
-
+      // ========================================
+      // MOBILE RESPONSE
+      // ========================================
 
       return res.status(200).json({
 
         reports: [
-          response
+
+          {
+            id:
+              `${req.branchId}_${today}`,
+
+            date:
+              today,
+
+            // IMPORTANT:
+            // Mobile expects "daily"
+            reportType:
+              "daily",
+
+            branchId:
+              String(
+                req.branchId
+              ),
+
+            createdAt:
+              savedHistory?.createdAt ||
+              new Date().toISOString(),
+
+            report
+
+          }
+
         ]
 
       });
 
 
-    } catch (
-      error
-    ) {
+    } catch (error) {
 
       console.error(
         "GET CURRENT CREDIT REPORT HISTORY ERROR:",
         error
       );
 
-
       return res.status(500).json({
-
         message:
           error.message
-
       });
 
     }
 
   };
+
  
-  // ============================================
+ // ============================================
 // GET CREDIT REPORT BY DATE
 //
-// USED BY HISTORY DETAILS SCREEN
-//
 // GET /reports/credit-history/:date
+//
+// RULE:
+// TODAY      -> LIVE
+// OLD DATE   -> LOCKED SNAPSHOT
+//
+// DATABASE:
+// credit_daily
+//
+// MOBILE:
+// daily
 // ============================================
 
 const getCreditReportHistoryByDate =
@@ -2210,14 +2238,16 @@ const getCreditReportHistoryByDate =
       ) {
 
         return res.status(401).json({
-
           message:
             "Unauthorized"
-
         });
 
       }
 
+
+      // ========================================
+      // SELECTED DATE
+      // ========================================
 
       const selectedDate =
         String(
@@ -2226,7 +2256,7 @@ const getCreditReportHistoryByDate =
 
 
       // ========================================
-      // DATE VALIDATION
+      // VALIDATE DATE FORMAT
       // ========================================
 
       if (
@@ -2236,20 +2266,21 @@ const getCreditReportHistoryByDate =
       ) {
 
         return res.status(400).json({
-
           message:
             "Invalid report date"
-
         });
 
       }
 
 
+      // ========================================
+      // OBJECT IDS
+      // ========================================
+
       const ownerId =
         new mongoose.Types.ObjectId(
           req.ownerId
         );
-
 
       const branchId =
         new mongoose.Types.ObjectId(
@@ -2257,19 +2288,20 @@ const getCreditReportHistoryByDate =
         );
 
 
+      // ========================================
+      // TODAY
+      // ========================================
+
       const today =
         getDateKey();
 
 
       // ========================================
-      // TODAY
-      //
-      // BUILD LIVE REPORT
+      // TODAY = LIVE
       // ========================================
 
       if (
-        selectedDate ===
-        today
+        selectedDate === today
       ) {
 
         const report =
@@ -2279,6 +2311,58 @@ const getCreditReportHistoryByDate =
             selectedDate
           );
 
+
+        // ======================================
+        // ALSO UPDATE TODAY SNAPSHOT
+        // ======================================
+
+        const start =
+          new Date(
+            `${selectedDate}T00:00:00.000Z`
+          );
+
+        const end =
+          new Date(start);
+
+        end.setUTCDate(
+          end.getUTCDate() + 1
+        );
+
+
+        const savedHistory =
+          await ReportHistory.findOneAndUpdate(
+
+            {
+              owner: ownerId,
+              branch: branchId,
+              reportType: "credit_daily",
+              periodStart: start,
+              periodEnd: end
+            },
+
+            {
+              $set: {
+                owner: ownerId,
+                branch: branchId,
+                reportType: "credit_daily",
+                periodStart: start,
+                periodEnd: end,
+                report
+              }
+            },
+
+            {
+              upsert: true,
+              new: true,
+              setDefaultsOnInsert: true
+            }
+
+          );
+
+
+        // ======================================
+        // MOBILE RESPONSE
+        // ======================================
 
         return res.status(200).json({
 
@@ -2297,6 +2381,7 @@ const getCreditReportHistoryByDate =
             ),
 
           createdAt:
+            savedHistory?.createdAt ||
             new Date().toISOString(),
 
           report
@@ -2307,14 +2392,13 @@ const getCreditReportHistoryByDate =
 
 
       // ========================================
-      // HISTORICAL REPORT
+      // HISTORICAL DATE
       // ========================================
 
       const start =
         new Date(
           `${selectedDate}T00:00:00.000Z`
         );
-
 
       const end =
         new Date(start);
@@ -2324,14 +2408,16 @@ const getCreditReportHistoryByDate =
       );
 
 
+      // ========================================
+      // FIND LOCKED SNAPSHOT
+      // ========================================
+
       const history =
         await ReportHistory.findOne({
 
-          owner:
-            req.ownerId,
+          owner: ownerId,
 
-          branch:
-            req.branchId,
+          branch: branchId,
 
           reportType:
             "credit_daily",
@@ -2345,19 +2431,36 @@ const getCreditReportHistoryByDate =
         }).lean();
 
 
-      if (
-        !history
-      ) {
+      // ========================================
+      // NOT FOUND
+      // ========================================
+
+      if (!history) {
 
         return res.status(404).json({
 
           message:
-            "Report not found"
+            "Report not found",
+
+          date:
+            selectedDate,
+
+          reportType:
+            "daily",
+
+          branchId:
+            String(
+              req.branchId
+            )
 
         });
 
       }
 
+
+      // ========================================
+      // RETURN HISTORICAL SNAPSHOT
+      // ========================================
 
       return res.status(200).json({
 
@@ -2386,26 +2489,23 @@ const getCreditReportHistoryByDate =
       });
 
 
-    } catch (
-      error
-    ) {
+    } catch (error) {
 
       console.error(
         "GET CREDIT REPORT BY DATE ERROR:",
         error
       );
 
-
       return res.status(500).json({
-
         message:
           error.message
-
       });
 
     }
 
   };
+
+
  const getExpenseReport = async (req, res) => {
   try {
     // SECURITY
