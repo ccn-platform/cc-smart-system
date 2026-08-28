@@ -2216,190 +2216,470 @@ const syncPayment = async (req, res) => {
 
 };
 
- // REFUND PAYMENT
-const refundPayment =
-  async (req, res) => {
-    try {
+ 
+// ====================================
+// REFUND PAYMENT
+// ====================================
 
-      const {
-        loanId,
-        amount
-      } = req.body;
+const refundPayment = async (req, res) => {
 
-      if (!loanId) {
-        return res.status(400).json({
-          message:
-            "Loan ID required"
-        });
-      }
+  let session = null;
 
-      const refundAmount =
-        Number(amount);
+  try {
 
-      if (
-        isNaN(refundAmount) ||
-        refundAmount <= 0
-      ) {
-        return res.status(400).json({
-          message:
-            "Kiasi cha refund si sahihi"
-        });
-      }
+    const {
+      loanId,
+      amount
+    } = req.body;
 
-      const loan =
-        await DebtLoan.findOne({
-          _id: loanId,
-          owner: req.ownerId,
-          branch: req.branchId
-        });
 
-      if (!loan) {
-        return res.status(404).json({
-          message:
-            "Deni halijapatikana"
-        });
-      }
+    // ====================================
+    // VALIDATION
+    // ====================================
 
-      if (
-        refundAmount >
-        loan.paidAmount
-      ) {
-        return res.status(400).json({
-          message:
-            "Kiasi cha refund kinazidi kilicholipwa"
-        });
-      }
+    if (!loanId) {
 
-      const session =
-        await mongoose.startSession();
-
-      try {
-
-        session.startTransaction();
-
-        loan.paidAmount -=
-          refundAmount;
-
-        loan.balanceAmount +=
-          refundAmount;
-
-        if (
-          loan.status ===
-          "paid"
-        ) {
-          loan.status =
-            "active";
-
-          await CustomerIdentity.findByIdAndUpdate(
-            loan.customer,
-            {
-              $inc: {
-                activeLoans: 1,
-                paidLoans: -1,
-                totalPaid:
-                  -refundAmount
-              }
-            },
-            {
-              session
-            }
-          );
-        } else {
-
-          await CustomerIdentity.findByIdAndUpdate(
-            loan.customer,
-            {
-              $inc: {
-                totalPaid:
-                  -refundAmount
-              }
-            },
-            {
-              session
-            }
-          );
-        }
-
-        await loan.save({
-          session
-        });
-
-        // 🔥 HIFADHI REFUND KWENYE PAYMENT HISTORY
-     await DebtPayment.create(
-  [
-    {
-      owner: req.ownerId,
-      branch: req.branchId,
-
-      loan: loan._id,
-
-      customer: loan.customer,
-
-      amount: -refundAmount,
-
-      type: "refund",
-
-      paymentMethod: "cash",
-
-      channel: "online",
-
-      reference: "REFUND",
-
-      note: "Malipo yamerudishwa kwenye deni",
-
-      receivedBy: req.user.id,
-
-      status: "reversed",
-
-      paymentDate: new Date(),
-
-      source: "online",
-
-      syncStatus: "synced",
-
-      lastSyncedAt: new Date(),
-
-      syncError: "",
-
-      queuedAt: null
-    }
-  ],
-  {
-    session
-  }
-);
-
-        await session.commitTransaction();
-
-        return res.status(200).json(
-          loan
-        );
-
-      } catch (err) {
-
-        if (
-          session.inTransaction()
-        ) {
-          await session.abortTransaction();
-        }
-
-        throw err;
-
-      } finally {
-
-        await session.endSession();
-
-      }
-
-    } catch (error) {
-
-      return res.status(500).json({
+      return res.status(400).json({
+        success: false,
         message:
-          error.message
+          "Loan ID required"
       });
 
     }
-  };
+
+
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        loanId
+      )
+    ) {
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Loan ID si sahihi"
+      });
+
+    }
+
+
+    const refundAmount =
+      Number(amount);
+
+
+    if (
+      !Number.isFinite(refundAmount) ||
+      refundAmount <= 0
+    ) {
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Kiasi cha refund si sahihi"
+      });
+
+    }
+
+
+    // ====================================
+    // FIND LOAN
+    // ====================================
+
+    const loan =
+      await DebtLoan.findOne({
+
+        _id:
+          loanId,
+
+        owner:
+          req.ownerId,
+
+        branch:
+          req.branchId
+
+      });
+
+
+    if (!loan) {
+
+      return res.status(404).json({
+        success: false,
+        message:
+          "Deni halijapatikana"
+      });
+
+    }
+
+
+    // ====================================
+    // VALIDATE PAID AMOUNT
+    // ====================================
+
+    const paidAmount =
+      Number(
+        loan.paidAmount || 0
+      );
+
+
+    if (refundAmount > paidAmount) {
+
+      return res.status(400).json({
+        success: false,
+        message:
+          `Kiasi cha refund kinazidi kilicholipwa. Kilicholipwa ni ${paidAmount}`
+      });
+
+    }
+
+
+    // ====================================
+    // START TRANSACTION
+    // ====================================
+
+    session =
+      await mongoose.startSession();
+
+    session.startTransaction();
+
+
+    try {
+
+      // ====================================
+      // OLD STATUS
+      // ====================================
+
+      const oldStatus =
+        loan.status;
+
+
+      // ====================================
+      // UPDATE LOAN AMOUNTS
+      // ====================================
+
+      loan.paidAmount =
+        Number(
+          loan.paidAmount || 0
+        ) -
+        refundAmount;
+
+
+      loan.balanceAmount =
+        Number(
+          loan.balanceAmount || 0
+        ) +
+        refundAmount;
+
+
+      // ====================================
+      // PREVENT NEGATIVE PAID AMOUNT
+      // ====================================
+
+      if (
+        loan.paidAmount < 0
+      ) {
+
+        throw new Error(
+          "Paid amount haiwezi kuwa chini ya sifuri"
+        );
+
+      }
+
+
+      // ====================================
+      // IF LOAN WAS FULLY PAID
+      // ====================================
+
+      if (
+        oldStatus === "paid"
+      ) {
+
+        loan.status =
+          "active";
+
+
+        await CustomerIdentity.findByIdAndUpdate(
+
+          loan.customer,
+
+          {
+            $inc: {
+
+              activeLoans:
+                1,
+
+              paidLoans:
+                -1,
+
+              totalPaid:
+                -refundAmount
+
+            }
+          },
+
+          {
+            session
+          }
+
+        );
+
+      } else {
+
+        // ====================================
+        // NORMAL ACTIVE / OVERDUE LOAN
+        // ====================================
+
+        await CustomerIdentity.findByIdAndUpdate(
+
+          loan.customer,
+
+          {
+            $inc: {
+
+              totalPaid:
+                -refundAmount
+
+            }
+          },
+
+          {
+            session
+          }
+
+        );
+
+      }
+
+
+      // ====================================
+      // SAVE LOAN
+      // ====================================
+
+      await loan.save({
+        session
+      });
+
+
+      // ====================================
+      // SAVE REFUND HISTORY
+      // ====================================
+
+      const refund =
+        await DebtPayment.create(
+
+          [
+            {
+
+              // --------------------------------
+              // OWNERSHIP
+              // --------------------------------
+
+              owner:
+                req.ownerId,
+
+              branch:
+                req.branchId,
+
+
+              // --------------------------------
+              // RELATIONS
+              // --------------------------------
+
+              loan:
+                loan._id,
+
+              customer:
+                loan.customer,
+
+
+              // --------------------------------
+              // REFUND AMOUNT
+              // --------------------------------
+
+              amount:
+                -refundAmount,
+
+
+              // --------------------------------
+              // IMPORTANT
+              // REFUND TYPE
+              // --------------------------------
+
+              type:
+                "refund",
+
+
+              // --------------------------------
+              // PAYMENT INFORMATION
+              // --------------------------------
+
+              paymentDate:
+                new Date(),
+
+              paymentMethod:
+                "cash",
+
+              // IMPORTANT:
+              // "online" haipo kwenye schema yako.
+              // Tunatumia "app".
+              channel:
+                "app",
+
+              reference:
+                "REFUND",
+
+              note:
+                "Malipo yamerudishwa kwenye deni",
+
+
+              // --------------------------------
+              // USER
+              // --------------------------------
+
+              receivedBy:
+                req.user.id,
+
+
+              // --------------------------------
+              // STATUS
+              // --------------------------------
+
+              status:
+                "reversed",
+
+
+              // --------------------------------
+              // SOURCE
+              // --------------------------------
+
+              source:
+                "online",
+
+              syncStatus:
+                "synced",
+
+              lastSyncedAt:
+                new Date(),
+
+              syncError:
+                "",
+
+              queuedAt:
+                null,
+
+              syncId:
+                null,
+
+              deviceId:
+                null
+
+            }
+
+          ],
+
+          {
+            session
+          }
+
+        );
+
+
+      // ====================================
+      // COMMIT
+      // ====================================
+
+      await session.commitTransaction();
+
+
+      // ====================================
+      // GET UPDATED LOAN
+      // ====================================
+
+      const updatedLoan =
+        await DebtLoan.findOne({
+
+          _id:
+            loan._id,
+
+          owner:
+            req.ownerId,
+
+          branch:
+            req.branchId
+
+        })
+          .populate(
+            "customer",
+            "fullName phone"
+          )
+          .lean();
+
+
+      // ====================================
+      // SUCCESS RESPONSE
+      // ====================================
+
+      return res.status(200).json({
+
+        success: true,
+
+        message:
+          "Refund imehifadhiwa kikamilifu",
+
+        refund:
+          refund[0],
+
+        loan:
+          updatedLoan
+
+      });
+
+
+    } catch (err) {
+
+      // ====================================
+      // ABORT TRANSACTION
+      // ====================================
+
+      if (
+        session.inTransaction()
+      ) {
+
+        await session.abortTransaction();
+
+      }
+
+      throw err;
+
+    } finally {
+
+      await session.endSession();
+
+    }
+
+
+  } catch (error) {
+
+    console.error(
+      "❌ REFUND PAYMENT ERROR:",
+      error
+    );
+
+
+    return res.status(500).json({
+
+      success: false,
+
+      message:
+        error?.message ||
+        "Refund imeshindikana"
+
+    });
+
+  }
+
+};
+ 
+
 
   // ====================================
 // SYNC OFFLINE REFUND
