@@ -1,4 +1,5 @@
- const mongoose =
+  
+const mongoose =
   require("mongoose");
 
 const subscriptionSchema =
@@ -26,11 +27,11 @@ const subscriptionSchema =
         default: () =>
           new Date(
             Date.now() +
-            14 *
-              24 *
-              60 *
-              60 *
-              1000
+              14 *
+                24 *
+                60 *
+                60 *
+                1000
           )
       },
 
@@ -85,12 +86,19 @@ const branchSchema =
         default: true
       },
 
+      // ==========================================
       // 🔥 SUBSCRIPTION
+      // ==========================================
+
       subscription: {
         type:
           subscriptionSchema,
         default: () => ({})
       },
+
+      // ==========================================
+      // 🔥 PENDING PAYMENT
+      // ==========================================
 
       pendingPlan: {
         type: String,
@@ -109,15 +117,35 @@ const branchSchema =
         index: true
       },
 
-     pendingExpiresAt: {
-  type: Date,
-  default: null
-},
+      pendingExpiresAt: {
+        type: Date,
+        default: null
+      },
 
-paymentProcessing: {
-  type: Boolean,
-  default: false
-}
+      paymentProcessing: {
+        type: Boolean,
+        default: false
+      },
+
+      // ==========================================
+      // 🔥 PAYMENT STATUS
+      // ==========================================
+
+      paymentStatus: {
+        type: String,
+        enum: [
+          "idle",
+          "pending",
+          "success",
+          "failed"
+        ],
+        default: "idle"
+      },
+
+      paymentCompletedAt: {
+        type: Date,
+        default: null
+      }
     },
     {
       timestamps: true
@@ -125,7 +153,10 @@ paymentProcessing: {
   );
 
 
+// ============================================
 // UNIQUE NAME PER SHOP
+// ============================================
+
 branchSchema.index(
   {
     shop: 1,
@@ -137,7 +168,10 @@ branchSchema.index(
 );
 
 
+// ============================================
 // FAST LOOKUPS
+// ============================================
+
 branchSchema.index({
   shop: 1,
   isActive: 1
@@ -148,8 +182,14 @@ branchSchema.index({
   isMain: 1
 });
 
+
+// ============================================
+// EXPORT
+// ============================================
+
 module.exports =
   mongoose.model(
     "Branch",
     branchSchema
   );
+ 
