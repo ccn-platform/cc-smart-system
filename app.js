@@ -37,6 +37,33 @@ app.get("/", (req, res) => {
   res.send("CCN Backend Running");
 });
 
+ 
+/*
+ * -----------------------------------------
+ * APP VERSION CHECK
+ * -----------------------------------------
+ */
+
+app.get(
+  "/api/app-version",
+  (req, res) => {
+
+    res.json({
+      latestVersion: "1.0.0",
+
+      minimumVersion: "1.0.0",
+
+      forceUpdate: false,
+
+      message:
+        "Kuna toleo jipya la Biashara Plus lenye maboresho na marekebisho muhimu."
+    });
+
+  }
+);
+ 
+
+
 app.get(
   "/my-ip",
   async (req, res) => {
