@@ -425,6 +425,8 @@ router.get(
 );
 
 
+ 
+ 
 // ============================================================
 // CLICKPESA CALLBACK
 // ============================================================
@@ -434,18 +436,41 @@ router.post(
 
   async (req, res) => {
 
-    let branch;
+    let branch = null;
 
     try {
 
+      // ========================================================
+      // RECEIVE PAYLOAD
+      // ========================================================
+
       const payload =
-        req.body.data ||
-        req.body;
+        req.body?.data ||
+        req.body ||
+        {};
 
 
-      // ======================================================
+      console.log(
+        "=================================================="
+      );
+
+      console.log(
+        "📥 CLICKPESA CALLBACK RECEIVED"
+      );
+
+      console.log(
+        "📦 CALLBACK BODY:",
+        JSON.stringify(
+          req.body,
+          null,
+          2
+        )
+      );
+
+
+      // ========================================================
       // REFERENCE
-      // ======================================================
+      // ========================================================
 
       const reference =
         payload.orderReference ||
@@ -454,9 +479,9 @@ router.post(
         payload.merchant_reference;
 
 
-      // ======================================================
+      // ========================================================
       // STATUS
-      // ======================================================
+      // ========================================================
 
       const status =
         payload.status ||
@@ -468,18 +493,41 @@ router.post(
         String(
           status || ""
         )
+          .trim()
           .toUpperCase();
 
 
       console.log(
-        "CALLBACK:",
-        req.body
+        "🔑 CALLBACK REFERENCE:",
+        reference
+      );
+
+      console.log(
+        "📊 CALLBACK STATUS:",
+        normalizedStatus
       );
 
 
-      // ======================================================
+      // ========================================================
+      // REFERENCE MUST EXIST
+      // ========================================================
+
+      if (!reference) {
+
+        console.error(
+          "❌ CALLBACK HAS NO PAYMENT REFERENCE"
+        );
+
+        return res.sendStatus(
+          200
+        );
+
+      }
+
+
+      // ========================================================
       // ONLY SUCCESS PAYMENT ACTIVATES
-      // ======================================================
+      // ========================================================
 
       if (
         ![
@@ -492,7 +540,7 @@ router.post(
       ) {
 
         console.log(
-          "⏳ CALLBACK NOT SUCCESS:",
+          "⏳ PAYMENT NOT SUCCESSFUL - NO ACTIVATION",
           {
             reference,
             status:
@@ -507,54 +555,27 @@ router.post(
       }
 
 
-      // ======================================================
-      // LOCK PAYMENT PROCESSING
-      // ======================================================
+      // ========================================================
+      // FIND PENDING PAYMENT
+      //
+      // We first find the branch using the payment reference.
+      // ========================================================
 
       branch =
-        await Branch.findOneAndUpdate(
-
-          {
-
-            paymentReference:
-              reference,
-
-            pendingPlan:
-              {
-                $ne: null
-              },
-
-            paymentProcessing:
-              false
-
-          },
-
-          {
-
-            $set: {
-
-              paymentProcessing:
-                true
-
-            }
-
-          },
-
-          {
-
-            new: true
-
-          }
-
-        );
+        await Branch.findOne({
+          paymentReference:
+            reference
+        });
 
 
-      if (
-        !branch
-      ) {
+      // ========================================================
+      // NO BRANCH FOUND
+      // ========================================================
 
-        console.log(
-          "NO MATCHING PENDING PAYMENT:",
+      if (!branch) {
+
+        console.error(
+          "❌ NO BRANCH FOUND FOR PAYMENT REFERENCE:",
           reference
         );
 
@@ -565,17 +586,142 @@ router.post(
       }
 
 
-      // ======================================================
+      // ========================================================
+      // LOG PAYMENT STATE
+      // ========================================================
+
+      console.log(
+        "🏪 BRANCH FOUND:",
+        String(
+          branch._id
+        )
+      );
+
+      console.log(
+        "📋 CURRENT PAYMENT STATE:",
+        {
+          paymentReference:
+            branch.paymentReference,
+
+          pendingPlan:
+            branch.pendingPlan,
+
+          pendingExpiresAt:
+            branch.pendingExpiresAt,
+
+          paymentProcessing:
+            branch.paymentProcessing,
+
+          paymentStatus:
+            branch.paymentStatus
+        }
+      );
+
+
+      // ========================================================
+      // DUPLICATE CALLBACK PROTECTION
+      // ========================================================
+
+      if (
+        branch.paymentProcessing === true
+      ) {
+
+        console.log(
+          "⏳ PAYMENT IS ALREADY BEING PROCESSED:",
+          reference
+        );
+
+        return res.sendStatus(
+          200
+        );
+
+      }
+
+
+      // ========================================================
+      // PAYMENT ALREADY COMPLETED
+      // ========================================================
+
+      if (
+        branch.paymentStatus ===
+        "success"
+      ) {
+
+        console.log(
+          "✅ PAYMENT ALREADY COMPLETED:",
+          reference
+        );
+
+        return res.sendStatus(
+          200
+        );
+
+      }
+
+
+      // ========================================================
+      // PLAN MUST EXIST
+      // ========================================================
+
+      if (
+        !branch.pendingPlan
+      ) {
+
+        console.error(
+          "❌ PAYMENT FOUND BUT pendingPlan IS EMPTY:",
+          {
+            reference,
+            branchId:
+              String(
+                branch._id
+              )
+          }
+        );
+
+        return res.sendStatus(
+          200
+        );
+
+      }
+
+
+      // ========================================================
+      // LOCK PAYMENT
+      // ========================================================
+
+      branch.paymentProcessing =
+        true;
+
+      await branch.save();
+
+
+      // ========================================================
       // PLAN
-      // ======================================================
+      // ========================================================
 
       const planToActivate =
         branch.pendingPlan;
 
 
-      // ======================================================
-      // ACTIVATE
-      // ======================================================
+      console.log(
+        "🚀 ACTIVATING SUBSCRIPTION:",
+        {
+          branchId:
+            String(
+              branch._id
+            ),
+
+          plan:
+            planToActivate,
+
+          reference
+        }
+      );
+
+
+      // ========================================================
+      // ACTIVATE PLAN
+      // ========================================================
 
       await activatePlan(
         branch,
@@ -583,9 +729,9 @@ router.post(
       );
 
 
-      // ======================================================
-      // MARK SUCCESS
-      // ======================================================
+      // ========================================================
+      // MARK PAYMENT SUCCESS
+      // ========================================================
 
       branch.paymentStatus =
         "success";
@@ -606,46 +752,116 @@ router.post(
         false;
 
 
+      // ========================================================
+      // SAVE EVERYTHING
+      // ========================================================
+
       await branch.save();
 
 
-      console.log(
-        "✅ SUBSCRIPTION ACTIVATED:",
-        {
-          branchId:
-            String(
-              branch._id
-            ),
+      // ========================================================
+      // SUCCESS LOG
+      // ========================================================
 
-          plan:
-            planToActivate
-        }
+      console.log(
+        "=================================================="
       );
 
+      console.log(
+        "✅ SUBSCRIPTION ACTIVATED SUCCESSFULLY"
+      );
+
+      console.log(
+        "🏪 BRANCH:",
+        String(
+          branch._id
+        )
+      );
+
+      console.log(
+        "📦 PLAN:",
+        planToActivate
+      );
+
+      console.log(
+        "💳 REFERENCE:",
+        reference
+      );
+
+      console.log(
+        "⏰ ACTIVATED AT:",
+        branch.paymentCompletedAt
+      );
+
+      console.log(
+        "=================================================="
+      );
+
+
+      // ========================================================
+      // ACKNOWLEDGE CLICKPESA
+      // ========================================================
 
       return res.sendStatus(
         200
       );
 
+
     } catch (e) {
 
+      // ========================================================
+      // CALLBACK ERROR
+      // ========================================================
+
       console.error(
-        "❌ CALLBACK ERROR:",
+        "=================================================="
+      );
+
+      console.error(
+        "❌ CLICKPESA CALLBACK ERROR"
+      );
+
+      console.error(
         e
       );
 
+      console.error(
+        "=================================================="
+      );
+
+
+      // ========================================================
+      // UNLOCK PAYMENT IF ERROR OCCURRED
+      // ========================================================
 
       if (
         branch
       ) {
 
-        branch.paymentProcessing =
-          false;
+        try {
 
-        await branch.save();
+          branch.paymentProcessing =
+            false;
+
+          await branch.save();
+
+        } catch (
+          unlockError
+        ) {
+
+          console.error(
+            "❌ FAILED TO UNLOCK PAYMENT:",
+            unlockError
+          );
+
+        }
 
       }
 
+
+      // ========================================================
+      // RETURN ERROR
+      // ========================================================
 
       return res.sendStatus(
         500
@@ -654,8 +870,7 @@ router.post(
     }
 
   }
-);
-
+); 
 
 // ============================================================
 // TEST ACTIVATION
