@@ -4338,70 +4338,404 @@ return res.status(200).json(
         error.message
     });
   }
-};
+ };
+
+
 const getReportHistory = async (req, res) => {
   try {
 
-    if (!req.ownerId || !req.branchId) {
+    // ============================================
+    // SECURITY
+    // ============================================
+
+    if (
+      !req.ownerId ||
+      !req.branchId
+    ) {
+
       return res.status(401).json({
-        message: "Unauthorized"
+        message:
+          "Unauthorized"
       });
+
     }
+
+
+    // ============================================
+    // PAGINATION
+    // ============================================
 
     const page =
-      Number(req.query.page) || 1;
+      Math.max(
+        Number(
+          req.query.page
+        ) || 1,
+        1
+      );
 
     const limit =
-      Number(req.query.limit) || 20;
+      Math.max(
+        Number(
+          req.query.limit
+        ) || 50,
+        1
+      );
 
     const skip =
-      (page - 1) * limit;
+      (page - 1) *
+      limit;
+
+
+    // ============================================
+    // BASE FILTER
+    //
+    // Hii history ni ya:
+    // OWNER + ACTIVE BRANCH
+    // ============================================
 
     const filter = {
-      owner: req.ownerId,
-      branch: req.branchId
+
+      owner:
+        req.ownerId,
+
+      branch:
+        req.branchId,
+
+      // ========================================
+      // MUHIMU:
+      //
+      // Tunataka DAILY HISTORY pekee.
+      //
+      // Mfumo wako una records mbili zinazoweza
+      // kuwakilisha daily:
+      //
+      // "daily"
+      // "credit_daily"
+      //
+      // ========================================
+
+      reportType: {
+        $in: [
+          "daily",
+          "credit_daily"
+        ]
+      }
+
     };
 
-    if (req.query.reportType) {
-      filter.reportType =
-        req.query.reportType;
+
+    // ============================================
+    // OPTIONAL REPORT TYPE
+    //
+    // Kama frontend imetuma reportType,
+    // tunaiheshimu lakini bado ndani ya
+    // daily-compatible types.
+    // ============================================
+
+    if (
+      req.query.reportType
+    ) {
+
+      const requestedType =
+        String(
+          req.query.reportType
+        );
+
+      if (
+        [
+          "daily",
+          "credit_daily"
+        ].includes(
+          requestedType
+        )
+      ) {
+
+        filter.reportType =
+          requestedType;
+
+      } else {
+
+        // ======================================
+        // Requested report type si daily.
+        //
+        // Tunarudisha empty result badala ya
+        // kuchanganya weekly/monthly n.k.
+        // ======================================
+
+        return res.status(200).json({
+
+          total:
+            0,
+
+          page,
+
+          pages:
+            0,
+
+          reports:
+            []
+
+        });
+
+      }
+
     }
 
+
+    // ============================================
+    // GET REPORTS
+    //
+    // DATE ndiyo ya muhimu zaidi kwenye history.
+    //
+    // Tunasort kwa:
+    //
+    // 1. date DESC
+    // 2. createdAt DESC
+    //
+    // Hii inasaidia tarehe zenye kazi
+    // zisiondoke kwa sababu record nyingine
+    // iliundwa baadaye.
+    // ============================================
+
     const reports =
-      await ReportHistory.find(filter)
+      await ReportHistory.find(
+        filter
+      )
         .sort({
-          createdAt: -1
+
+          // ====================================
+          // PRIMARY SORT
+          // ====================================
+
+          "report.date":
+            -1,
+
+          // ====================================
+          // SECONDARY SORT
+          // ====================================
+
+          periodStart:
+            -1,
+
+          // ====================================
+          // FALLBACK
+          // ====================================
+
+          createdAt:
+            -1
+
         })
-        .skip(skip)
-        .limit(limit)
+
+        .skip(
+          skip
+        )
+
+        .limit(
+          limit
+        )
+
         .lean();
+
+
+    // ============================================
+    // TOTAL
+    // ============================================
 
     const total =
       await ReportHistory.countDocuments(
         filter
       );
 
+
+    // ============================================
+    // NORMALIZE RESPONSE
+    //
+    // Baadhi ya old records zinaweza kuwa na:
+    //
+    // reportType = credit_daily
+    //
+    // lakini mobile inatarajia:
+    //
+    // reportType = daily
+    //
+    // Kwa hiyo tunafanya mapping hapa tu.
+    //
+    // HATUBADILISHI DATABASE.
+    // ============================================
+
+    const normalizedReports =
+      reports.map(
+        (
+          report
+        ) => {
+
+          const reportDate =
+            report?.report?.date ||
+            (
+              report?.periodStart
+                ? new Date(
+                    report.periodStart
+                  )
+                    .toISOString()
+                    .slice(
+                      0,
+                      10
+                    )
+                : null
+            );
+
+
+          return {
+
+            ...report,
+
+            // ==================================
+            // STABLE MOBILE ID
+            // ==================================
+
+            id:
+              reportDate
+                ? `${String(
+                    req.branchId
+                  )}_${reportDate}`
+                : String(
+                    report._id
+                  ),
+
+            // ==================================
+            // DATE
+            // ==================================
+
+            date:
+              reportDate,
+
+            // ==================================
+            // MOBILE REPORT TYPE
+            // ==================================
+
+            reportType:
+              "daily",
+
+            // ==================================
+            // BRANCH ID
+            // ==================================
+
+            branchId:
+              String(
+                req.branchId
+              )
+
+          };
+
+        }
+      );
+
+
+    // ============================================
+    // REMOVE DUPLICATE DATES
+    //
+    // Kuna uwezekano branch ina:
+    //
+    // daily
+    // +
+    // credit_daily
+    //
+    // kwa tarehe ile ile.
+    //
+    // Mobile inahitaji tarehe moja tu.
+    //
+    // Tunahifadhi record ya kwanza kwa
+    // sababu tayari tume-sort DESC.
+    // ============================================
+
+    const seenDates =
+      new Set();
+
+    const uniqueReports =
+      normalizedReports.filter(
+        (
+          report
+        ) => {
+
+          const date =
+            report?.date;
+
+          if (
+            !date
+          ) {
+
+            return false;
+
+          }
+
+          if (
+            seenDates.has(
+              date
+            )
+          ) {
+
+            return false;
+
+          }
+
+          seenDates.add(
+            date
+          );
+
+          return true;
+
+        }
+      );
+
+
+    // ============================================
+    // FINAL TOTAL
+    //
+    // Pagination total bado inatoka DB.
+    // Lakini reports zinazosafirishwa zina
+    // unique dates.
+    // ============================================
+
     return res.status(200).json({
+
       total,
+
       page,
-      pages: Math.ceil(total / limit),
-      reports
+
+      pages:
+        Math.ceil(
+          total /
+          limit
+        ),
+
+      reports:
+        uniqueReports
+
     });
+
 
   } catch (error) {
 
-    console.log(
-      "REPORT HISTORY ERROR:",
+    // ============================================
+    // ERROR
+    // ============================================
+
+    console.error(
+      "❌ REPORT HISTORY ERROR:",
       error
     );
 
-    res.status(500).json({
-      message: error.message
+
+    return res.status(500).json({
+
+      message:
+        error?.message ||
+        "Failed to load report history"
+
     });
 
   }
 };
-
 const getReportHistoryById = async (req, res) => {
   try {
 
