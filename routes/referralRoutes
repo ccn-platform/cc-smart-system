@@ -1,5 +1,4 @@
- 
-const express =
+  const express =
   require("express");
 
 const router =
@@ -14,15 +13,16 @@ const {
 const {
   getMyReferral,
   getMyReferrals,
-  getReferralDashboard
+  getReferralDashboard,
+  getReferralById
 } = require(
   "../controllers/referralController"
 );
 
 
-// =====================================================
+// =========================================
 // MY REFERRAL INFO
-// =====================================================
+// =========================================
 
 router.get(
   "/my",
@@ -31,20 +31,20 @@ router.get(
 );
 
 
-// =====================================================
-// MY REFERRAL LIST
-// =====================================================
+// =========================================
+// MY REFERRALS
+// =========================================
 
 router.get(
-  "/my/list",
+  "/list",
   protect,
   getMyReferrals
 );
 
 
-// =====================================================
-// REFERRAL DASHBOARD
-// =====================================================
+// =========================================
+// DASHBOARD
+// =========================================
 
 router.get(
   "/dashboard",
@@ -53,6 +53,16 @@ router.get(
 );
 
 
+// =========================================
+// SINGLE REFERRAL
+// =========================================
+
+router.get(
+  "/:id",
+  protect,
+  getReferralById
+);
+
+
 module.exports =
   router;
- 
