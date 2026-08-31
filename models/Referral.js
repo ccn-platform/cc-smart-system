@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+  const mongoose = require("mongoose");
 
 const referralSchema =
   new mongoose.Schema(
@@ -75,14 +75,6 @@ const referralSchema =
         type: Number,
         default: 0,
         min: 0
-      },
-
-      // =========================
-      // REFERRAL CREATED
-      // =========================
-      createdAt: {
-        type: Date,
-        default: Date.now
       },
 
       // =========================
