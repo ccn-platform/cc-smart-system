@@ -1,0 +1,58 @@
+ 
+const express =
+  require("express");
+
+const router =
+  express.Router();
+
+const {
+  protect
+} = require(
+  "../middleware/authMiddleware"
+);
+
+const {
+  getMyReferral,
+  getMyReferrals,
+  getReferralDashboard
+} = require(
+  "../controllers/referralController"
+);
+
+
+// =====================================================
+// MY REFERRAL INFO
+// =====================================================
+
+router.get(
+  "/my",
+  protect,
+  getMyReferral
+);
+
+
+// =====================================================
+// MY REFERRAL LIST
+// =====================================================
+
+router.get(
+  "/my/list",
+  protect,
+  getMyReferrals
+);
+
+
+// =====================================================
+// REFERRAL DASHBOARD
+// =====================================================
+
+router.get(
+  "/dashboard",
+  protect,
+  getReferralDashboard
+);
+
+
+module.exports =
+  router;
+ 
