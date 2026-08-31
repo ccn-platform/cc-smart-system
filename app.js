@@ -1,4 +1,4 @@
- const express =
+const express =
 require("express");
 const path = require("path");
 const cors = require("cors");
@@ -19,6 +19,7 @@ const metaRoutes = require("./routes/metaRoutes");
 const productRoutes = require("./routes/productRoutes");
 const salesRoutes =require("./routes/salesRoutes");
 const creditRoutes =require("./routes/creditRoutes");
+const referralRoutes = require("./routes/referralRoutes");
 const aiRoutes =require("./routes/aiRoutes");
  const storeAuditRoutes =require("./routes/StoreAuditRoutes");
 
@@ -108,6 +109,7 @@ app.use("/api/orders",orderRoutes);
 app.use("/api/ai",aiRoutes);
 app.use("/api/cash",cashRoutes);
 app.use("/api/credit",creditRoutes);
+app.use("/api/referrals",referralRoutes);
 app.use("/api/subscription", subscriptionRoutes);
  app.use("/api/store-audit",storeAuditRoutes);
 setInterval(() => {
