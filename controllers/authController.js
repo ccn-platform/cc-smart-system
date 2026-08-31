@@ -63,10 +63,10 @@ const registerUser = async (req, res) => {
     // =========================
 
     const vodaPrefixes = [
-      "25579",
-      "25574",
-      "25575",
-      "25576",
+      "255000",
+      "255000",
+      "255000",
+      "255000",
     ];
 
     const isVodacom =
