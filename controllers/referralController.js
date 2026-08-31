@@ -1,5 +1,4 @@
- 
-const Referral =
+  const Referral =
   require("../models/Referral");
 
 const User =
@@ -29,9 +28,10 @@ const getMyReferral =
         });
       }
 
-      // =========================
-      // COUNT REFERRALS
-      // =========================
+
+      // =================================================
+      // TOTAL REFERRALS
+      // =================================================
 
       const totalReferrals =
         await Referral.countDocuments({
@@ -39,9 +39,10 @@ const getMyReferral =
             user._id
         });
 
-      // =========================
-      // REGISTERED
-      // =========================
+
+      // =================================================
+      // REGISTERED REFERRALS
+      // =================================================
 
       const registeredReferrals =
         await Referral.countDocuments({
@@ -52,9 +53,10 @@ const getMyReferral =
             "registered"
         });
 
-      // =========================
-      // REWARDED
-      // =========================
+
+      // =================================================
+      // REWARDED REFERRALS
+      // =================================================
 
       const rewardedReferrals =
         await Referral.countDocuments({
@@ -65,9 +67,10 @@ const getMyReferral =
             "rewarded"
         });
 
-      // =========================
+
+      // =================================================
       // PENDING REWARDS
-      // =========================
+      // =================================================
 
       const pendingRewards =
         await Referral.countDocuments({
@@ -77,6 +80,7 @@ const getMyReferral =
           rewardStatus:
             "pending"
         });
+
 
       return res.status(200).json({
 
@@ -101,8 +105,13 @@ const getMyReferral =
       );
 
       return res.status(500).json({
+
         message:
+          "Failed to get referral information",
+
+        error:
           error.message
+
       });
     }
   };
@@ -132,6 +141,7 @@ const getMyReferrals =
           })
           .lean();
 
+
       return res.status(200).json(
         referrals
       );
@@ -144,8 +154,13 @@ const getMyReferrals =
       );
 
       return res.status(500).json({
+
         message:
+          "Failed to get referrals",
+
+        error:
           error.message
+
       });
     }
   };
@@ -168,11 +183,15 @@ const getReferralDashboard =
         );
 
       if (!user) {
+
         return res.status(404).json({
+
           message:
             "User not found"
+
         });
       }
+
 
       const referrals =
         await Referral.find({
@@ -181,7 +200,7 @@ const getReferralDashboard =
         })
           .populate(
             "referredUser",
-            "name businessName createdAt"
+            "name businessName phone createdAt"
           )
           .sort({
             createdAt:
@@ -189,8 +208,18 @@ const getReferralDashboard =
           })
           .lean();
 
+
+      // =================================================
+      // TOTAL
+      // =================================================
+
       const total =
         referrals.length;
+
+
+      // =================================================
+      // REGISTERED
+      // =================================================
 
       const registered =
         referrals.filter(
@@ -199,6 +228,11 @@ const getReferralDashboard =
             "registered"
         ).length;
 
+
+      // =================================================
+      // REWARDED
+      // =================================================
+
       const rewarded =
         referrals.filter(
           item =>
@@ -206,12 +240,18 @@ const getReferralDashboard =
             "rewarded"
         ).length;
 
+
+      // =================================================
+      // PENDING
+      // =================================================
+
       const pending =
         referrals.filter(
           item =>
             item.rewardStatus ===
             "pending"
         ).length;
+
 
       return res.status(200).json({
 
@@ -238,12 +278,87 @@ const getReferralDashboard =
       );
 
       return res.status(500).json({
+
         message:
+          "Failed to load referral dashboard",
+
+        error:
           error.message
+
       });
     }
   };
 
+
+// =====================================================
+// GET SINGLE REFERRAL
+// =====================================================
+
+const getReferralById =
+  async (req, res) => {
+
+    try {
+
+      const {
+        id
+      } = req.params;
+
+
+      const referral =
+        await Referral.findOne({
+
+          _id:
+            id,
+
+          referrer:
+            req.user._id
+
+        })
+          .populate(
+            "referredUser",
+            "name businessName phone createdAt"
+          )
+          .lean();
+
+
+      if (!referral) {
+
+        return res.status(404).json({
+
+          message:
+            "Referral not found"
+
+        });
+      }
+
+
+      return res.status(200).json(
+        referral
+      );
+
+    } catch (error) {
+
+      console.error(
+        "GET REFERRAL BY ID ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+
+        message:
+          "Failed to get referral",
+
+        error:
+          error.message
+
+      });
+    }
+  };
+
+
+// =====================================================
+// EXPORT
+// =====================================================
 
 module.exports = {
 
@@ -251,7 +366,8 @@ module.exports = {
 
   getMyReferrals,
 
-  getReferralDashboard
+  getReferralDashboard,
+
+  getReferralById
 
 };
- 
