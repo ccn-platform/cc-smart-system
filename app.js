@@ -34,13 +34,10 @@ app.use((req, res, next) => {
   console.log("➡️ REQUEST:", req.method, req.url);
   next();
 });
-
- app.get("/health", (req, res) => {
-  return res
-    .status(200)
-    .type("text")
-    .send("OK");
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
 });
+ 
 app.get("/", (req, res) => {
   res.send("CCN Backend Running");
 });
