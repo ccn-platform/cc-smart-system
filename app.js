@@ -34,6 +34,16 @@ app.use((req, res, next) => {
   console.log("➡️ REQUEST:", req.method, req.url);
   next();
 });
+
+app.get("/health", (req, res) => {
+  console.log("❤️ HEALTH REQUEST RECEIVED");
+
+  return res.status(200).json({
+    success: true,
+    message: "CCN Backend is healthy",
+    time: new Date().toISOString(),
+  });
+});
 app.get("/", (req, res) => {
   res.send("CCN Backend Running");
 });
