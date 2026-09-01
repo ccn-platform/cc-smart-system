@@ -1,5 +1,5 @@
  const express =
-require("express"); 
+require("express");
 const path = require("path");
 const cors = require("cors");
  const axios = require("axios");
@@ -19,7 +19,6 @@ const metaRoutes = require("./routes/metaRoutes");
 const productRoutes = require("./routes/productRoutes");
 const salesRoutes =require("./routes/salesRoutes");
 const creditRoutes =require("./routes/creditRoutes");
-const referralRoutes = require("./routes/referralRoutes");
 const aiRoutes =require("./routes/aiRoutes");
  const storeAuditRoutes =require("./routes/StoreAuditRoutes");
 
@@ -34,40 +33,9 @@ app.use((req, res, next) => {
   console.log("➡️ REQUEST:", req.method, req.url);
   next();
 });
-app.get("/health", (req, res) => {
-  res.status(200).send("OK");
-});
- 
 app.get("/", (req, res) => {
   res.send("CCN Backend Running");
 });
-
- 
-/*
- * -----------------------------------------
- * APP VERSION CHECK
- * -----------------------------------------
- */
-
-app.get(
-  "/api/app-version",
-  (req, res) => {
-
-    res.json({
-      latestVersion: "1.0.0",
-
-      minimumVersion: "1.0.0",
-
-      forceUpdate: false,
-
-      message:
-        "Kuna toleo jipya la Biashara Plus lenye maboresho na marekebisho muhimu."
-    });
-
-  }
-);
- 
-
 
 app.get(
   "/my-ip",
@@ -113,7 +81,6 @@ app.use("/api/orders",orderRoutes);
 app.use("/api/ai",aiRoutes);
 app.use("/api/cash",cashRoutes);
 app.use("/api/credit",creditRoutes);
-app.use("/api/referrals",referralRoutes);
 app.use("/api/subscription", subscriptionRoutes);
  app.use("/api/store-audit",storeAuditRoutes);
 setInterval(() => {
