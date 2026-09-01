@@ -35,14 +35,11 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/health", (req, res) => {
-  console.log("❤️ HEALTH REQUEST RECEIVED");
-
-  return res.status(200).json({
-    success: true,
-    message: "CCN Backend is healthy",
-    time: new Date().toISOString(),
-  });
+ app.get("/health", (req, res) => {
+  return res
+    .status(200)
+    .type("text")
+    .send("OK");
 });
 app.get("/", (req, res) => {
   res.send("CCN Backend Running");
