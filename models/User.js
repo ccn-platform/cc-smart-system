@@ -118,19 +118,6 @@ resetPinRequestBlockedUntil: {
         default: null,
         index: true
       },
-referralCode: {
-  type: String,
-  unique: true,
-  sparse: true,
-  index: true
-},
-
-referredBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "User",
-  default: null,
-  index: true
-},
 
       // STAFF ASSIGNED BRANCH
       branch: {
