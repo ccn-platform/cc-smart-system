@@ -4,33 +4,44 @@ const crypto = require("crypto");
 const pushService = require("../services/pushService");
 const smsService = require("../services/smsService");
    const User = require("../models/User");
+   const Referral =require("../models/Referral");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Shop = require("../models/Shop");
 const Branch = require("../models/Branch");
 const normalizePhone = require("../utils/normalizePhone");
 
+ 
 const registerUser = async (req, res) => {
-  const session = await mongoose.startSession();
+  const session =
+    await mongoose.startSession();
 
   try {
     session.startTransaction();
 
     let {
-  name,
-  businessName,
-  phone,
-  password,
-  businessCategory,
-  mkoa = "",
-  wilaya = "",
-  mtaa = ""
-} = req.body;
+      name,
+      businessName,
+      phone,
+      password,
+      businessCategory,
+      mkoa = "",
+      wilaya = "",
+      mtaa = "",
+      referralCode = ""
+    } = req.body;
 
+    // =========================
     // NORMALIZE PHONE
-    phone = normalizePhone(phone);
+    // =========================
 
+    phone =
+      normalizePhone(phone);
+
+    // =========================
     // VALIDATION
+    // =========================
+
     if (
       !name ||
       !businessName ||
@@ -42,166 +53,415 @@ const registerUser = async (req, res) => {
       session.endSession();
 
       return res.status(400).json({
-        message: "All fields are required"
+        message:
+          "All fields are required"
       });
     }
 
+    // =========================
+    // VODACOM CHECK
+    // =========================
+
     const vodaPrefixes = [
-  "25579",
-  "25574",
-  "25575",
-  "25576",
-];
+      "255000",
+      "255000",
+      "255000",
+      "255000",
+    ];
 
-const isVodacom =
-  vodaPrefixes.some(
-    prefix =>
-      phone.startsWith(prefix)
-  );
+    const isVodacom =
+      vodaPrefixes.some(
+        prefix =>
+          phone.startsWith(prefix)
+      );
 
-if (isVodacom) {
-  await session.abortTransaction();
-  session.endSession();
+    if (isVodacom) {
+      await session.abortTransaction();
+      session.endSession();
 
-  return res.status(400).json({
-    message:
-      "Namba za Vodacom haziruhusiwi kujisajili kwa sasa mpaka tutakapofanya maboresho tumia namba ya mtandao mwingine. au wasiliana nasi kwa namba 0758078629"
-  });
-}
+      return res.status(400).json({
+        message:
+          "Namba za Vodacom haziruhusiwi kujisajili kwa sasa mpaka tutakapofanya maboresho tumia namba ya mtandao mwingine. au wasiliana nasi kwa namba 0758078629"
+      });
+    }
+
+    // =========================
     // CHECK DUPLICATE
-    const exists = await User.findOne({
-      phone
-    }).session(session);
+    // =========================
+
+    const exists =
+      await User.findOne({
+        phone
+      }).session(session);
 
     if (exists) {
       await session.abortTransaction();
       session.endSession();
 
-     return res.status(400).json({
-  message:
-    "Namba hii tayari imeshatumika kusajili akaunti. Tumia namba nyingine au ingia kwenye akaunti yako. au wasiliana nasi kwa namba 0758078629"
-});
+      return res.status(400).json({
+        message:
+          "Namba hii tayari imeshatumika kusajili akaunti. Tumia namba nyingine au ingia kwenye akaunti yako. au wasiliana nasi kwa namba 0758078629"
+      });
     }
 
+    // =========================
+    // FIND REFERRER
+    // =========================
+
+    let referredBy = null;
+
+    if (
+      referralCode &&
+      String(referralCode).trim()
+    ) {
+      const referrer =
+        await User.findOne({
+          referralCode:
+            String(referralCode)
+              .trim()
+              .toUpperCase(),
+
+          role:
+            "owner",
+
+          isActive:
+            true
+        }).session(session);
+
+      if (referrer) {
+        referredBy =
+          referrer._id;
+      }
+    }
+
+    // =========================
+    // GENERATE REFERRAL CODE
+    // =========================
+
+    const generateReferralCode = () => {
+      return (
+        "CCN-" +
+        crypto
+          .randomBytes(4)
+          .toString("hex")
+          .toUpperCase()
+      );
+    };
+
+    let newReferralCode;
+
+    do {
+      newReferralCode =
+        generateReferralCode();
+
+      const codeExists =
+        await User.findOne({
+          referralCode:
+            newReferralCode
+        }).session(session);
+
+      if (!codeExists) {
+        break;
+      }
+
+    } while (true);
+
+    // =========================
     // HASH PASSWORD
+    // =========================
+
     const hashedPassword =
-      await bcrypt.hash(password, 10);
+      await bcrypt.hash(
+        password,
+        10
+      );
 
+    // =========================
     // CREATE USER
-   const users = await User.create(
-  [{
-    name: name.trim(),
-    businessName: businessName.trim(),
-    phone,
-    password: hashedPassword,
-    businessCategory,
-    mkoa,
-    wilaya,
-    mtaa
-  }],
-  { session }
-);
-    const user = users[0];
+    // =========================
 
+    const users =
+      await User.create(
+        [
+          {
+            name:
+              name.trim(),
+
+            businessName:
+              businessName.trim(),
+
+            phone,
+
+            password:
+              hashedPassword,
+
+            businessCategory,
+
+            mkoa,
+
+            wilaya,
+
+            mtaa,
+
+            // =========================
+            // REFERRAL
+            // =========================
+
+            referralCode:
+              newReferralCode,
+
+            referredBy
+          }
+        ],
+        {
+          session
+        }
+      );
+
+    const user =
+      users[0];
+
+    // =========================
     // CREATE SHOP
-    const shops = await Shop.create(
-      [{
-        owner: user._id,
-        businessName:
-          user.businessName,
-        category:
-          user.businessCategory,
-        phone:
-          user.phone,
-        mkoa:
-          user.mkoa,
-        wilaya:
-          user.wilaya,
-        mtaa:
-          user.mtaa
-      }],
-      { session }
+    // =========================
+
+    const shops =
+      await Shop.create(
+        [
+          {
+            owner:
+              user._id,
+
+            businessName:
+              user.businessName,
+
+            category:
+              user.businessCategory,
+
+            phone:
+              user.phone,
+
+            mkoa:
+              user.mkoa,
+
+            wilaya:
+              user.wilaya,
+
+            mtaa:
+              user.mtaa
+          }
+        ],
+        {
+          session
+        }
+      );
+
+    const shop =
+      shops[0];
+
+    // =========================
+    // CREATE MAIN BRANCH
+    // =========================
+
+    await Branch.create(
+      [
+        {
+          shop:
+            shop._id,
+
+          name:
+            `${user.businessName} Main Branch`,
+
+          phone:
+            user.phone,
+
+          manager:
+            user.name,
+
+          mkoa:
+            user.mkoa,
+
+          wilaya:
+            user.wilaya,
+
+          mtaa:
+            user.mtaa,
+
+          isMain:
+            true,
+
+          isActive:
+            true,
+
+          subscription: {
+            plan:
+              "trial",
+
+            startDate:
+              new Date(),
+
+            expiresAt:
+              new Date(
+                Date.now() +
+                14 *
+                24 *
+                60 *
+                60 *
+                1000
+              ),
+
+            isActive:
+              true
+          }
+        }
+      ],
+      {
+        session
+      }
     );
 
-    const shop = shops[0];
+    // =========================
+    // CREATE REFERRAL RECORD
+    // =========================
+    //
+    // Kama user mpya amekuja
+    // kupitia referral ya owner
+    // mwingine, tunahifadhi
+    // relationship A -> B.
+    //
+    // Hii inaingia ndani ya
+    // transaction hiyo hiyo.
+    // =========================
 
-    // CREATE MAIN BRANCH
-    await Branch.create(
-  [{
-    shop: shop._id,
-    name: `${user.businessName} Main Branch`,
-    phone: user.phone,
-    manager: user.name,
-    mkoa: user.mkoa,
-    wilaya: user.wilaya,
-    mtaa: user.mtaa,
-    isMain: true,
-    isActive: true,
+    if (referredBy) {
+      await Referral.create(
+        [
+          {
+            referrer:
+              referredBy,
 
-    subscription: {
-      plan: "trial",
-      startDate: new Date(),
-      expiresAt: new Date(
-        Date.now() +
-        14 * 24 * 60 * 60 * 1000
-      ),
-      isActive: true
+            referredUser:
+              user._id,
+
+            status:
+              "registered",
+
+            rewardStatus:
+              "pending",
+
+            rewardType:
+              "subscription_days",
+
+            rewardValue:
+              7
+          }
+        ],
+        {
+          session
+        }
+      );
     }
-  }],
-  { session }
-);
+
+    // =========================
     // COMMIT
+    // =========================
+
     await session.commitTransaction();
     session.endSession();
 
+    // =========================
     // TOKEN
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "30d" }
-    );
+    // =========================
 
-    // GET MAIN BRANCH
-const mainBranch =
-  await Branch.findOne({
-    shop: shop._id,
-    isMain: true
-  }).select(
-    "name subscription"
-  );
-
- return res.status(201).json({
-  token,
-  user: {
-    id: user._id,
-    name: user.name,
-    businessName:
-      user.businessName,
-    phone: user.phone,
-
-    businessCategory:
-      businessCategory ===
-      "credit_business"
-        ? "credit_business"
-        : "cash_business",
-
-    role: user.role,
-    owner: null,
-
-    branch: mainBranch
-      ? {
-          id: mainBranch._id,
-          name: mainBranch.name,
-          subscription:
-            mainBranch.subscription
+    const token =
+      jwt.sign(
+        {
+          id:
+            user._id
+        },
+        process.env.JWT_SECRET,
+        {
+          expiresIn:
+            "30d"
         }
-      : null,
+      );
 
-    subscription:
-      mainBranch?.subscription ||
-      null
-  }
-});
+    // =========================
+    // GET MAIN BRANCH
+    // =========================
+
+    const mainBranch =
+      await Branch.findOne({
+        shop:
+          shop._id,
+
+        isMain:
+          true
+      }).select(
+        "name subscription"
+      );
+
+    // =========================
+    // RESPONSE
+    // =========================
+
+    return res.status(201).json({
+      token,
+
+      user: {
+        id:
+          user._id,
+
+        name:
+          user.name,
+
+        businessName:
+          user.businessName,
+
+        phone:
+          user.phone,
+
+        businessCategory:
+          businessCategory ===
+          "credit_business"
+            ? "credit_business"
+            : "cash_business",
+
+        role:
+          user.role,
+
+        owner:
+          null,
+
+        // =========================
+        // REFERRAL INFO
+        // =========================
+
+        referralCode:
+          user.referralCode,
+
+        referredBy:
+          user.referredBy,
+
+        branch:
+          mainBranch
+            ? {
+                id:
+                  mainBranch._id,
+
+                name:
+                  mainBranch.name,
+
+                subscription:
+                  mainBranch.subscription
+              }
+            : null,
+
+        subscription:
+          mainBranch?.subscription ||
+          null
+      }
+    });
 
   } catch (error) {
     await session.abortTransaction();
@@ -213,10 +473,14 @@ const mainBranch =
     );
 
     return res.status(500).json({
-      message: error.message
+      message:
+        error.message
     });
   }
 };
+ 
+
+
  const loginUser = async (req, res) => {
   try {
 
