@@ -122,7 +122,7 @@ const getDateKey =
 
   };
  
-// ============================================
+ // ============================================
 // BUILD CREDIT HISTORY REPORT
 //
 // FORMAT COMPATIBLE WITH MOBILE APP
@@ -130,6 +130,9 @@ const getDateKey =
 // RULE:
 // DebtLoan    → createdAt
 // DebtPayment → paymentDate
+//
+// TIMEZONE:
+// Tanzania = UTC+3
 //
 // TODAY / HISTORICAL:
 // - Loans issued on selected date
@@ -150,18 +153,58 @@ const buildCreditHistoryReport =
 
       // ========================================
       // DATE RANGE
+      //
+      // IMPORTANT:
+      //
+      // Tanzania is UTC+3.
+      //
+      // Example:
+      //
+      // 2026-09-02 00:00 Tanzania
+      // =
+      // 2026-09-01 21:00 UTC
+      //
+      // 2026-09-03 00:00 Tanzania
+      // =
+      // 2026-09-02 21:00 UTC
+      //
+      // This makes ONLINE report use the
+      // same business day as the OFFLINE report.
       // ========================================
 
       const start =
         new Date(
-          `${date}T00:00:00.000Z`
+          `${date}T00:00:00.000+03:00`
         );
 
       const end =
-        new Date(start);
+        new Date(
+          `${date}T00:00:00.000+03:00`
+        );
 
       end.setUTCDate(
         end.getUTCDate() + 1
+      );
+
+
+      // ========================================
+      // DEBUG DATE RANGE
+      // ========================================
+
+      console.log(
+        "📅 CREDIT REPORT DATE RANGE:",
+        {
+          date,
+
+          timezone:
+            "Africa/Dar_es_Salaam",
+
+          start:
+            start.toISOString(),
+
+          end:
+            end.toISOString()
+        }
       );
 
 
@@ -696,7 +739,6 @@ const buildCreditHistoryReport =
     }
 
   };
- 
 
 
   const getInventoryReport = async (req, res) => {
@@ -4338,404 +4380,70 @@ return res.status(200).json(
         error.message
     });
   }
- };
-
-
+};
 const getReportHistory = async (req, res) => {
   try {
 
-    // ============================================
-    // SECURITY
-    // ============================================
-
-    if (
-      !req.ownerId ||
-      !req.branchId
-    ) {
-
+    if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
-        message:
-          "Unauthorized"
+        message: "Unauthorized"
       });
-
     }
-
-
-    // ============================================
-    // PAGINATION
-    // ============================================
 
     const page =
-      Math.max(
-        Number(
-          req.query.page
-        ) || 1,
-        1
-      );
+      Number(req.query.page) || 1;
 
     const limit =
-      Math.max(
-        Number(
-          req.query.limit
-        ) || 50,
-        1
-      );
+      Number(req.query.limit) || 20;
 
     const skip =
-      (page - 1) *
-      limit;
-
-
-    // ============================================
-    // BASE FILTER
-    //
-    // Hii history ni ya:
-    // OWNER + ACTIVE BRANCH
-    // ============================================
+      (page - 1) * limit;
 
     const filter = {
-
-      owner:
-        req.ownerId,
-
-      branch:
-        req.branchId,
-
-      // ========================================
-      // MUHIMU:
-      //
-      // Tunataka DAILY HISTORY pekee.
-      //
-      // Mfumo wako una records mbili zinazoweza
-      // kuwakilisha daily:
-      //
-      // "daily"
-      // "credit_daily"
-      //
-      // ========================================
-
-      reportType: {
-        $in: [
-          "daily",
-          "credit_daily"
-        ]
-      }
-
+      owner: req.ownerId,
+      branch: req.branchId
     };
 
-
-    // ============================================
-    // OPTIONAL REPORT TYPE
-    //
-    // Kama frontend imetuma reportType,
-    // tunaiheshimu lakini bado ndani ya
-    // daily-compatible types.
-    // ============================================
-
-    if (
-      req.query.reportType
-    ) {
-
-      const requestedType =
-        String(
-          req.query.reportType
-        );
-
-      if (
-        [
-          "daily",
-          "credit_daily"
-        ].includes(
-          requestedType
-        )
-      ) {
-
-        filter.reportType =
-          requestedType;
-
-      } else {
-
-        // ======================================
-        // Requested report type si daily.
-        //
-        // Tunarudisha empty result badala ya
-        // kuchanganya weekly/monthly n.k.
-        // ======================================
-
-        return res.status(200).json({
-
-          total:
-            0,
-
-          page,
-
-          pages:
-            0,
-
-          reports:
-            []
-
-        });
-
-      }
-
+    if (req.query.reportType) {
+      filter.reportType =
+        req.query.reportType;
     }
 
-
-    // ============================================
-    // GET REPORTS
-    //
-    // DATE ndiyo ya muhimu zaidi kwenye history.
-    //
-    // Tunasort kwa:
-    //
-    // 1. date DESC
-    // 2. createdAt DESC
-    //
-    // Hii inasaidia tarehe zenye kazi
-    // zisiondoke kwa sababu record nyingine
-    // iliundwa baadaye.
-    // ============================================
-
     const reports =
-      await ReportHistory.find(
-        filter
-      )
+      await ReportHistory.find(filter)
         .sort({
-
-          // ====================================
-          // PRIMARY SORT
-          // ====================================
-
-          "report.date":
-            -1,
-
-          // ====================================
-          // SECONDARY SORT
-          // ====================================
-
-          periodStart:
-            -1,
-
-          // ====================================
-          // FALLBACK
-          // ====================================
-
-          createdAt:
-            -1
-
+          createdAt: -1
         })
-
-        .skip(
-          skip
-        )
-
-        .limit(
-          limit
-        )
-
+        .skip(skip)
+        .limit(limit)
         .lean();
-
-
-    // ============================================
-    // TOTAL
-    // ============================================
 
     const total =
       await ReportHistory.countDocuments(
         filter
       );
 
-
-    // ============================================
-    // NORMALIZE RESPONSE
-    //
-    // Baadhi ya old records zinaweza kuwa na:
-    //
-    // reportType = credit_daily
-    //
-    // lakini mobile inatarajia:
-    //
-    // reportType = daily
-    //
-    // Kwa hiyo tunafanya mapping hapa tu.
-    //
-    // HATUBADILISHI DATABASE.
-    // ============================================
-
-    const normalizedReports =
-      reports.map(
-        (
-          report
-        ) => {
-
-          const reportDate =
-            report?.report?.date ||
-            (
-              report?.periodStart
-                ? new Date(
-                    report.periodStart
-                  )
-                    .toISOString()
-                    .slice(
-                      0,
-                      10
-                    )
-                : null
-            );
-
-
-          return {
-
-            ...report,
-
-            // ==================================
-            // STABLE MOBILE ID
-            // ==================================
-
-            id:
-              reportDate
-                ? `${String(
-                    req.branchId
-                  )}_${reportDate}`
-                : String(
-                    report._id
-                  ),
-
-            // ==================================
-            // DATE
-            // ==================================
-
-            date:
-              reportDate,
-
-            // ==================================
-            // MOBILE REPORT TYPE
-            // ==================================
-
-            reportType:
-              "daily",
-
-            // ==================================
-            // BRANCH ID
-            // ==================================
-
-            branchId:
-              String(
-                req.branchId
-              )
-
-          };
-
-        }
-      );
-
-
-    // ============================================
-    // REMOVE DUPLICATE DATES
-    //
-    // Kuna uwezekano branch ina:
-    //
-    // daily
-    // +
-    // credit_daily
-    //
-    // kwa tarehe ile ile.
-    //
-    // Mobile inahitaji tarehe moja tu.
-    //
-    // Tunahifadhi record ya kwanza kwa
-    // sababu tayari tume-sort DESC.
-    // ============================================
-
-    const seenDates =
-      new Set();
-
-    const uniqueReports =
-      normalizedReports.filter(
-        (
-          report
-        ) => {
-
-          const date =
-            report?.date;
-
-          if (
-            !date
-          ) {
-
-            return false;
-
-          }
-
-          if (
-            seenDates.has(
-              date
-            )
-          ) {
-
-            return false;
-
-          }
-
-          seenDates.add(
-            date
-          );
-
-          return true;
-
-        }
-      );
-
-
-    // ============================================
-    // FINAL TOTAL
-    //
-    // Pagination total bado inatoka DB.
-    // Lakini reports zinazosafirishwa zina
-    // unique dates.
-    // ============================================
-
     return res.status(200).json({
-
       total,
-
       page,
-
-      pages:
-        Math.ceil(
-          total /
-          limit
-        ),
-
-      reports:
-        uniqueReports
-
+      pages: Math.ceil(total / limit),
+      reports
     });
-
 
   } catch (error) {
 
-    // ============================================
-    // ERROR
-    // ============================================
-
-    console.error(
-      "❌ REPORT HISTORY ERROR:",
+    console.log(
+      "REPORT HISTORY ERROR:",
       error
     );
 
-
-    return res.status(500).json({
-
-      message:
-        error?.message ||
-        "Failed to load report history"
-
+    res.status(500).json({
+      message: error.message
     });
 
   }
 };
+
 const getReportHistoryById = async (req, res) => {
   try {
 
