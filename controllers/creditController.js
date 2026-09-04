@@ -3278,6 +3278,296 @@ const refund =
   }
 };
  
+ 
+// ====================================
+// GET ALL PAYMENT HISTORY
+// READ ONLY
+//
+// Hii endpoint:
+// - haisemi loanId
+// - haifuti data
+// - haibadilishi data
+// - haisync data
+//
+// Inarudisha payments zote
+// za owner + branch husika.
+// ====================================
+
+const getAllPaymentHistory =
+  async (req, res) => {
+
+    try {
+
+      console.log(
+        "🔍 GETTING ALL BACKEND PAYMENT HISTORY..."
+      );
+
+
+      const payments =
+        await DebtPayment.find({
+
+          owner:
+            req.ownerId,
+
+          branch:
+            req.branchId,
+
+          status: {
+            $in: [
+              "posted",
+              "reversed"
+            ]
+          }
+
+        })
+          .populate(
+            "receivedBy",
+            "name"
+          )
+          .sort({
+
+            paymentDate:
+              -1,
+
+            createdAt:
+              -1
+
+          })
+          .lean();
+
+
+      // ====================================
+      // NORMALIZE PAYMENTS
+      //
+      // Hatubadilishi database.
+      // Tunaandaa response tu.
+      // ====================================
+
+      const normalizedPayments =
+        payments.map(
+          (payment) => ({
+
+            ...payment,
+
+            paymentId:
+              String(
+                payment._id
+              ),
+
+            syncId:
+              payment.syncId ||
+              null,
+
+            transactionId:
+              payment.transactionId ||
+              null,
+
+            loanId:
+              payment.loan
+                ? String(
+                    payment.loan
+                  )
+                : null,
+
+          })
+        );
+
+
+      // ====================================
+      // FIND DATE RANGE
+      // ====================================
+
+      const validDates =
+        normalizedPayments
+          .map(
+            (payment) => {
+
+              const rawDate =
+                payment.paymentDate ||
+                payment.createdAt ||
+                null;
+
+
+              if (
+                !rawDate
+              ) {
+
+                return null;
+
+              }
+
+
+              const date =
+                new Date(
+                  rawDate
+                );
+
+
+              if (
+                Number.isNaN(
+                  date.getTime()
+                )
+              ) {
+
+                return null;
+
+              }
+
+
+              return date;
+
+            }
+          )
+          .filter(
+            Boolean
+          )
+          .sort(
+            (a, b) =>
+              a.getTime() -
+              b.getTime()
+          );
+
+
+      const oldestDate =
+        validDates.length > 0
+          ? validDates[0]
+          : null;
+
+
+      const newestDate =
+        validDates.length > 0
+          ? validDates[
+              validDates.length - 1
+            ]
+          : null;
+
+
+      // ====================================
+      // SERVER LOG
+      // ====================================
+
+      console.log(
+        "📥 ALL PAYMENT HISTORY RESPONSE:",
+        {
+
+          owner:
+            String(
+              req.ownerId
+            ),
+
+          branch:
+            String(
+              req.branchId
+            ),
+
+          count:
+            normalizedPayments.length,
+
+          oldestPayment:
+            oldestDate
+              ? oldestDate.toISOString()
+              : null,
+
+          newestPayment:
+            newestDate
+              ? newestDate.toISOString()
+              : null,
+
+          payments:
+            normalizedPayments.map(
+              (payment) => ({
+
+                paymentId:
+                  payment.paymentId,
+
+                syncId:
+                  payment.syncId,
+
+                transactionId:
+                  payment.transactionId,
+
+                loanId:
+                  payment.loanId,
+
+                amount:
+                  payment.amount,
+
+                paymentDate:
+                  payment.paymentDate ||
+
+                  payment.createdAt ||
+
+                  null,
+
+                status:
+                  payment.status
+
+              })
+            )
+
+        }
+      );
+
+
+      // ====================================
+      // RESPONSE
+      // ====================================
+
+      return res
+        .status(200)
+        .json({
+
+          success:
+            true,
+
+          count:
+            normalizedPayments.length,
+
+          dateRange: {
+
+            oldest:
+              oldestDate
+                ? oldestDate.toISOString()
+                : null,
+
+            newest:
+              newestDate
+                ? newestDate.toISOString()
+                : null
+
+          },
+
+          payments:
+            normalizedPayments
+
+        });
+
+
+    } catch (error) {
+
+      console.error(
+        "❌ GET ALL PAYMENT HISTORY ERROR:",
+        error
+      );
+
+
+      return res
+        .status(500)
+        .json({
+
+          success:
+            false,
+
+          message:
+            error.message
+
+        });
+
+    }
+
+  };
+ 
+
  const getPaymentHistory =
   async (req, res) => {
 
@@ -4163,6 +4453,7 @@ const syncDeleteLoan =
   createDebtLoan,
   syncLoan,
   syncPayment,
+  getAllPaymentHistory,
    syncRefund,
   getLoanHistory,
   getLoanById,
