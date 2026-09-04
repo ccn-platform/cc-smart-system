@@ -30,6 +30,7 @@ const {
   receivePayment,
   getLoanHistory,
   getPaymentHistory,
+  getAllLoansForRecovery,
   getLoanById,
   scanFingerprint,
   getOverdueLoans,
@@ -224,7 +225,18 @@ router.get(
   getPaymentHistory
 );
 
+// ====================================
+// ALL LOANS FOR RECOVERY
+//
+// MUST BE BEFORE "/:id"
+// ====================================
 
+router.get(
+  "/recovery/all-loans",
+  protect,
+  branchAccess,
+  getAllLoansForRecovery
+);
 // ====================================
 // SINGLE LOAN
 // ====================================
