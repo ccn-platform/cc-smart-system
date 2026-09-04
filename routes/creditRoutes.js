@@ -22,6 +22,7 @@ const {
    deleteDebtLoan,
    syncDeleteLoan,
   createDebtLoan,
+  getAllPaymentHistory,
    syncLoan,
    syncPayment,
     syncRefund,
@@ -200,6 +201,18 @@ router.get(
 );
 
 
+// ====================================
+// ALL PAYMENT HISTORY
+// ====================================
+
+router.get(
+  "/payment-history/all",
+  protect,
+  branchAccess,
+  getAllPaymentHistory
+);
+
+ 
  // ====================================
 // PAYMENT HISTORY
 // ====================================
