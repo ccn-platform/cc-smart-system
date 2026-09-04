@@ -860,6 +860,248 @@ const syncLoan =
     }
 
   };
+// ====================================
+// GET ALL LOANS FOR RECOVERY
+//
+// HII ENDPOINT NI MAALUM KWA DATA RECOVERY.
+//
+// HAIBADILISHI DATA.
+//
+// INARUDISHA LOAN ZOTE ZA BRANCH
+// ILI RECOVERY IFUATILIE:
+//
+// LOAN CREATED
+//      ↓
+// PAYMENTS
+//      ↓
+// REFUNDS / REVERSALS
+//      ↓
+// FINAL BALANCE
+// ====================================
+
+const getAllLoansForRecovery =
+  async (req, res) => {
+
+    try {
+
+      // ====================================
+      // GET ALL LOANS
+      //
+      // IMPORTANT:
+      //
+      // HATUFILTER KWA:
+      //
+      // active
+      // overdue
+      // paid
+      // balance
+      //
+      // TUNATAKA HISTORY YOTE.
+      // ====================================
+
+      const loans =
+        await DebtLoan.find({
+          owner: req.ownerId,
+          branch: req.branchId
+        })
+          .populate(
+            "customer",
+            "fullName phone"
+          )
+          .sort({
+            createdAt: 1
+          })
+          .lean();
+
+
+      // ====================================
+      // NORMALIZE LOANS FOR RECOVERY
+      // ====================================
+
+      const normalizedLoans =
+        loans.map(
+          (loan) => {
+
+            const loanId =
+              loan.loanId ||
+              String(
+                loan._id
+              );
+
+
+            const syncId =
+              loan.syncId ||
+              loan.loanSyncId ||
+              null;
+
+
+            return {
+
+              // =================================
+              // ORIGINAL DATA
+              // =================================
+
+              ...loan,
+
+
+              // =================================
+              // NORMALIZED ID
+              // =================================
+
+              loanId:
+                String(
+                  loanId
+                ),
+
+
+              // =================================
+              // BACKEND ID
+              // =================================
+
+              backendLoanId:
+                String(
+                  loan._id
+                ),
+
+
+              // =================================
+              // SYNC ID
+              // =================================
+
+              syncId:
+                syncId
+                  ? String(
+                      syncId
+                    )
+                  : null,
+
+
+              // =================================
+              // NORMALIZED AMOUNTS
+              // =================================
+
+              principalAmount:
+                Number(
+                  loan.principalAmount ||
+                  loan.amount ||
+                  0
+                ),
+
+
+              paidAmount:
+                Number(
+                  loan.paidAmount ||
+                  0
+                ),
+
+
+              balanceAmount:
+                Number(
+                  loan.balanceAmount ||
+                  loan.remainingAmount ||
+                  0
+                ),
+
+
+              // =================================
+              // STATUS
+              // =================================
+
+              status:
+                String(
+                  loan.status ||
+                  "unknown"
+                )
+                  .trim()
+                  .toLowerCase()
+
+            };
+
+          }
+        );
+
+
+      // ====================================
+      // RECOVERY SUMMARY
+      // ====================================
+
+      const statusSummary =
+        normalizedLoans.reduce(
+          (
+            result,
+            loan
+          ) => {
+
+            const status =
+              loan.status ||
+              "unknown";
+
+
+            result[status] =
+              (
+                result[status] ||
+                0
+              ) + 1;
+
+
+            return result;
+
+          },
+          {}
+        );
+
+
+      console.log(
+        "📚 ALL BACKEND LOANS FOR RECOVERY:",
+        {
+
+          ownerId:
+            req.ownerId,
+
+          branchId:
+            req.branchId,
+
+          total:
+            normalizedLoans.length,
+
+          statuses:
+            statusSummary
+
+        }
+      );
+
+
+      // ====================================
+      // RETURN
+      //
+      // READ ONLY
+      // ====================================
+
+      return res.status(200).json(
+        normalizedLoans
+      );
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "❌ GET ALL LOANS FOR RECOVERY ERROR:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        message:
+          error.message
+
+      });
+
+    }
+
+  };
+
  const getLoanHistory =
   async (req, res) => {
 
@@ -4461,6 +4703,7 @@ const syncDeleteLoan =
   scanFingerprint,
   getPaymentHistory,
   scanDebtsFromImage,
+  getAllLoansForRecovery,
   importDebts,
   refundPayment,
   getOverdueLoans
