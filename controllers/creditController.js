@@ -1391,8 +1391,8 @@ const receivePayment =
  // ====================================
 // SYNC OFFLINE PAYMENT
 // ====================================
-
-const syncPayment = async (req, res) => {
+ 
+ const syncPayment = async (req, res) => {
 
   let session = null;
 
@@ -1467,6 +1467,32 @@ const syncPayment = async (req, res) => {
 
 
     // ====================================
+    // NORMALIZE REFERENCES
+    // ====================================
+
+    const normalizedLoanId =
+      loanId
+        ? String(loanId).trim()
+        : "";
+
+
+    const normalizedLoanSyncId =
+      loanSyncId
+        ? String(loanSyncId).trim()
+        : "";
+
+
+    const normalizedSyncId =
+      String(syncId).trim();
+
+
+    const normalizedTransactionId =
+      transactionId
+        ? String(transactionId).trim()
+        : "";
+
+
+    // ====================================
     // CHECK DUPLICATE syncId
     // ====================================
 
@@ -1479,7 +1505,8 @@ const syncPayment = async (req, res) => {
         branch:
           req.branchId,
 
-        syncId
+        syncId:
+          normalizedSyncId
 
       }).lean();
 
@@ -1546,7 +1573,7 @@ const syncPayment = async (req, res) => {
     // CHECK DUPLICATE transactionId
     // ====================================
 
-    if (transactionId) {
+    if (normalizedTransactionId) {
 
       const existingTransaction =
         await DebtPayment.findOne({
@@ -1557,7 +1584,8 @@ const syncPayment = async (req, res) => {
           branch:
             req.branchId,
 
-          transactionId
+          transactionId:
+            normalizedTransactionId
 
         }).lean();
 
@@ -1625,39 +1653,65 @@ const syncPayment = async (req, res) => {
     // ====================================
     // FIND LOAN
     // ====================================
+    //
+    // MUHIMU:
+    //
+    // Tunatafuta kwa loanId AU loanSyncId.
+    //
+    // Hii inasaidia pale ambapo:
+    //
+    // 1. loanId ya local ni ya zamani
+    // 2. loanSyncId bado ni sahihi
+    //
+    // Pia tunalinda owner + branch.
+    //
+    // ====================================
 
-    const loanQuery = {
-
-      owner:
-        req.ownerId,
-
-      branch:
-        req.branchId,
-
-      ...(loanId
-        ? {
-            _id:
-              loanId
-          }
-        : {
-            syncId:
-              loanSyncId
-          })
-
-    };
-
-
-    const loan =
-      await DebtLoan.findOne(
-        loanQuery
-      ).lean();
+    const loanOrConditions = [];
 
 
     // ====================================
-    // LOAN NOT FOUND
+    // ADD loanId ONLY IF VALID ObjectId
     // ====================================
 
-    if (!loan) {
+    if (
+      normalizedLoanId &&
+      mongoose.Types.ObjectId.isValid(
+        normalizedLoanId
+      )
+    ) {
+
+      loanOrConditions.push({
+        _id:
+          normalizedLoanId
+      });
+
+    }
+
+
+    // ====================================
+    // ADD loanSyncId
+    // ====================================
+
+    if (
+      normalizedLoanSyncId
+    ) {
+
+      loanOrConditions.push({
+        syncId:
+          normalizedLoanSyncId
+      });
+
+    }
+
+
+    // ====================================
+    // NO VALID SEARCH REFERENCE
+    // ====================================
+
+    if (
+      loanOrConditions.length === 0
+    ) {
 
       return res.status(404).json({
 
@@ -1669,6 +1723,118 @@ const syncPayment = async (req, res) => {
       });
 
     }
+
+
+    // ====================================
+    // DEBUG LOAN SEARCH
+    // ====================================
+
+    console.log(
+      "🔍 SYNC PAYMENT LOAN SEARCH:",
+      {
+        loanId:
+          normalizedLoanId || null,
+
+        loanSyncId:
+          normalizedLoanSyncId || null,
+
+        ownerId:
+          req.ownerId,
+
+        branchId:
+          req.branchId,
+
+        searchBy:
+          loanOrConditions.map(
+            condition =>
+              Object.keys(condition)[0]
+          )
+      }
+    );
+
+
+    // ====================================
+    // FIND LOAN BY ID OR syncId
+    // ====================================
+
+    const loan =
+      await DebtLoan.findOne({
+
+        owner:
+          req.ownerId,
+
+        branch:
+          req.branchId,
+
+        $or:
+          loanOrConditions
+
+      }).lean();
+
+
+    // ====================================
+    // LOAN NOT FOUND
+    // ====================================
+
+    if (!loan) {
+
+      console.error(
+        "❌ LOAN NOT FOUND DURING PAYMENT SYNC:",
+        {
+          loanId:
+            normalizedLoanId || null,
+
+          loanSyncId:
+            normalizedLoanSyncId || null,
+
+          ownerId:
+            req.ownerId,
+
+          branchId:
+            req.branchId
+        }
+      );
+
+
+      return res.status(404).json({
+
+        success: false,
+
+        message:
+          "Loan not found"
+
+      });
+
+    }
+
+
+    // ====================================
+    // LOAN FOUND
+    // ====================================
+
+    console.log(
+      "✅ LOAN FOUND FOR PAYMENT SYNC:",
+      {
+        loanId:
+          loan._id,
+
+        loanSyncId:
+          loan.syncId || null,
+
+        balanceAmount:
+          Number(
+            loan.balanceAmount || 0
+          ),
+
+        paidAmount:
+          Number(
+            loan.paidAmount || 0
+          ),
+
+        status:
+          loan.status
+      }
+    );
 
 
     // ====================================
@@ -1691,6 +1857,10 @@ const syncPayment = async (req, res) => {
 
     }
 
+
+    // ====================================
+    // ALREADY FULLY PAID
+    // ====================================
 
     if (
       loan.status ===
@@ -1915,19 +2085,18 @@ const syncPayment = async (req, res) => {
               "",
 
             transactionId:
-              transactionId ||
+              normalizedTransactionId ||
               null,
 
             receivedBy:
               req.user.id,
-
 
             // ====================================
             // OFFLINE SYNC DATA
             // ====================================
 
             syncId:
-              syncId,
+              normalizedSyncId,
 
             syncStatus:
               "synced",
@@ -2103,13 +2272,15 @@ const syncPayment = async (req, res) => {
           $or: [
 
             {
-              syncId
+              syncId:
+                normalizedSyncId
             },
 
-            ...(transactionId
+            ...(normalizedTransactionId
               ? [
                   {
-                    transactionId
+                    transactionId:
+                      normalizedTransactionId
                   }
                 ]
               : [])
@@ -2215,8 +2386,6 @@ const syncPayment = async (req, res) => {
   }
 
 };
-
- 
 // ====================================
 // REFUND PAYMENT
 // ====================================
