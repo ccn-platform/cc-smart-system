@@ -19,6 +19,7 @@ const {
   findOrCreateCustomer,
   checkCredit,
    scanDebtsFromImage,
+   applyLoanRecovery,
    deleteDebtLoan,
    syncDeleteLoan,
   createDebtLoan,
@@ -225,6 +226,12 @@ router.get(
   getPaymentHistory
 );
 
+router.post(
+  "/recover-loans",
+  protect,
+  branchAccess,
+  applyLoanRecovery
+);
 // ====================================
 // ALL LOANS FOR RECOVERY
 //
