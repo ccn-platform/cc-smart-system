@@ -167,7 +167,7 @@ const developerCreditAccess = (
       true,
 
     message:
-      "Huduma ya Credit Online imesimamishwa kwa muda kwa ajili ya marekebisho. Tafadhali endelea kutumia Offline Mode."
+      "Huduma ya Online imesimamishwa kwa muda kwa ajili ya marekebisho kwa siku  chache. Tafadhali zima data tumia bila bando ."
 
   });
 
