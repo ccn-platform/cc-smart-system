@@ -1020,6 +1020,602 @@ const getAllLoansForRecovery =
           }
         );
 
+ 
+// ====================================
+// APPLY LOAN RECOVERY
+//
+// HII ENDPOINT:
+// - haifuti loan
+// - haifuti payment history
+// - haibadilishi principalAmount
+//
+// INA UPDATE TU:
+//
+// paidAmount
+// balanceAmount
+// status
+//
+// DATA INATOKA KWENYE SQLITE
+// AMBAYO TAYARI IMERECOVER
+// KWA KUTUMIA PAYMENT HISTORY.
+// ====================================
+
+const applyLoanRecovery =
+  async (req, res) => {
+
+    try {
+
+      // ====================================
+      // REQUEST DATA
+      // ====================================
+
+      const {
+        loans
+      } = req.body;
+
+
+      // ====================================
+      // VALIDATE
+      // ====================================
+
+      if (
+        !Array.isArray(
+          loans
+        )
+      ) {
+
+        return res.status(400).json({
+
+          message:
+            "loans must be an array"
+
+        });
+
+      }
+
+
+      if (
+        loans.length === 0
+      ) {
+
+        return res.status(200).json({
+
+          success:
+            true,
+
+          total:
+            0,
+
+          updated:
+            0,
+
+          failed:
+            0,
+
+          results:
+            []
+
+        });
+
+      }
+
+
+      console.log(
+        "\n🛠️ ===================================="
+      );
+
+      console.log(
+        "🛠️ APPLYING BACKEND LOAN RECOVERY"
+      );
+
+      console.log(
+        "🛠️ ===================================="
+      );
+
+      console.log({
+
+        ownerId:
+          req.ownerId,
+
+        branchId:
+          req.branchId,
+
+        total:
+          loans.length
+
+      });
+
+
+      // ====================================
+      // COUNTERS
+      // ====================================
+
+      let updated =
+        0;
+
+      let failed =
+        0;
+
+
+      const results =
+        [];
+
+
+      // ====================================
+      // PROCESS LOANS
+      // ====================================
+
+      for (
+        const recoveryLoan
+        of loans
+      ) {
+
+        try {
+
+          // ==================================
+          // NORMALIZE IDS
+          // ==================================
+
+          const loanId =
+            String(
+              recoveryLoan?.loanId ||
+              ""
+            ).trim();
+
+
+          const syncId =
+            String(
+              recoveryLoan?.syncId ||
+              ""
+            ).trim();
+
+
+          const backendLoanId =
+            String(
+              recoveryLoan?.backendLoanId ||
+              ""
+            ).trim();
+
+
+          // ==================================
+          // LOAN MUST HAVE ID
+          // ==================================
+
+          if (
+            !loanId &&
+            !syncId &&
+            !backendLoanId
+          ) {
+
+            throw new Error(
+              "Loan has no identifier"
+            );
+
+          }
+
+
+          // ==================================
+          // NORMALIZE AMOUNTS
+          // ==================================
+
+          const paidAmount =
+            Math.max(
+
+              0,
+
+              Number(
+                recoveryLoan?.paidAmount ||
+                recoveryLoan?.recoveredPaidAmount ||
+                0
+              )
+
+            );
+
+
+          const balanceAmount =
+            Math.max(
+
+              0,
+
+              Number(
+                recoveryLoan?.balanceAmount ??
+                recoveryLoan?.recoveredBalanceAmount ??
+                0
+              )
+
+            );
+
+
+          // ==================================
+          // NORMALIZE STATUS
+          // ==================================
+
+          const status =
+            String(
+
+              recoveryLoan?.status ||
+              recoveryLoan?.recoveredStatus ||
+              "active"
+
+            )
+              .trim()
+              .toLowerCase();
+
+
+          // ==================================
+          // FIND LOAN
+          //
+          // SECURITY:
+          //
+          // owner + branch lazima
+          // zilingane.
+          // ==================================
+
+          const orConditions =
+            [];
+
+
+          if (
+            backendLoanId
+          ) {
+
+            orConditions.push({
+
+              _id:
+                backendLoanId
+
+            });
+
+          }
+
+
+          if (
+            loanId
+          ) {
+
+            orConditions.push({
+
+              loanId:
+                loanId
+
+            });
+
+          }
+
+
+          if (
+            syncId
+          ) {
+
+            orConditions.push({
+
+              syncId:
+                syncId
+
+            });
+
+          }
+
+
+          const loan =
+            await DebtLoan.findOne({
+
+              owner:
+                req.ownerId,
+
+              branch:
+                req.branchId,
+
+              $or:
+                orConditions
+
+            });
+
+
+          // ==================================
+          // NOT FOUND
+          // ==================================
+
+          if (
+            !loan
+          ) {
+
+            throw new Error(
+              `Backend loan not found: loanId=${loanId}, syncId=${syncId}`
+            );
+
+          }
+
+
+          // ==================================
+          // CURRENT DATA
+          // ==================================
+
+          const before = {
+
+            paidAmount:
+              Number(
+                loan.paidAmount ||
+                0
+              ),
+
+            balanceAmount:
+              Number(
+                loan.balanceAmount ||
+                loan.remainingAmount ||
+                0
+              ),
+
+            status:
+              String(
+                loan.status ||
+                ""
+              )
+
+          };
+
+
+          // ==================================
+          // APPLY RECOVERY
+          // ==================================
+
+          loan.paidAmount =
+            paidAmount;
+
+
+          loan.balanceAmount =
+            balanceAmount;
+
+
+          loan.status =
+            status;
+
+
+          await loan.save();
+
+
+          // ==================================
+          // VERIFY
+          // ==================================
+
+          const verifiedLoan =
+            await DebtLoan.findOne({
+
+              _id:
+                loan._id,
+
+              owner:
+                req.ownerId,
+
+              branch:
+                req.branchId
+
+            })
+              .lean();
+
+
+          if (
+            !verifiedLoan
+          ) {
+
+            throw new Error(
+              "Loan disappeared after update"
+            );
+
+          }
+
+
+          const verifiedPaidAmount =
+            Number(
+              verifiedLoan.paidAmount ||
+              0
+            );
+
+
+          const verifiedBalanceAmount =
+            Number(
+              verifiedLoan.balanceAmount ||
+              verifiedLoan.remainingAmount ||
+              0
+            );
+
+
+          const verifiedStatus =
+            String(
+              verifiedLoan.status ||
+              ""
+            )
+              .trim()
+              .toLowerCase();
+
+
+          // ==================================
+          // VERIFY AMOUNTS
+          // ==================================
+
+          if (
+
+            Math.abs(
+
+              verifiedPaidAmount -
+              paidAmount
+
+            ) > 0.01 ||
+
+            Math.abs(
+
+              verifiedBalanceAmount -
+              balanceAmount
+
+            ) > 0.01 ||
+
+            verifiedStatus !==
+            status
+
+          ) {
+
+            throw new Error(
+              "Backend recovery verification failed"
+            );
+
+          }
+
+
+          // ==================================
+          // SUCCESS
+          // ==================================
+
+          updated++;
+
+
+          const result = {
+
+            success:
+              true,
+
+            loanId,
+
+            syncId,
+
+            backendLoanId:
+              String(
+                loan._id
+              ),
+
+            before,
+
+            after: {
+
+              paidAmount,
+
+              balanceAmount,
+
+              status
+
+            }
+
+          };
+
+
+          results.push(
+            result
+          );
+
+
+          console.log(
+            "✅ BACKEND LOAN RECOVERED:",
+            result
+          );
+
+
+        } catch (
+          error
+        ) {
+
+          failed++;
+
+
+          const failedResult = {
+
+            success:
+              false,
+
+            loanId:
+
+              recoveryLoan?.loanId ||
+              "",
+
+            syncId:
+
+              recoveryLoan?.syncId ||
+              "",
+
+            error:
+              error.message
+
+          };
+
+
+          results.push(
+            failedResult
+          );
+
+
+          console.error(
+            "❌ BACKEND LOAN RECOVERY FAILED:",
+            failedResult
+          );
+
+        }
+
+      }
+
+
+      // ====================================
+      // FINAL RESPONSE
+      // ====================================
+
+      const response = {
+
+        success:
+          failed === 0,
+
+        total:
+          loans.length,
+
+        updated,
+
+        failed,
+
+        results
+
+      };
+
+
+      console.log(
+        "\n🛠️ ===================================="
+      );
+
+      console.log(
+        "🛠️ BACKEND LOAN RECOVERY FINISHED"
+      );
+
+      console.log(
+        response
+      );
+
+      console.log(
+        "🛠️ ====================================\n"
+      );
+
+
+      return res.status(200).json(
+        response
+      );
+
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "❌ APPLY BACKEND LOAN RECOVERY ERROR:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        message:
+          error.message
+
+      });
+
+    }
+
+  };
+ 
+
 
       // ====================================
       // RECOVERY SUMMARY
@@ -4704,6 +5300,7 @@ const syncDeleteLoan =
   getPaymentHistory,
   scanDebtsFromImage,
   getAllLoansForRecovery,
+  applyLoanRecovery,
   importDebts,
   refundPayment,
   getOverdueLoans
