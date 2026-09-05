@@ -1,4 +1,4 @@
- const express =
+  const express =
 require("express");
 const path = require("path");
 const cors = require("cors");
@@ -50,7 +50,7 @@ app.get(
   (req, res) => {
 
     res.json({
-      latestVersion: "1.0.2",
+      latestVersion: "1.0.0",
 
       minimumVersion: "1.0.0",
 
@@ -108,7 +108,82 @@ app.use("/api/sales",salesRoutes);
 app.use("/api/orders",orderRoutes);
 app.use("/api/ai",aiRoutes);
 app.use("/api/cash",cashRoutes);
-app.use("/api/credit",creditRoutes);
+
+// ==========================================
+// CREDIT ONLINE MAINTENANCE MODE
+// ==========================================
+
+// false = Wateja wamezuiwa
+// true  = Credit Online iko wazi kwa wote
+const CREDIT_ONLINE_ENABLED = false;
+
+
+// Developer access wakati wa maintenance
+const developerCreditAccess = (
+  req,
+  res,
+  next
+) => {
+
+  // Credit Online ikiwa wazi,
+  // kila mtu anaendelea kawaida
+  if (
+    CREDIT_ONLINE_ENABLED
+  ) {
+    return next();
+  }
+
+
+  // Developer key kutoka request header
+  const developerKey =
+    req.headers[
+      "x-developer-credit-key"
+    ];
+
+
+  // Ruhusu developer pekee
+  if (
+    developerKey &&
+    developerKey ===
+      process.env.DEVELOPER_CREDIT_KEY
+  ) {
+    return next();
+  }
+
+
+  console.log(
+    "🚫 CREDIT ONLINE BLOCKED:",
+    req.method,
+    req.originalUrl
+  );
+
+
+  return res.status(503).json({
+
+    success:
+      false,
+
+    offlineMode:
+      true,
+
+    message:
+      "Huduma ya Credit Online imesimamishwa kwa muda kwa ajili ya marekebisho. Tafadhali endelea kutumia Offline Mode."
+
+  });
+
+};
+
+
+// ==========================================
+// CREDIT ROUTES
+// ==========================================
+
+app.use(
+  "/api/credit",
+  developerCreditAccess,
+  creditRoutes
+);
+ 
 app.use("/api/referrals",referralRoutes);
 app.use("/api/subscription", subscriptionRoutes);
  app.use("/api/store-audit",storeAuditRoutes);
