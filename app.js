@@ -117,6 +117,9 @@ app.use("/api/cash",cashRoutes);
 // true  = Credit Online iko wazi kwa wote
 const CREDIT_ONLINE_ENABLED = false;
 
+const DEVELOPER_CREDIT_KEY =
+  process.env.DEVELOPER_CREDIT_KEY ||
+  "CCNDEV2026";
 
 // Developer access wakati wa maintenance
 const developerCreditAccess = (
@@ -143,9 +146,9 @@ const developerCreditAccess = (
 
   // Ruhusu developer pekee
   if (
-    developerKey &&
-    developerKey ===
-      process.env.DEVELOPER_CREDIT_KEY
+ developerKey &&
+developerKey ===
+  DEVELOPER_CREDIT_KEY
   ) {
     return next();
   }
@@ -167,7 +170,7 @@ const developerCreditAccess = (
       true,
 
     message:
-      "Huduma ya Online imesimamishwa kwa muda kwa ajili ya marekebisho kwa siku  chache. Tafadhali zima data tumia bila bando ."
+      "Huduma ya Credit Online imesimamishwa kwa muda kwa ajili ya marekebisho. Tafadhali endelea kutumia Offline Mode."
 
   });
 
