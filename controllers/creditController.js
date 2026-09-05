@@ -2,7 +2,7 @@
   require("mongoose");
  const CustomerIdentity =
   require("../models/CustomerIdentity");
- 
+
 const DebtLoan =
   require("../models/DebtLoan");
 
@@ -1020,7 +1020,91 @@ const getAllLoansForRecovery =
           }
         );
 
- 
+  
+
+      // ====================================
+      // RECOVERY SUMMARY
+      // ====================================
+
+      const statusSummary =
+        normalizedLoans.reduce(
+          (
+            result,
+            loan
+          ) => {
+
+            const status =
+              loan.status ||
+              "unknown";
+
+
+            result[status] =
+              (
+                result[status] ||
+                0
+              ) + 1;
+
+
+            return result;
+
+          },
+          {}
+        );
+
+
+      console.log(
+        "📚 ALL BACKEND LOANS FOR RECOVERY:",
+        {
+
+          ownerId:
+            req.ownerId,
+
+          branchId:
+            req.branchId,
+
+          total:
+            normalizedLoans.length,
+
+          statuses:
+            statusSummary
+
+        }
+      );
+
+
+      // ====================================
+      // RETURN
+      //
+      // READ ONLY
+      // ====================================
+
+      return res.status(200).json(
+        normalizedLoans
+      );
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "❌ GET ALL LOANS FOR RECOVERY ERROR:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        message:
+          error.message
+
+      });
+
+    }
+
+  };
+
+
+  
 // ====================================
 // APPLY LOAN RECOVERY
 //
@@ -1616,87 +1700,6 @@ const applyLoanRecovery =
   };
  
 
-
-      // ====================================
-      // RECOVERY SUMMARY
-      // ====================================
-
-      const statusSummary =
-        normalizedLoans.reduce(
-          (
-            result,
-            loan
-          ) => {
-
-            const status =
-              loan.status ||
-              "unknown";
-
-
-            result[status] =
-              (
-                result[status] ||
-                0
-              ) + 1;
-
-
-            return result;
-
-          },
-          {}
-        );
-
-
-      console.log(
-        "📚 ALL BACKEND LOANS FOR RECOVERY:",
-        {
-
-          ownerId:
-            req.ownerId,
-
-          branchId:
-            req.branchId,
-
-          total:
-            normalizedLoans.length,
-
-          statuses:
-            statusSummary
-
-        }
-      );
-
-
-      // ====================================
-      // RETURN
-      //
-      // READ ONLY
-      // ====================================
-
-      return res.status(200).json(
-        normalizedLoans
-      );
-
-    } catch (
-      error
-    ) {
-
-      console.error(
-        "❌ GET ALL LOANS FOR RECOVERY ERROR:",
-        error
-      );
-
-
-      return res.status(500).json({
-
-        message:
-          error.message
-
-      });
-
-    }
-
-  };
 
  const getLoanHistory =
   async (req, res) => {
