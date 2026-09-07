@@ -170,7 +170,7 @@ developerKey ===
       true,
 
     message:
-      "Huduma ya Credit Online imesimamishwa kwa muda kwa ajili ya marekebisho. Tafadhali endelea kutumia Offline Mode."
+      "haijafanikiwa fanya apdet  nenda play store updet app yako au piga 0758078629 kwa msaada ."
 
   });
 
