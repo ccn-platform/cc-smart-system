@@ -1,5 +1,7 @@
-   const mongoose =
+  
+const mongoose =
   require("mongoose");
+
 
 const debtLoanSchema =
   new mongoose.Schema(
@@ -13,6 +15,7 @@ const debtLoanSchema =
         index: true
       },
 
+
       owner: {
         type:
           mongoose.Schema.Types.ObjectId,
@@ -21,12 +24,14 @@ const debtLoanSchema =
         index: true
       },
 
+
       createdBy: {
         type:
           mongoose.Schema.Types.ObjectId,
         ref: "User",
         default: null
       },
+
 
       branch: {
         type:
@@ -36,16 +41,19 @@ const debtLoanSchema =
         index: true
       },
 
+
       businessCategory: {
         type: String,
         default: "",
         index: true
       },
 
+
       loanNumber: {
         type: String,
         required: true
       },
+
 
       principalAmount: {
         type: Number,
@@ -53,11 +61,13 @@ const debtLoanSchema =
         min: 1
       },
 
+
       balanceAmount: {
         type: Number,
         required: true,
         min: 0
       },
+
 
       paidAmount: {
         type: Number,
@@ -65,20 +75,24 @@ const debtLoanSchema =
         min: 0
       },
 
+
       dueDate: {
         type: Date,
         required: true
       },
+
 
       daysLate: {
         type: Number,
         default: 0
       },
 
+
       lastPaymentDate: {
         type: Date,
         default: null
       },
+
 
       status: {
         type: String,
@@ -94,6 +108,7 @@ const debtLoanSchema =
           "active"
       },
 
+
       items: [
         {
           name: String,
@@ -102,10 +117,12 @@ const debtLoanSchema =
         }
       ],
 
+
       note: {
         type: String,
         default: ""
       },
+
 
       approvedBy: {
         type:
@@ -113,89 +130,248 @@ const debtLoanSchema =
         ref: "User",
         default: null
       },
-syncId: {
-  type: String,
-  default: null,
-  index: true
-},
 
-syncStatus: {
-  type: String,
-  enum: [
-    "synced",
-    "pending",
-    "conflict"
-  ],
-  default: "synced",
-  index: true
-},
 
-source: {
-  type: String,
-  enum: [
-    "online",
-    "offline"
-  ],
-  default: "online"
-},
+      // ====================================
+      // SYNC
+      // ====================================
 
-deviceId: {
-  type: String,
-  default: null
-},
+      syncId: {
+        type: String,
+        default: null,
+        index: true
+      },
 
-lastSyncedAt: {
-  type: Date,
-  default: null
-},
 
- 
+      syncStatus: {
+        type: String,
+        enum: [
+          "synced",
+          "pending",
+          "conflict"
+        ],
+        default: "synced",
+        index: true
+      },
 
-syncError: {
-  type: String,
-  default: ""
-},
 
-deleteSyncId: {
-  type: String,
-  default: null,
-  index: true
-},
+      source: {
+        type: String,
+        enum: [
+          "online",
+          "offline"
+        ],
+        default: "online"
+      },
 
-deleteDeviceId: {
-  type: String,
-  default: null
-},
 
-deleteSource: {
-  type: String,
-  enum: [
-    "online",
-    "offline"
-  ],
-  default: null
-},
+      deviceId: {
+        type: String,
+        default: null
+      },
 
-deleteSyncedAt: {
-  type: Date,
-  default: null
-},
 
-deletedAt: {
-  type: Date,
-  default: null
-},
+      lastSyncedAt: {
+        type: Date,
+        default: null
+      },
 
-queuedAt: {
-  type: Date,
-  default: null
-},
- 
+
+      syncError: {
+        type: String,
+        default: ""
+      },
+
+
+      deleteSyncId: {
+        type: String,
+        default: null,
+        index: true
+      },
+
+
+      deleteDeviceId: {
+        type: String,
+        default: null
+      },
+
+
+      deleteSource: {
+        type: String,
+        enum: [
+          "online",
+          "offline"
+        ],
+        default: null
+      },
+
+
+      deleteSyncedAt: {
+        type: Date,
+        default: null
+      },
+
+
+      deletedAt: {
+        type: Date,
+        default: null
+      },
+
+
+      queuedAt: {
+        type: Date,
+        default: null
+      },
+
+
+      // ====================================
+      // LOAN INCREASE HISTORY
+      //
+      // NEW FIELD
+      //
+      // SAFE FOR LIVE SYSTEM.
+      //
+      // Existing loans will simply have
+      // an empty array.
+      // ====================================
+
+      loanIncreases: [
+        {
+          // ==============================
+          // AMOUNT ADDED
+          // ==============================
+
+          amount: {
+            type: Number,
+            required: true,
+            min: 0
+          },
+
+
+          // ==============================
+          // BEFORE INCREASE
+          // ==============================
+
+          previousPrincipalAmount: {
+            type: Number,
+            default: 0
+          },
+
+
+          previousBalanceAmount: {
+            type: Number,
+            default: 0
+          },
+
+
+          // ==============================
+          // AFTER INCREASE
+          // ==============================
+
+          newPrincipalAmount: {
+            type: Number,
+            default: 0
+          },
+
+
+          newBalanceAmount: {
+            type: Number,
+            default: 0
+          },
+
+
+          // ==============================
+          // OPTIONAL REASON
+          // ==============================
+
+          reason: {
+            type: String,
+            default: ""
+          },
+
+
+          // ==============================
+          // USER WHO ADDED DEBT
+          // ==============================
+
+          createdBy: {
+            type:
+              mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+          },
+
+
+          // ==============================
+          // OFFLINE SYNC ID
+          // ==============================
+
+          syncId: {
+            type: String,
+            default: null
+          },
+
+
+          // ==============================
+          // DEVICE
+          // ==============================
+
+          deviceId: {
+            type: String,
+            default: null
+          },
+
+
+          // ==============================
+          // SOURCE
+          // ==============================
+
+          source: {
+            type: String,
+            enum: [
+              "online",
+              "offline"
+            ],
+            default: "online"
+          },
+
+
+          // ==============================
+          // SYNC STATUS
+          // ==============================
+
+          syncStatus: {
+            type: String,
+            enum: [
+              "synced",
+              "pending",
+              "conflict"
+            ],
+            default: "synced"
+          },
+
+
+          // ==============================
+          // DATE
+          // ==============================
+
+          createdAt: {
+            type: Date,
+            default: Date.now
+          }
+        }
+      ],
+
+
+      // ====================================
+      // APPROVAL METHOD
+      // ====================================
+
       approvalMethod: {
         type: String,
         enum: [
           "auto",
-          "manual", 
+          "manual",
           "offline_pending"
         ],
         default: "auto"
@@ -207,12 +383,17 @@ queuedAt: {
   );
 
 
+
+// ====================================
 // MULTI BRANCH INDEXES
+// ====================================
+
 debtLoanSchema.index({
   owner: 1,
   branch: 1,
   status: 1
 });
+
 
 debtLoanSchema.index({
   owner: 1,
@@ -220,11 +401,13 @@ debtLoanSchema.index({
   customer: 1
 });
 
+
 debtLoanSchema.index({
   owner: 1,
   branch: 1,
   dueDate: 1
 });
+
 
 debtLoanSchema.index(
   {
@@ -237,11 +420,13 @@ debtLoanSchema.index(
   }
 );
 
+
 debtLoanSchema.index({
   owner: 1,
   branch: 1,
   createdAt: -1
 });
+
 
 debtLoanSchema.index({
   owner: 1,
@@ -250,19 +435,28 @@ debtLoanSchema.index({
   createdAt: -1
 });
 
+
 debtLoanSchema.index({
   owner: 1,
   branch: 1,
   customer: 1,
   status: 1
 });
+
+
 debtLoanSchema.index({
   owner: 1,
   branch: 1,
   syncStatus: 1
 });
 
- debtLoanSchema.index(
+
+
+// ====================================
+// UNIQUE LOAN SYNC ID
+// ====================================
+
+debtLoanSchema.index(
   {
     owner: 1,
     branch: 1,
@@ -277,6 +471,12 @@ debtLoanSchema.index({
     }
   }
 );
+
+
+
+// ====================================
+// UNIQUE DELETE SYNC ID
+// ====================================
 
 debtLoanSchema.index(
   {
@@ -293,8 +493,11 @@ debtLoanSchema.index(
     }
   }
 );
+
+
 module.exports =
   mongoose.model(
     "DebtLoan",
     debtLoanSchema
   );
+ 
