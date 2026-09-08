@@ -1,4 +1,4 @@
-   const mongoose =
+    const mongoose =
   require("mongoose");
  const CustomerIdentity =
   require("../models/CustomerIdentity");
@@ -4408,24 +4408,51 @@ const getAllPaymentHistory =
 
   };
  
-
  const getPaymentHistory =
 async (req, res) => {
-
  
 try {
 
-  const { loanId } =
+  const {
+    loanId
+  } =
     req.params;
+
+
+  // ====================================
+  // VALIDATE LOAN ID
+  // ====================================
+
+  if (
+    !loanId
+  ) {
+
+    return res
+      .status(
+        400
+      )
+      .json({
+
+        message:
+          "Loan ID is required"
+
+      });
+
+  }
 
 
   // ====================================
   // GET PAYMENTS ONLY
   //
-  // This endpoint is ONLY for payments.
+  // IMPORTANT:
   //
-  // Refunds must come from the
-  // refund history endpoint.
+  // This endpoint returns ONLY actual
+  // posted payments.
+  //
+  // Refunds must NOT be returned here.
+  //
+  // Refund history must come from the
+  // dedicated refund history source.
   // ====================================
 
   const payments =
@@ -4440,12 +4467,17 @@ try {
       loan:
         loanId,
 
-      status: {
-        $in: [
-          "posted",
-          "reversed"
-        ]
-      }
+
+      // ==================================
+      // ONLY ACTUAL COMPLETED PAYMENTS
+      //
+      // Do not include reversed records
+      // here because they may cause
+      // incorrect payment totals.
+      // ==================================
+
+      status:
+        "posted"
 
     })
       .populate(
@@ -4453,8 +4485,13 @@ try {
         "name"
       )
       .sort({
+
         paymentDate:
+          -1,
+
+        createdAt:
           -1
+
       })
       .limit(
         100
@@ -4480,61 +4517,147 @@ try {
     payments.map(
       (
         payment
-      ) => ({
+      ) => {
 
-        ...payment,
-
-
-        // ==============================
-        // EXPLICIT HISTORY TYPE
-        // ==============================
-
-        historyType:
-          "payment",
-
-
-        type:
-          "payment",
-
-
-        // ==============================
-        // NORMALIZED PAYMENT ID
-        // ==============================
-
-        paymentId:
+        const normalizedPaymentId =
           payment.paymentId ||
           String(
             payment._id
-          ),
+          );
 
 
-        // ==============================
-        // KEEP SYNC ID
-        // ==============================
-
-        syncId:
-          payment.syncId ||
-          null,
-
-
-        // ==============================
-        // EXPLICIT PAYMENT DATE
-        // ==============================
-
-        historyDate:
+        const normalizedPaymentDate =
           payment.paymentDate ||
           payment.createdAt ||
           payment.updatedAt ||
-          null,
+          null;
 
 
-        paymentDate:
-          payment.paymentDate ||
-          payment.createdAt ||
-          payment.updatedAt ||
-          null,
+        return {
 
-      })
+          // ==============================
+          // KEEP ORIGINAL DATA
+          // ==============================
+
+          ...payment,
+
+
+          // ==============================
+          // FORCE HISTORY TYPE
+          //
+          // This record is ALWAYS a
+          // payment.
+          // ==============================
+
+          historyType:
+            "payment",
+
+
+          type:
+            "payment",
+
+
+          isRefund:
+            false,
+
+
+          // ==============================
+          // NORMALIZED PAYMENT ID
+          // ==============================
+
+          paymentId:
+            normalizedPaymentId,
+
+
+          // ==============================
+          // KEEP ORIGINAL DATABASE ID
+          // ==============================
+
+          _id:
+            payment._id,
+
+
+          // ==============================
+          // KEEP SYNC ID
+          //
+          // Important for offline/server
+          // transaction identity.
+          // ==============================
+
+          syncId:
+            payment.syncId ||
+            null,
+
+
+          // ==============================
+          // NORMALIZED HISTORY DATE
+          // ==============================
+
+          historyDate:
+            normalizedPaymentDate,
+
+
+          // ==============================
+          // EXPLICIT PAYMENT DATE
+          // ==============================
+
+          paymentDate:
+            normalizedPaymentDate,
+
+
+          // ==============================
+          // PAYMENT AMOUNT
+          //
+          // Always return a number.
+          // ==============================
+
+          amount:
+            Number(
+              payment.amount ||
+              0
+            ),
+
+
+          // ==============================
+          // REFERENCE
+          //
+          // Used by frontend.
+          // ==============================
+
+          reference:
+
+            payment.reference ||
+
+            payment.transactionId ||
+
+            payment.paymentId ||
+
+            payment.syncId ||
+
+            String(
+              payment._id
+            ),
+
+
+          // ==============================
+          // REMOVE REFUND FLAGS
+          //
+          // These are explicitly cleared
+          // so old database fields cannot
+          // make this payment look like
+          // a refund in the frontend.
+          // ==============================
+
+          refundId:
+            undefined,
+
+
+          refundDate:
+            undefined,
+
+        };
+
+      }
     );
 
 
@@ -4548,8 +4671,15 @@ try {
 
       loanId,
 
+      ownerId:
+        req.ownerId,
+
+      branchId:
+        req.branchId,
+
       count:
         normalizedPayments.length,
+
 
       payments:
         normalizedPayments.map(
@@ -4558,6 +4688,11 @@ try {
           ) => ({
 
             paymentId:
+              String(
+                payment.paymentId
+              ),
+
+            databaseId:
               String(
                 payment._id
               ),
@@ -4583,6 +4718,8 @@ try {
 
   // ====================================
   // RESPONSE
+  //
+  // PAYMENTS ONLY
   // ====================================
 
   return res
@@ -4611,12 +4748,12 @@ try {
     .json({
 
       message:
-        error.message
+        error?.message ||
+        "Failed to load payment history"
 
     });
 
-}
- 
+} 
 
 };
 
