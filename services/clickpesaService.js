@@ -42,14 +42,14 @@ if (
 // ==========================================
 // SAFISHA NAMBA
 //
-// Mfano wa format zinazokubalika:
+// Format zinazokubalika:
 //
 // 0712345678
 // +255712345678
 // 255712345678
 // 712345678
 //
-// Tunaondoa spaces, +, -, (), na alama nyingine
+// Tunaondoa spaces, +, -, (), na alama nyingine.
 // ==========================================
 
 phone = String(phone)
@@ -60,7 +60,7 @@ phone = String(phone)
 // FORMAT:
 //
 // 0712345678
-// kwenda
+// ->
 // 255712345678
 // ==========================================
 
@@ -75,7 +75,7 @@ if (
 // FORMAT:
 //
 // 712345678
-// kwenda
+// ->
 // 255712345678
 // ==========================================
 
@@ -87,13 +87,18 @@ if (
 }
 
 // ==========================================
-// HAKIKISHA FORMAT YA MWISHO
+// HAKIKISHA FORMAT YA TANZANIA
 //
-// Tanzania:
-// 255 + digits 9
+// Format inayotumwa ClickPesa:
 //
-// Mfano:
-// 255712345678
+// 255XXXXXXXXX
+//
+// 255 + digits 9 = digits 12
+//
+// HATUCHAGUI MTANDAO KWA PREFIX.
+//
+// ClickPesa ndiyo itatambua mtandao na
+// payment channel unaofaa.
 // ==========================================
 
 if (
@@ -103,127 +108,6 @@ if (
   throw new Error(
     "Namba ya simu si sahihi. Tafadhali tumia namba halali ya Tanzania, mfano 0712345678."
   );
-}
-
-// ==========================================
-// RUDISHA NAMBA KATIKA FORMAT YA NDANI
-//
-// 255712345678
-// ->
-// 0712345678
-// ==========================================
-
-const localPhone =
-  "0" + phone.slice(3);
-
-// ==========================================
-// CHUKUA PREFIX
-//
-// Mfano:
-//
-// 0712345678 -> 071
-// 0682345678 -> 068
-// ==========================================
-
-const prefix =
-  localPhone.slice(0, 3);
-
-// ==========================================
-// PREFIX HALALI ZA SIMU ZA TANZANIA
-//
-// 061 - Mobile range
-// 062 - Mobile range
-// 064 - Mobile range
-// 065 - Mobile range
-// 066 - Mobile range
-// 067 - Mobile range
-//
-// 068 - Airtel
-// 069 - Airtel
-//
-// 071 - Yas / mobile range
-// 072 - Mobile range
-// 073 - Mobile range
-// 074 - Vodacom
-// 075 - Vodacom
-// 076 - Vodacom
-// 077 - Mobile range
-//
-// 078 - Airtel
-// 079 - Vodacom
-//
-// Prefix ambazo hazipo hapa
-// zitakataliwa kabla ya kwenda ClickPesa.
-// ==========================================
-
-const validPrefixes = [
-  "061",
-  "062",
-  "064",
-  "065",
-  "066",
-  "067",
-  "068",
-  "069",
-  "071",
-  "072",
-  "073",
-  "074",
-  "075",
-  "076",
-  "077",
-  "078",
-  "079"
-];
-
-// ==========================================
-// KATAA PREFIX ISIYO HALALI
-// ==========================================
-
-if (
-  !validPrefixes.includes(prefix)
-) {
-  throw new Error(
-    "Namba ya simu si sahihi. Tafadhali tumia namba halali ya simu ya Tanzania."
-  );
-}
-
-// ==========================================
-// TAMBULISHA MTANDAO KWA AJILI YA LOG TU
-//
-// HII HAIATHIRI MALIPO.
-// ==========================================
-
-let network = "Mtandao wa simu";
-
-if (
-  [
-    "068",
-    "069",
-    "078"
-  ].includes(prefix)
-) {
-  network = "Airtel";
-}
-
-else if (
-  [
-    "074",
-    "075",
-    "076",
-    "079"
-  ].includes(prefix)
-) {
-  network = "Vodacom";
-}
-
-else if (
-  [
-    "071",
-    "077"
-  ].includes(prefix)
-) {
-  network = "Yas / Mtandao wa simu";
 }
 
 try {
@@ -240,8 +124,8 @@ try {
   // ==========================================
   // LOG YA PAYMENT REQUEST
   //
-  // HII NI KWA SERVER TU
-  // HAIATHIRI MALIPO
+  // ClickPesa ndiyo itachagua mtandao/payment
+  // channel kulingana na namba halisi.
   // ==========================================
 
   console.log(
@@ -251,9 +135,6 @@ try {
   console.log({
     reference,
     phone,
-    localPhone,
-    prefix,
-    network,
     amount: amountStr
   });
 
@@ -296,9 +177,6 @@ try {
     {
       reference,
       phone,
-      localPhone,
-      prefix,
-      network,
       amount,
       error:
         error.response?.data ||
@@ -368,7 +246,7 @@ try {
     /invalid.*msisdn/i.test(message)
   ) {
     throw new Error(
-      "Namba ya simu si sahihi au haiwezi kupokea ombi la malipo. Tafadhali hakikisha namba ya simu ni sahihi kisha ujaribu tena."
+      "Namba ya simu si sahihi. Tafadhali hakikisha namba uliyoandika ni sahihi na inaweza kupokea huduma ya malipo."
     );
   }
 
@@ -407,8 +285,7 @@ try {
     message ||
     "Malipo yameshindwa. Tafadhali jaribu tena. Kwa msaada zaidi wasiliana nasi kwa namba 0758078629."
   );
-}
- 
+} 
 
 }
 }
