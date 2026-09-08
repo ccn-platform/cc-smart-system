@@ -5527,7 +5527,7 @@ const syncDeleteLoan =
 
   };
 
-  // ====================================
+ // ====================================
 // ADD AMOUNT TO EXISTING LOAN
 //
 // SAFE FOR LIVE SYSTEM
@@ -5536,11 +5536,12 @@ const syncDeleteLoan =
 //
 // 1. Finds existing loan
 // 2. Verifies owner and branch
-// 3. Adds new amount to principalAmount
-// 4. Adds new amount to balanceAmount
+// 3. Adds amount to principalAmount
+// 4. Adds amount to balanceAmount
 // 5. Does NOT change paidAmount
 // 6. Does NOT delete payment history
 // 7. Does NOT delete refund history
+// 8. Saves loan increase history
 // ====================================
 
 const addAmountToExistingLoan =
@@ -5565,7 +5566,10 @@ const addAmountToExistingLoan =
       const {
         amount,
         note,
-        dueDate
+        dueDate,
+        syncId,
+        deviceId,
+        source
       } =
         req.body;
 
@@ -5581,6 +5585,38 @@ const addAmountToExistingLoan =
 
 
       // ==================================
+      // NORMALIZE SYNC ID
+      // ==================================
+
+      const normalizedSyncId =
+        String(
+          syncId ||
+          ""
+        ).trim();
+
+
+      // ==================================
+      // NORMALIZE DEVICE ID
+      // ==================================
+
+      const normalizedDeviceId =
+        String(
+          deviceId ||
+          ""
+        ).trim();
+
+
+      // ==================================
+      // NORMALIZE SOURCE
+      // ==================================
+
+      const normalizedSource =
+        source === "offline"
+          ? "offline"
+          : "online";
+
+
+      // ==================================
       // VALIDATE LOAN ID
       // ==================================
 
@@ -5589,13 +5625,10 @@ const addAmountToExistingLoan =
       ) {
 
         return res
-          .status(
-            400
-          )
+          .status(400)
           .json({
 
-            success:
-              false,
+            success: false,
 
             message:
               "Loan ID is required"
@@ -5613,19 +5646,14 @@ const addAmountToExistingLoan =
         !Number.isFinite(
           additionalAmount
         ) ||
-
-        additionalAmount <=
-        0
+        additionalAmount <= 0
       ) {
 
         return res
-          .status(
-            400
-          )
+          .status(400)
           .json({
 
-            success:
-              false,
+            success: false,
 
             message:
               "Amount must be greater than zero"
@@ -5639,7 +5667,6 @@ const addAmountToExistingLoan =
       // FIND LOAN
       //
       // IMPORTANT:
-      //
       // owner + branch protection
       // ==================================
 
@@ -5667,13 +5694,10 @@ const addAmountToExistingLoan =
       ) {
 
         return res
-          .status(
-            404
-          )
+          .status(404)
           .json({
 
-            success:
-              false,
+            success: false,
 
             message:
               "Loan not found"
@@ -5693,13 +5717,10 @@ const addAmountToExistingLoan =
       ) {
 
         return res
-          .status(
-            400
-          )
+          .status(400)
           .json({
 
-            success:
-              false,
+            success: false,
 
             message:
               "Cannot add amount to a cancelled loan"
@@ -5710,9 +5731,84 @@ const addAmountToExistingLoan =
 
 
       // ==================================
+      // PREVENT DUPLICATE SYNC
+      //
+      // IMPORTANT FOR OFFLINE SYNC
+      //
+      // If the same offline transaction
+      // reaches the server twice,
+      // do not add the amount twice.
+      // ==================================
+
+      if (
+        normalizedSyncId &&
+        Array.isArray(
+          loan.loanIncreases
+        )
+      ) {
+
+        const existingIncrease =
+          loan.loanIncreases.find(
+            (
+              increase
+            ) =>
+              String(
+                increase?.syncId ||
+                ""
+              ) ===
+              normalizedSyncId
+          );
+
+
+        if (
+          existingIncrease
+        ) {
+
+          console.log(
+            "⚠️ DUPLICATE LOAN INCREASE SYNC DETECTED:",
+            {
+
+              loanId:
+                String(
+                  loan._id
+                ),
+
+              syncId:
+                normalizedSyncId
+
+            }
+          );
+
+
+          return res
+            .status(200)
+            .json({
+
+              success:
+                true,
+
+              duplicate:
+                true,
+
+              message:
+                "Loan increase already processed",
+
+              loan,
+
+              addition:
+                existingIncrease
+
+            });
+
+        }
+
+      }
+
+
+      // ==================================
       // OLD VALUES
       //
-      // Used for history/logging
+      // Used for history
       // ==================================
 
       const oldPrincipal =
@@ -5762,10 +5858,8 @@ const addAmountToExistingLoan =
       // ==================================
       // UPDATE DUE DATE
       //
-      // Optional
-      //
-      // Only changes if new dueDate
-      // is provided.
+      // Optional.
+      // Only changes if supplied.
       // ==================================
 
       if (
@@ -5785,9 +5879,7 @@ const addAmountToExistingLoan =
         ) {
 
           return res
-            .status(
-              400
-            )
+            .status(400)
             .json({
 
               success:
@@ -5810,8 +5902,8 @@ const addAmountToExistingLoan =
       // ==================================
       // IF LOAN WAS PAID
       //
-      // Adding new debt means it is
-      // active again.
+      // New debt means customer
+      // now owes money again.
       // ==================================
 
       if (
@@ -5826,9 +5918,117 @@ const addAmountToExistingLoan =
 
 
       // ==================================
-      // SAFE NOTE HISTORY
+      // CUSTOM REASON
+      // ==================================
+
+      const reason =
+        String(
+          note ||
+          ""
+        ).trim();
+
+
+      // ==================================
+      // CREATE INCREASE HISTORY
       //
-      // We do not remove existing note.
+      // IMPORTANT:
+      //
+      // This is the main audit record.
+      //
+      // We do not depend only on
+      // loan.note because note is text
+      // and cannot safely be used for
+      // reports/history.
+      // ==================================
+
+      const increaseRecord =
+        {
+
+          amount:
+            additionalAmount,
+
+
+          previousPrincipalAmount:
+            oldPrincipal,
+
+
+          previousBalanceAmount:
+            oldBalance,
+
+
+          newPrincipalAmount:
+            newPrincipal,
+
+
+          newBalanceAmount:
+            newBalance,
+
+
+          reason,
+
+
+          createdBy:
+            req.user?._id ||
+            req.user?.id ||
+            null,
+
+
+          syncId:
+            normalizedSyncId ||
+            null,
+
+
+          deviceId:
+            normalizedDeviceId ||
+            null,
+
+
+          source:
+            normalizedSource,
+
+
+          syncStatus:
+            "synced",
+
+
+          createdAt:
+            new Date()
+
+        };
+
+
+      // ==================================
+      // ENSURE ARRAY EXISTS
+      //
+      // SAFE FOR OLD LOANS
+      // ==================================
+
+      if (
+        !Array.isArray(
+          loan.loanIncreases
+        )
+      ) {
+
+        loan.loanIncreases =
+          [];
+
+      }
+
+
+      // ==================================
+      // SAVE HISTORY
+      // ==================================
+
+      loan.loanIncreases.push(
+        increaseRecord
+      );
+
+
+      // ==================================
+      // OPTIONAL TEXT NOTE
+      //
+      // Keep old note.
+      // Never overwrite it.
       // ==================================
 
       const now =
@@ -5842,17 +6042,10 @@ const addAmountToExistingLoan =
         `New balance: ${newBalance}.`;
 
 
-      const customNote =
-        String(
-          note ||
-          ""
-        ).trim();
-
-
       const newNotePart =
-        customNote
+        reason
 
-          ? `${additionHistory} Reason: ${customNote}`
+          ? `${additionHistory} Reason: ${reason}`
 
           : additionHistory;
 
@@ -5868,7 +6061,7 @@ const addAmountToExistingLoan =
       // ==================================
       // SYNC INFORMATION
       //
-      // Server update is authoritative.
+      // Server is authoritative
       // ==================================
 
       loan.syncStatus =
@@ -5876,7 +6069,7 @@ const addAmountToExistingLoan =
 
 
       loan.source =
-        "online";
+        normalizedSource;
 
 
       loan.lastSyncedAt =
@@ -5888,10 +6081,23 @@ const addAmountToExistingLoan =
 
 
       // ==================================
-      // SAVE
+      // SAVE LOAN
       // ==================================
 
       await loan.save();
+
+
+      // ==================================
+      // GET SAVED INCREASE
+      //
+      // Mongoose adds _id to subdocument.
+      // ==================================
+
+      const savedIncrease =
+        loan.loanIncreases[
+          loan.loanIncreases.length -
+          1
+        ];
 
 
       // ==================================
@@ -5910,6 +6116,16 @@ const addAmountToExistingLoan =
           loanSyncId:
             loan.syncId,
 
+          increaseId:
+            String(
+              savedIncrease?._id ||
+              ""
+            ),
+
+          increaseSyncId:
+            normalizedSyncId ||
+            null,
+
           owner:
             String(
               req.ownerId
@@ -5919,6 +6135,9 @@ const addAmountToExistingLoan =
             String(
               req.branchId
             ),
+
+          source:
+            normalizedSource,
 
           addedAmount:
             additionalAmount,
@@ -5946,35 +6165,24 @@ const addAmountToExistingLoan =
       // ==================================
 
       return res
-        .status(
-          200
-        )
+        .status(200)
         .json({
 
           success:
             true,
 
+          duplicate:
+            false,
+
           message:
             "Loan amount added successfully",
 
+
           loan,
 
-          addition: {
 
-            amount:
-              additionalAmount,
-
-            previousPrincipal:
-              oldPrincipal,
-
-            newPrincipal,
-
-            previousBalance:
-              oldBalance,
-
-            newBalance
-
-          }
+          addition:
+            savedIncrease
 
         });
 
@@ -5990,9 +6198,7 @@ const addAmountToExistingLoan =
 
 
       return res
-        .status(
-          500
-        )
+        .status(500)
         .json({
 
           success:
@@ -6008,6 +6214,804 @@ const addAmountToExistingLoan =
 
   };
 
+  const syncLoanIncrease =
+async (req, res) => {
+
+ 
+try {
+
+  // ==================================
+  // REQUEST BODY
+  // ==================================
+
+  const {
+
+    loanId,
+
+    loanSyncId,
+
+    amount,
+
+    reason,
+
+    dueDate,
+
+    syncId,
+
+    deviceId,
+
+    createdAt
+
+  } =
+    req.body;
+
+
+  // ==================================
+  // NORMALIZE VALUES
+  // ==================================
+
+  const normalizedLoanId =
+    String(
+      loanId ||
+      ""
+    ).trim();
+
+
+  const normalizedLoanSyncId =
+    String(
+      loanSyncId ||
+      ""
+    ).trim();
+
+
+  const normalizedSyncId =
+    String(
+      syncId ||
+      ""
+    ).trim();
+
+
+  const increaseAmount =
+    Number(
+      amount ||
+      0
+    );
+
+
+  const normalizedReason =
+    String(
+      reason ||
+      ""
+    ).trim();
+
+
+  const normalizedDeviceId =
+    String(
+      deviceId ||
+      ""
+    ).trim();
+
+
+  // ==================================
+  // VALIDATE SYNC ID
+  //
+  // syncId is REQUIRED.
+  //
+  // Without it we cannot prevent
+  // duplicate synchronization.
+  // ==================================
+
+  if (
+    !normalizedSyncId
+  ) {
+
+    return res
+      .status(
+        400
+      )
+      .json({
+
+        success:
+          false,
+
+        message:
+          "syncId is required"
+
+      });
+
+  }
+
+
+  // ==================================
+  // VALIDATE AMOUNT
+  // ==================================
+
+  if (
+    !Number.isFinite(
+      increaseAmount
+    ) ||
+    increaseAmount <= 0
+  ) {
+
+    return res
+      .status(
+        400
+      )
+      .json({
+
+        success:
+          false,
+
+        message:
+          "Increase amount must be greater than zero"
+
+      });
+
+  }
+
+
+  // ==================================
+  // VALIDATE LOAN IDENTIFIER
+  //
+  // We accept either:
+  //
+  // loanId
+  //
+  // OR
+  //
+  // loanSyncId
+  // ==================================
+
+  if (
+    !normalizedLoanId &&
+    !normalizedLoanSyncId
+  ) {
+
+    return res
+      .status(
+        400
+      )
+      .json({
+
+        success:
+          false,
+
+        message:
+          "loanId or loanSyncId is required"
+
+      });
+
+  }
+
+
+  // ==================================
+  // NORMALIZE CREATED AT
+  //
+  // Invalid offline date must not
+  // be saved into MongoDB.
+  // ==================================
+
+  let increaseCreatedAt =
+    new Date();
+
+
+  if (
+    createdAt
+  ) {
+
+    const parsedCreatedAt =
+      new Date(
+        createdAt
+      );
+
+
+    if (
+      !Number.isNaN(
+        parsedCreatedAt.getTime()
+      )
+    ) {
+
+      increaseCreatedAt =
+        parsedCreatedAt;
+
+    }
+
+  }
+
+
+  // ==================================
+  // VALIDATE OPTIONAL DUE DATE
+  //
+  // Keep null when not supplied.
+  // ==================================
+
+  let parsedDueDate =
+    null;
+
+
+  if (
+    dueDate
+  ) {
+
+    const date =
+      new Date(
+        dueDate
+      );
+
+
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+
+      return res
+        .status(
+          400
+        )
+        .json({
+
+          success:
+            false,
+
+          message:
+            "Invalid due date"
+
+        });
+
+    }
+
+
+    parsedDueDate =
+      date;
+
+  }
+
+
+  // ==================================
+  // FIND LOAN
+  //
+  // IMPORTANT:
+  //
+  // Always restrict by:
+  //
+  // owner
+  // branch
+  //
+  // This protects multi-branch data.
+  // ==================================
+
+  const loanQuery =
+    {
+
+      owner:
+        req.ownerId,
+
+      branch:
+        req.branchId
+
+    };
+
+
+  // ==================================
+  // BUILD IDENTIFIER QUERY
+  // ==================================
+
+  if (
+    normalizedLoanId &&
+    normalizedLoanSyncId
+  ) {
+
+    loanQuery.$or =
+      [
+
+        {
+          _id:
+            normalizedLoanId
+        },
+
+        {
+          syncId:
+            normalizedLoanSyncId
+        }
+
+      ];
+
+  }
+
+  else if (
+    normalizedLoanId
+  ) {
+
+    loanQuery._id =
+      normalizedLoanId;
+
+  }
+
+  else {
+
+    loanQuery.syncId =
+      normalizedLoanSyncId;
+
+  }
+
+
+  // ==================================
+  // LOAD LOAN
+  // ==================================
+
+  const loan =
+    await DebtLoan.findOne(
+      loanQuery
+    );
+
+
+  // ==================================
+  // LOAN NOT FOUND
+  // ==================================
+
+  if (
+    !loan
+  ) {
+
+    return res
+      .status(
+        404
+      )
+      .json({
+
+        success:
+          false,
+
+        message:
+          "Loan not found"
+
+      });
+
+  }
+
+
+  // ==================================
+  // CHECK DUPLICATE SYNC
+  //
+  // If this syncId already exists
+  // inside loanIncreases,
+  // DO NOT ADD AGAIN.
+  //
+  // This makes offline sync
+  // IDEMPOTENT.
+  // ==================================
+
+  const existingIncrease =
+    (
+      loan.loanIncreases ||
+      []
+    ).find(
+
+      (
+        increase
+      ) =>
+
+        String(
+          increase?.syncId ||
+          ""
+        ).trim() ===
+        normalizedSyncId
+
+    );
+
+
+  // ==================================
+  // ALREADY SYNCED
+  //
+  // RETURN CURRENT LOAN
+  //
+  // NO DUPLICATE INCREASE.
+  // ==================================
+
+  if (
+    existingIncrease
+  ) {
+
+    console.log(
+      "♻️ LOAN INCREASE ALREADY SYNCED:",
+      {
+
+        loanId:
+          String(
+            loan._id
+          ),
+
+        loanSyncId:
+          loan.syncId,
+
+        syncId:
+          normalizedSyncId,
+
+        amount:
+          increaseAmount
+
+      }
+    );
+
+
+    return res
+      .status(
+        200
+      )
+      .json({
+
+        success:
+          true,
+
+        duplicate:
+          true,
+
+        message:
+          "Loan increase already synced",
+
+        loan,
+
+        increase:
+          existingIncrease
+
+      });
+
+  }
+
+
+  // ==================================
+  // BLOCK ONLY CANCELLED LOAN
+  //
+  // PAID loan is allowed.
+  //
+  // This matches the ONLINE function.
+  // ==================================
+
+  if (
+    loan.status ===
+    "cancelled"
+  ) {
+
+    return res
+      .status(
+        400
+      )
+      .json({
+
+        success:
+          false,
+
+        message:
+          "Cannot increase a cancelled loan"
+
+      });
+
+  }
+
+
+  // ==================================
+  // STORE OLD VALUES
+  //
+  // Used for audit history.
+  // ==================================
+
+  const previousPrincipalAmount =
+    Number(
+      loan.principalAmount ||
+      0
+    );
+
+
+  const previousBalanceAmount =
+    Number(
+      loan.balanceAmount ||
+      0
+    );
+
+
+  // ==================================
+  // CALCULATE NEW VALUES
+  // ==================================
+
+  const newPrincipalAmount =
+    previousPrincipalAmount +
+    increaseAmount;
+
+
+  const newBalanceAmount =
+    previousBalanceAmount +
+    increaseAmount;
+
+
+  // ==================================
+  // UPDATE LOAN AMOUNTS
+  // ==================================
+
+  loan.principalAmount =
+    newPrincipalAmount;
+
+
+  loan.balanceAmount =
+    newBalanceAmount;
+
+
+  // ==================================
+  // UPDATE OPTIONAL DUE DATE
+  //
+  // Only update when supplied
+  // by offline transaction.
+  // ==================================
+
+  if (
+    parsedDueDate
+  ) {
+
+    loan.dueDate =
+      parsedDueDate;
+
+  }
+
+
+  // ==================================
+  // PAID → ACTIVE
+  //
+  // Customer has received
+  // new debt.
+  //
+  // This must behave exactly
+  // like the ONLINE function.
+  // ==================================
+
+  if (
+    loan.status ===
+    "paid"
+  ) {
+
+    loan.status =
+      "active";
+
+  }
+
+
+  // ==================================
+  // ENSURE ARRAY EXISTS
+  //
+  // SAFE FOR OLD LOANS.
+  // ==================================
+
+  if (
+    !Array.isArray(
+      loan.loanIncreases
+    )
+  ) {
+
+    loan.loanIncreases =
+      [];
+
+  }
+
+
+  // ==================================
+  // CREATE INCREASE HISTORY
+  //
+  // IMPORTANT:
+  //
+  // This preserves the complete
+  // audit history of the increase.
+  // ==================================
+
+  const increaseRecord =
+    {
+
+      amount:
+        increaseAmount,
+
+
+      previousPrincipalAmount,
+
+
+      previousBalanceAmount,
+
+
+      newPrincipalAmount,
+
+
+      newBalanceAmount,
+
+
+      reason:
+        normalizedReason,
+
+
+      createdBy:
+        req.user?._id ||
+        req.user?.id ||
+        null,
+
+
+      syncId:
+        normalizedSyncId,
+
+
+      deviceId:
+        normalizedDeviceId ||
+        null,
+
+
+      source:
+        "offline",
+
+
+      syncStatus:
+        "synced",
+
+
+      createdAt:
+        increaseCreatedAt
+
+    };
+
+
+  // ==================================
+  // ADD HISTORY
+  // ==================================
+
+  loan.loanIncreases.push(
+    increaseRecord
+  );
+
+
+  // ==================================
+  // SYNC INFORMATION
+  //
+  // Server is authoritative.
+  // ==================================
+
+  loan.syncStatus =
+    "synced";
+
+
+  loan.syncError =
+    "";
+
+
+  loan.lastSyncedAt =
+    new Date();
+
+
+  // ==================================
+  // SAVE
+  // ==================================
+
+  await loan.save();
+
+
+  // ==================================
+  // GET SAVED INCREASE
+  //
+  // Mongoose adds _id
+  // to subdocument.
+  // ==================================
+
+  const savedIncrease =
+    loan.loanIncreases[
+      loan.loanIncreases.length -
+      1
+    ];
+
+
+  // ==================================
+  // LOG
+  // ==================================
+
+  console.log(
+    "✅ OFFLINE LOAN INCREASE SYNCED:",
+    {
+
+      loanId:
+        String(
+          loan._id
+        ),
+
+
+      loanSyncId:
+        loan.syncId,
+
+
+      syncId:
+        normalizedSyncId,
+
+
+      amount:
+        increaseAmount,
+
+
+      previousPrincipalAmount,
+
+
+      newPrincipalAmount,
+
+
+      previousBalanceAmount,
+
+
+      newBalanceAmount,
+
+
+      dueDate:
+        loan.dueDate,
+
+
+      status:
+        loan.status
+
+
+    }
+  );
+
+
+  // ==================================
+  // SUCCESS
+  // ==================================
+
+  return res
+    .status(
+      200
+    )
+    .json({
+
+      success:
+        true,
+
+
+      duplicate:
+        false,
+
+
+      message:
+        "Loan increase synced successfully",
+
+
+      loan,
+
+
+      increase:
+        savedIncrease
+
+    });
+
+
+} catch (
+  error
+) {
+
+  console.error(
+    "❌ SYNC LOAN INCREASE ERROR:",
+    error
+  );
+
+
+  return res
+    .status(
+      500
+    )
+    .json({
+
+      success:
+        false,
+
+      message:
+        error.message ||
+        "Failed to sync loan increase"
+
+    });
+
+} 
+
+};
+
+ 
  module.exports = {
   findOrCreateCustomer,
    addAmountToExistingLoan,
@@ -6029,5 +7033,6 @@ const addAmountToExistingLoan =
   applyLoanRecovery,
   importDebts,
   refundPayment,
+  syncLoanIncrease,
   getOverdueLoans
 };
