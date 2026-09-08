@@ -17,6 +17,7 @@ const {
 
 const {
   findOrCreateCustomer,
+  syncLoanIncrease,
     addAmountToExistingLoan,
   checkCredit,
    scanDebtsFromImage,
@@ -155,6 +156,13 @@ router.post(
   protect,
   branchAccess,
   addAmountToExistingLoan
+);
+
+router.post(
+  "/sync-loan-increase",
+  protect,
+  branchAccess,
+  syncLoanIncrease
 );
 // SYNC OFFLINE LOAN
 router.post(
