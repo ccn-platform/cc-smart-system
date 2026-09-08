@@ -5527,8 +5527,490 @@ const syncDeleteLoan =
 
   };
 
+  // ====================================
+// ADD AMOUNT TO EXISTING LOAN
+//
+// SAFE FOR LIVE SYSTEM
+//
+// This function:
+//
+// 1. Finds existing loan
+// 2. Verifies owner and branch
+// 3. Adds new amount to principalAmount
+// 4. Adds new amount to balanceAmount
+// 5. Does NOT change paidAmount
+// 6. Does NOT delete payment history
+// 7. Does NOT delete refund history
+// ====================================
+
+const addAmountToExistingLoan =
+  async (req, res) => {
+
+    try {
+
+      // ==================================
+      // PARAMS
+      // ==================================
+
+      const {
+        loanId
+      } =
+        req.params;
+
+
+      // ==================================
+      // BODY
+      // ==================================
+
+      const {
+        amount,
+        note,
+        dueDate
+      } =
+        req.body;
+
+
+      // ==================================
+      // NORMALIZE AMOUNT
+      // ==================================
+
+      const additionalAmount =
+        Number(
+          amount
+        );
+
+
+      // ==================================
+      // VALIDATE LOAN ID
+      // ==================================
+
+      if (
+        !loanId
+      ) {
+
+        return res
+          .status(
+            400
+          )
+          .json({
+
+            success:
+              false,
+
+            message:
+              "Loan ID is required"
+
+          });
+
+      }
+
+
+      // ==================================
+      // VALIDATE AMOUNT
+      // ==================================
+
+      if (
+        !Number.isFinite(
+          additionalAmount
+        ) ||
+
+        additionalAmount <=
+        0
+      ) {
+
+        return res
+          .status(
+            400
+          )
+          .json({
+
+            success:
+              false,
+
+            message:
+              "Amount must be greater than zero"
+
+          });
+
+      }
+
+
+      // ==================================
+      // FIND LOAN
+      //
+      // IMPORTANT:
+      //
+      // owner + branch protection
+      // ==================================
+
+      const loan =
+        await DebtLoan.findOne({
+
+          _id:
+            loanId,
+
+          owner:
+            req.ownerId,
+
+          branch:
+            req.branchId
+
+        });
+
+
+      // ==================================
+      // LOAN NOT FOUND
+      // ==================================
+
+      if (
+        !loan
+      ) {
+
+        return res
+          .status(
+            404
+          )
+          .json({
+
+            success:
+              false,
+
+            message:
+              "Loan not found"
+
+          });
+
+      }
+
+
+      // ==================================
+      // PREVENT ADDING TO CANCELLED LOAN
+      // ==================================
+
+      if (
+        loan.status ===
+        "cancelled"
+      ) {
+
+        return res
+          .status(
+            400
+          )
+          .json({
+
+            success:
+              false,
+
+            message:
+              "Cannot add amount to a cancelled loan"
+
+          });
+
+      }
+
+
+      // ==================================
+      // OLD VALUES
+      //
+      // Used for history/logging
+      // ==================================
+
+      const oldPrincipal =
+        Number(
+          loan.principalAmount ||
+          0
+        );
+
+
+      const oldBalance =
+        Number(
+          loan.balanceAmount ||
+          0
+        );
+
+
+      // ==================================
+      // NEW VALUES
+      // ==================================
+
+      const newPrincipal =
+        oldPrincipal +
+        additionalAmount;
+
+
+      const newBalance =
+        oldBalance +
+        additionalAmount;
+
+
+      // ==================================
+      // UPDATE PRINCIPAL
+      // ==================================
+
+      loan.principalAmount =
+        newPrincipal;
+
+
+      // ==================================
+      // UPDATE BALANCE
+      // ==================================
+
+      loan.balanceAmount =
+        newBalance;
+
+
+      // ==================================
+      // UPDATE DUE DATE
+      //
+      // Optional
+      //
+      // Only changes if new dueDate
+      // is provided.
+      // ==================================
+
+      if (
+        dueDate
+      ) {
+
+        const parsedDueDate =
+          new Date(
+            dueDate
+          );
+
+
+        if (
+          Number.isNaN(
+            parsedDueDate.getTime()
+          )
+        ) {
+
+          return res
+            .status(
+              400
+            )
+            .json({
+
+              success:
+                false,
+
+              message:
+                "Invalid due date"
+
+            });
+
+        }
+
+
+        loan.dueDate =
+          parsedDueDate;
+
+      }
+
+
+      // ==================================
+      // IF LOAN WAS PAID
+      //
+      // Adding new debt means it is
+      // active again.
+      // ==================================
+
+      if (
+        loan.status ===
+        "paid"
+      ) {
+
+        loan.status =
+          "active";
+
+      }
+
+
+      // ==================================
+      // SAFE NOTE HISTORY
+      //
+      // We do not remove existing note.
+      // ==================================
+
+      const now =
+        new Date();
+
+
+      const additionHistory =
+        `[${now.toISOString()}] ` +
+        `Added debt: ${additionalAmount}. ` +
+        `Previous balance: ${oldBalance}. ` +
+        `New balance: ${newBalance}.`;
+
+
+      const customNote =
+        String(
+          note ||
+          ""
+        ).trim();
+
+
+      const newNotePart =
+        customNote
+
+          ? `${additionHistory} Reason: ${customNote}`
+
+          : additionHistory;
+
+
+      loan.note =
+        loan.note
+
+          ? `${loan.note}\n${newNotePart}`
+
+          : newNotePart;
+
+
+      // ==================================
+      // SYNC INFORMATION
+      //
+      // Server update is authoritative.
+      // ==================================
+
+      loan.syncStatus =
+        "synced";
+
+
+      loan.source =
+        "online";
+
+
+      loan.lastSyncedAt =
+        new Date();
+
+
+      loan.syncError =
+        "";
+
+
+      // ==================================
+      // SAVE
+      // ==================================
+
+      await loan.save();
+
+
+      // ==================================
+      // LOG
+      // ==================================
+
+      console.log(
+        "➕ LOAN AMOUNT ADDED:",
+        {
+
+          loanId:
+            String(
+              loan._id
+            ),
+
+          loanSyncId:
+            loan.syncId,
+
+          owner:
+            String(
+              req.ownerId
+            ),
+
+          branch:
+            String(
+              req.branchId
+            ),
+
+          addedAmount:
+            additionalAmount,
+
+          oldPrincipal,
+
+          newPrincipal,
+
+          oldBalance,
+
+          newBalance,
+
+          paidAmount:
+            loan.paidAmount,
+
+          status:
+            loan.status
+
+        }
+      );
+
+
+      // ==================================
+      // RESPONSE
+      // ==================================
+
+      return res
+        .status(
+          200
+        )
+        .json({
+
+          success:
+            true,
+
+          message:
+            "Loan amount added successfully",
+
+          loan,
+
+          addition: {
+
+            amount:
+              additionalAmount,
+
+            previousPrincipal:
+              oldPrincipal,
+
+            newPrincipal,
+
+            previousBalance:
+              oldBalance,
+
+            newBalance
+
+          }
+
+        });
+
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "❌ ADD AMOUNT TO LOAN ERROR:",
+        error
+      );
+
+
+      return res
+        .status(
+          500
+        )
+        .json({
+
+          success:
+            false,
+
+          message:
+            error.message ||
+            "Failed to add amount to loan"
+
+        });
+
+    }
+
+  };
+
  module.exports = {
   findOrCreateCustomer,
+   addAmountToExistingLoan,
   checkCredit,
   deleteDebtLoan,
   syncDeleteLoan,
