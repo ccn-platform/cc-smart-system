@@ -494,6 +494,23 @@ debtLoanSchema.index(
   }
 );
 
+// ====================================
+// LOAN INCREASE SYNC LOOKUP INDEX
+//
+// Used to quickly find an increase
+// that was already synced.
+//
+// IMPORTANT:
+//
+// This helps prevent the same offline
+// loan increase from being applied twice.
+// ====================================
+
+debtLoanSchema.index({
+  owner: 1,
+  branch: 1,
+  "loanIncreases.syncId": 1
+});
 
 module.exports =
   mongoose.model(
