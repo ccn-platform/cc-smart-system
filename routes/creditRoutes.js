@@ -17,6 +17,7 @@ const {
 
 const {
   findOrCreateCustomer,
+    addAmountToExistingLoan,
   checkCredit,
    scanDebtsFromImage,
    applyLoanRecovery,
@@ -133,6 +134,27 @@ router.post(
   protect,
   branchAccess,
   createDebtLoan
+);
+
+// ====================================
+// ADD AMOUNT TO EXISTING LOAN
+//
+// Mfanyabiashara anaongeza deni jipya
+// kwenye deni lililopo.
+//
+// Haiharibu:
+// - paidAmount
+// - payment history
+// - refund history
+// - syncId
+// - loanNumber
+// ====================================
+
+router.post(
+  "/loan/:loanId/add-amount",
+  protect,
+  branchAccess,
+  addAmountToExistingLoan
 );
 // SYNC OFFLINE LOAN
 router.post(
