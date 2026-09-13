@@ -34,10 +34,12 @@ app.use((req, res, next) => {
   console.log("➡️ REQUEST:", req.method, req.url);
   next();
 });
+ 
 app.get("/", (req, res) => {
-  res.send("CCN Backend Running");
+  res.sendFile(
+    path.join(__dirname, "views", "home.html")
+  );
 });
-
  
 /*
  * -----------------------------------------
