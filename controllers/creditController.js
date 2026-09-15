@@ -2228,14 +2228,23 @@ const receivePayment =
       });
     }
   };
-
- // ====================================
+ 
+ 
+ 
+// ====================================
 // SYNC OFFLINE PAYMENT
 // ====================================
- 
- const syncPayment = async (req, res) => {
+
+const syncPayment = async (req, res) => {
 
   let session = null;
+
+  // ====================================
+  // KEEP VALUES AVAILABLE IN CATCH
+  // ====================================
+
+  let normalizedSyncId = "";
+  let normalizedTransactionId = "";
 
   try {
 
@@ -2323,11 +2332,11 @@ const receivePayment =
         : "";
 
 
-    const normalizedSyncId =
+    normalizedSyncId =
       String(syncId).trim();
 
 
-    const normalizedTransactionId =
+    normalizedTransactionId =
       transactionId
         ? String(transactionId).trim()
         : "";
@@ -2494,8 +2503,6 @@ const receivePayment =
     // ====================================
     // FIND LOAN
     // ====================================
-    //
-    // MUHIMU:
     //
     // Tunatafuta kwa loanId AU loanSyncId.
     //
@@ -3041,6 +3048,71 @@ const receivePayment =
 
 
     // ====================================
+    // READ FINAL LOAN STATE
+    // ====================================
+    //
+    // MUHIMU:
+    //
+    // Baada ya transaction ku-commit,
+    // tunasoma loan tena kutoka MongoDB.
+    //
+    // Hivyo response inaonyesha hali
+    // halisi iliyopo server.
+    //
+    // ====================================
+
+    const finalLoan =
+      await DebtLoan.findOne({
+
+        _id:
+          loan._id,
+
+        owner:
+          req.ownerId,
+
+        branch:
+          req.branchId
+
+      }).lean();
+
+
+    // ====================================
+    // FINAL LOAN SAFETY CHECK
+    // ====================================
+
+    if (!finalLoan) {
+
+      console.error(
+        "❌ FINAL LOAN NOT FOUND AFTER PAYMENT COMMIT:",
+        {
+          loanId:
+            loan._id,
+
+          syncId:
+            normalizedSyncId,
+
+          branchId:
+            req.branchId,
+
+          ownerId:
+            req.ownerId
+        }
+      );
+
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          "Payment was committed but final loan state could not be loaded"
+
+      });
+
+    }
+
+
+    // ====================================
     // RETURN SUCCESS
     // ====================================
 
@@ -3056,20 +3128,24 @@ const receivePayment =
       loan: {
 
         _id:
-          loan._id,
+          finalLoan._id,
 
         syncId:
-          loan.syncId ||
+          finalLoan.syncId ||
           null,
 
         balanceAmount:
-          newBalance,
+          Number(
+            finalLoan.balanceAmount || 0
+          ),
 
         paidAmount:
-          newPaid,
+          Number(
+            finalLoan.paidAmount || 0
+          ),
 
         status:
-          newStatus
+          finalLoan.status
 
       }
 
@@ -3097,8 +3173,8 @@ const receivePayment =
     // ====================================
 
     if (
-      error?.code ===
-      11000
+      error &&
+      error.code === 11000
     ) {
 
       const existingPayment =
@@ -3211,7 +3287,6 @@ const receivePayment =
 
     });
 
-
   } finally {
 
     // ====================================
@@ -3227,6 +3302,8 @@ const receivePayment =
   }
 
 };
+ 
+
 // ====================================
 // REFUND PAYMENT
 // ====================================
