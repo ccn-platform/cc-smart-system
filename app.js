@@ -13,7 +13,10 @@ const reportRoutes =require("./routes/reportRoutes");
 const cashRoutes =require("./routes/cashRoutes");
 const auditRoutes =require("./routes/auditRoutes");
 const orderRoutes =require("./routes/orderRoutes");
+const loanApplicationRoutes = require("./routes/loanApplicationRoutes");
+const loanApprovalRoutes = require("./routes/loanApprovalRoutes");
 const shopRoutes =require("./routes/shopRoutes");
+const loanSecurityRoutes = require("./routes/loanSecurityRoutes");
 const authRoutes = require("./routes/authRoutes");
 const metaRoutes = require("./routes/metaRoutes");
 const productRoutes = require("./routes/productRoutes");
@@ -34,12 +37,10 @@ app.use((req, res, next) => {
   console.log("➡️ REQUEST:", req.method, req.url);
   next();
 });
- 
 app.get("/", (req, res) => {
-  res.sendFile(
-    path.join(__dirname, "views", "home.html")
-  );
+  res.send("CCN Backend Running");
 });
+
  
 /*
  * -----------------------------------------
@@ -52,7 +53,7 @@ app.get(
   (req, res) => {
 
     res.json({
-      latestVersion: "1.0.3",
+      latestVersion: "1.0.0",
 
       minimumVersion: "1.0.0",
 
@@ -110,7 +111,9 @@ app.use("/api/sales",salesRoutes);
 app.use("/api/orders",orderRoutes);
 app.use("/api/ai",aiRoutes);
 app.use("/api/cash",cashRoutes);
-
+app.use("/api/loan-applications",loanApplicationRoutes);
+app.use("/api/loan-approvals",loanApprovalRoutes);
+app.use("/api/loan-securities",loanSecurityRoutes);
 // ==========================================
 // CREDIT ONLINE MAINTENANCE MODE
 // ==========================================
