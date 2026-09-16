@@ -1,4 +1,4 @@
- const mongoose = require("mongoose");
+  const mongoose = require("mongoose");
 
 const LoanApplication = require("../models/loanApplication");
 const LoanApproval = require("../models/loanApproval");
@@ -34,11 +34,7 @@ function getAuthContext(req) {
 }
 
 function makeLoanNumber() {
-  return (
-    "LN" +
-    Date.now() +
-    Math.floor(Math.random() * 10000)
-  );
+  return "LN" + Date.now() + Math.floor(Math.random() * 10000);
 }
 
 // --------------------------------------------------
@@ -113,14 +109,16 @@ exports.decideLoanApplication = async (req, res) => {
     if (!Number.isInteger(termDays) || termDays <= 0) {
       return res.status(400).json({
         success: false,
-        message: "approvedTermDays lazima iwe idadi kamili ya siku iliyo zaidi ya sifuri."
+        message:
+          "approvedTermDays lazima iwe idadi kamili ya siku iliyo zaidi ya sifuri."
       });
     }
   }
 
-  const session = await mongoose.startSession();
+  let session;
 
   try {
+    session = await mongoose.startSession();
     session.startTransaction();
 
     // Tafuta ombi ndani ya biashara na tawi la mtumiaji.
@@ -150,10 +148,27 @@ exports.decideLoanApplication = async (req, res) => {
     }
 
     let createdLoan = null;
+    let customer = null;
 
     if (decision === "approved") {
+      // Hakikisha ombi lina customerId halali.
+      if (
+        !application.customerId ||
+        !mongoose.Types.ObjectId.isValid(
+          String(application.customerId)
+        )
+      ) {
+        await session.abortTransaction();
+
+        return res.status(400).json({
+          success: false,
+          message:
+            "Ombi hili halina customerId halali. Fungua au rekebisha ombi kwa kumchagua mteja sahihi kwanza. Mkopo haujatengenezwa."
+        });
+      }
+
       // Hakikisha mteja ni wa biashara hii na bado yuko active.
-      const customer = await CustomerIdentity.findOne({
+      customer = await CustomerIdentity.findOne({
         _id: application.customerId,
         owner: auth.ownerId,
         status: "active"
@@ -164,7 +179,8 @@ exports.decideLoanApplication = async (req, res) => {
 
         return res.status(400).json({
           success: false,
-          message: "Mteja hajapatikana au hayuko active. Mkopo haujatengenezwa."
+          message:
+            "Mteja wa ombi hili hajapatikana, si wa biashara hii, au hayuko active. Mkopo haujatengenezwa."
         });
       }
 
@@ -173,13 +189,15 @@ exports.decideLoanApplication = async (req, res) => {
       const dueDate = new Date(approvalDate);
       dueDate.setDate(dueDate.getDate() + termDays);
 
-      // Tengeneza mkopo kwa fields zilizopo kwenye DebtLoan model.
+      // Tengeneza mkopo.
+      // DebtLoan.customer ndiyo field inayohifadhi CustomerIdentity ID.
       const loanDocs = await DebtLoan.create(
         [
           {
             owner: auth.ownerId,
             branch: auth.branchId,
             createdBy: auth.userId,
+
             customer: customer._id,
 
             loanNumber: makeLoanNumber(),
@@ -233,21 +251,27 @@ exports.decideLoanApplication = async (req, res) => {
           applicationId: application._id,
 
           decision,
-          approvedAmount: decision === "approved" ? amount : undefined,
-          approvedTermDays: decision === "approved" ? termDays : undefined,
+          approvedAmount:
+            decision === "approved" ? amount : undefined,
+          approvedTermDays:
+            decision === "approved" ? termDays : undefined,
 
           reason: typeof reason === "string" ? reason.trim() : "",
           decidedBy: auth.userId,
           decidedAt: new Date(),
 
-          resultingLoanId: createdLoan ? createdLoan._id : undefined
+          resultingLoanId: createdLoan
+            ? createdLoan._id
+            : undefined
         }
       ],
       { session }
     );
 
     // Sasisha ombi.
-    application.status = decision === "approved" ? "converted" : "rejected";
+    application.status =
+      decision === "approved" ? "converted" : "rejected";
+
     application.reviewedAt = new Date();
     application.reviewedBy = auth.userId;
 
@@ -259,6 +283,16 @@ exports.decideLoanApplication = async (req, res) => {
 
     await session.commitTransaction();
 
+    // Tengeneza object ya response yenye customerId inayoonekana
+    // kwenye jibu la API. Database bado hutumia field "customer".
+    let loanResponse = null;
+
+    if (createdLoan) {
+      loanResponse = createdLoan.toObject();
+
+      loanResponse.customerId = String(createdLoan.customer);
+    }
+
     return res.status(decision === "approved" ? 201 : 200).json({
       success: true,
       message:
@@ -269,21 +303,32 @@ exports.decideLoanApplication = async (req, res) => {
       data: {
         application,
         approval: approvalDocs[0],
-        loan: createdLoan
+        loan: loanResponse
       }
     });
   } catch (error) {
-    if (session.inTransaction()) {
+    if (session && session.inTransaction()) {
       await session.abortTransaction();
     }
 
     console.error("decideLoanApplication error:", error);
+
+    // Duplicate loanNumber au hitilafu nyingine ya database.
+    if (error && error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Kuna mgongano wa namba ya mkopo. Tafadhali jaribu tena."
+      });
+    }
 
     return res.status(500).json({
       success: false,
       message: "Imeshindikana kushughulikia uamuzi wa ombi."
     });
   } finally {
-    await session.endSession();
+    if (session) {
+      await session.endSession();
+    }
   }
 };
