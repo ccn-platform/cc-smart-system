@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+  const mongoose = require("mongoose");
 
 const LoanApplication = require("../models/loanApplication");
 const CustomerIdentity = require("../models/CustomerIdentity");
@@ -39,11 +39,25 @@ function isValidObjectId(id) {
 // CREATE APPLICATION
 // POST /api/loan-applications
 //
-// Hifadhi ombi tu.
-// HAIUNDI DebtLoan.
+// Frontend body:
+// {
+//   "customerName": "Jina la mteja",
+//   "customerPhone": "07XXXXXXXX",
+//   "requestedAmount": 50000,
+//   "requestedTermDays": 30,
+//   "purpose": "Mkopo wa biashara"
+// }
+//
+// Backend:
+// 1. Inatafuta mteja kwa simu ndani ya biashara.
+// 2. Ikiwa hayupo, inatengeneza CustomerIdentity.
+// 3. Inahifadhi CustomerIdentity _id kwenye application.customerId.
+// 4. HAIUNDI DebtLoan hapa.
 // --------------------------------------------------
 
 exports.createLoanApplication = async (req, res) => {
+  let session;
+
   try {
     const auth = getAuthContext(req);
 
@@ -55,16 +69,30 @@ exports.createLoanApplication = async (req, res) => {
     }
 
     const {
-      customerId,
+      customerName,
+      customerPhone,
       requestedAmount,
       requestedTermDays,
       purpose
     } = req.body;
 
-    if (!customerId || !isValidObjectId(customerId)) {
+    const fullName =
+      typeof customerName === "string" ? customerName.trim() : "";
+
+    const phone =
+      typeof customerPhone === "string" ? customerPhone.trim() : "";
+
+    if (!fullName) {
       return res.status(400).json({
         success: false,
-        message: "customerId si sahihi."
+        message: "Jina la mteja linahitajika."
+      });
+    }
+
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        message: "Namba ya simu ya mteja inahitajika."
       });
     }
 
@@ -78,65 +106,112 @@ exports.createLoanApplication = async (req, res) => {
       });
     }
 
-    if (
-      !Number.isInteger(termDays) ||
-      termDays <= 0
-    ) {
+    if (!Number.isInteger(termDays) || termDays <= 0) {
       return res.status(400).json({
         success: false,
-        message: "Muda wa mkopo lazima uwe idadi kamili ya siku iliyo zaidi ya sifuri."
+        message:
+          "Muda wa mkopo lazima uwe idadi kamili ya siku iliyo zaidi ya sifuri."
       });
     }
 
-    // Mteja lazima awe wa biashara hii.
-    const customer = await CustomerIdentity.findOne({
-      _id: customerId,
-      owner: auth.ownerId
-    }).select("_id owner fullName phone status");
+    session = await mongoose.startSession();
+    session.startTransaction();
 
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: "Mteja hajapatikana kwenye biashara hii."
-      });
-    }
-
-    if (customer.status !== "active") {
-      return res.status(400).json({
-        success: false,
-        message: "Mteja huyu hayuko kwenye hali ya active; ombi halijaundwa."
-      });
-    }
-
-    const application = await LoanApplication.create({
+    // Tafuta mteja kwa simu ndani ya biashara hii.
+    let customer = await CustomerIdentity.findOne({
       owner: auth.ownerId,
-      branch: auth.branchId,
+      phone
+    }).session(session);
 
-      customerId: customer._id,
-      customerName: customer.fullName,
-      customerPhone: customer.phone || "",
+    if (customer) {
+      // Mteja aliyepo lazima awe active.
+      if (customer.status !== "active") {
+        await session.abortTransaction();
 
-      requestedAmount: amount,
-      requestedTermDays: termDays,
-      purpose: typeof purpose === "string" ? purpose.trim() : "",
+        return res.status(400).json({
+          success: false,
+          message:
+            "Mteja mwenye namba hii hayuko active. Ombi halijahifadhiwa."
+        });
+      }
+    } else {
+      // Hakuna mteja mwenye simu hii: tengeneza rekodi mpya.
+      const customerDocs = await CustomerIdentity.create(
+        [
+          {
+            owner: auth.ownerId,
+            fullName,
+            phone,
+            status: "active"
+          }
+        ],
+        { session }
+      );
 
-      status: "submitted",
-      submittedAt: new Date(),
-      submittedBy: auth.userId
-    });
+      customer = customerDocs[0];
+    }
+
+    // Hifadhi ombi likiwa na ID halisi ya CustomerIdentity.
+    const applicationDocs = await LoanApplication.create(
+      [
+        {
+          owner: auth.ownerId,
+          branch: auth.branchId,
+
+          customerId: customer._id,
+          customerName: customer.fullName,
+          customerPhone: customer.phone || "",
+
+          requestedAmount: amount,
+          requestedTermDays: termDays,
+          purpose: typeof purpose === "string" ? purpose.trim() : "",
+
+          status: "submitted",
+          submittedAt: new Date(),
+          submittedBy: auth.userId
+        }
+      ],
+      { session }
+    );
+
+    const application = applicationDocs[0];
+
+    await session.commitTransaction();
 
     return res.status(201).json({
       success: true,
-      message: "Ombi la mkopo limehifadhiwa. Bado halijaidhinishwa na mkopo haujatengenezwa.",
-      data: application
+      message:
+        "Ombi limehifadhiwa na customerId imewekwa. Mkopo bado haujatengenezwa.",
+      data: {
+        application,
+        customerId: String(customer._id)
+      }
     });
   } catch (error) {
+    if (session && session.inTransaction()) {
+      await session.abortTransaction();
+    }
+
     console.error("createLoanApplication error:", error);
+
+    // Inaweza kutokea ikiwa kuna unique index ya simu na maombi
+    // mawili yamewasili kwa wakati mmoja.
+    if (error && error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Rekodi yenye taarifa hizi tayari ipo. Tafadhali jaribu tena au hakiki namba ya simu."
+      });
+    }
 
     return res.status(500).json({
       success: false,
       message: "Imeshindikana kuhifadhi ombi la mkopo."
     });
+  } finally {
+    if (session) {
+      await session.endSession();
+    }
   }
 };
 
@@ -277,7 +352,6 @@ exports.getLoanApplicationById = async (req, res) => {
 // CANCEL APPLICATION
 // PATCH /api/loan-applications/:id/cancel
 //
-// Inaruhusu kufuta ombi ambalo bado halijaamuliwa.
 // HAIHUSU DebtLoan.
 // --------------------------------------------------
 
@@ -317,7 +391,8 @@ exports.cancelLoanApplication = async (req, res) => {
     if (!["draft", "submitted"].includes(application.status)) {
       return res.status(400).json({
         success: false,
-        message: "Ombi hili haliwezi kufutwa kwa sababu tayari limeanza kupitia hatua ya review au limeamuliwa."
+        message:
+          "Ombi hili haliwezi kufutwa kwa sababu tayari limeanza kupitia hatua ya review au limeamuliwa."
       });
     }
 
