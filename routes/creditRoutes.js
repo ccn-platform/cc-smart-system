@@ -42,6 +42,12 @@ const {
   "../controllers/creditController"
 );
 
+const {
+  getMicrofinanceDashboard
+} = require(
+  "../controllers/microfinanceDashboardController"
+);
+
 const uploadDir = path.join(
   __dirname,
   "../uploads/temp"
@@ -273,6 +279,14 @@ router.get(
   protect,
   branchAccess,
   getAllLoansForRecovery
+);
+
+// MICROFINANCE DASHBOARD
+router.get(
+  "/microfinance-dashboard",
+  protect,
+  branchAccess,
+  getMicrofinanceDashboard
 );
 // ====================================
 // SINGLE LOAN
