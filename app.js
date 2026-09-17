@@ -109,6 +109,7 @@ app.use("/api/meta", metaRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/sales",salesRoutes);
 app.use("/api/orders",orderRoutes);
+ 
 app.use("/api/ai",aiRoutes);
 app.use("/api/cash",cashRoutes);
 app.use("/api/loan-applications",loanApplicationRoutes);
