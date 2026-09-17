@@ -1,13 +1,55 @@
-// controllers/microfinanceDashboardController.js
+ // controllers/microfinanceDashboardController.js
 
 const DebtLoan = require("../models/DebtLoan");
 const DebtPayment = require("../models/DebtPayment");
-const LoanApplication = require("../models/loanApplication");
-const LoanApproval = require("../models/loanApproval");
-const LoanSecurity = require("../models/loanSecurity");
 
 // Dashboard ya kusoma takwimu pekee.
-// Inahitaji protect na branchAccess ziwe zimekimbia kabla ya controller.
+// Hakuna loan creation wala payment posting hapa.
+// Middleware ya protect na branchAccess lazima iwe imekimbia kabla ya controller.
+
+const TIME_ZONE = "Africa/Dar_es_Salaam";
+const TANZANIA_UTC_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+const getDatePartsInTanzania = (date) => {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const values = {};
+
+  for (const part of parts) {
+    if (part.type !== "literal") {
+      values[part.type] = part.value;
+    }
+  }
+
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+  };
+};
+
+// Hurejesha mwanzo wa siku ya Tanzania kama Date ya UTC.
+// Tanzania hutumia UTC+3 bila kubadilisha saa za majira.
+const getTanzaniaDayStart = (date) => {
+  const { year, month, day } = getDatePartsInTanzania(date);
+
+  return new Date(
+    Date.UTC(year, month - 1, day) - TANZANIA_UTC_OFFSET_MS
+  );
+};
+
+const getTanzaniaMonthStart = (date) => {
+  const { year, month } = getDatePartsInTanzania(date);
+
+  return new Date(
+    Date.UTC(year, month - 1, 1) - TANZANIA_UTC_OFFSET_MS
+  );
+};
 
 const getMicrofinanceDashboard = async (req, res) => {
   try {
@@ -15,35 +57,35 @@ const getMicrofinanceDashboard = async (req, res) => {
 
     if (!ownerId || !branchId) {
       return res.status(400).json({
+        success: false,
         message: "Owner au branch haijapatikana.",
       });
     }
 
-    // Tumia UTC ili mipaka ya siku/mwezi iwe thabiti kwenye server.
     const now = new Date();
 
-    const todayStart = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate()
-      )
-    );
-
+    const todayStart = getTanzaniaDayStart(now);
     const tomorrowStart = new Date(
       todayStart.getTime() + 24 * 60 * 60 * 1000
     );
-
-    const monthStart = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
-    );
+    const monthStart = getTanzaniaMonthStart(now);
 
     const scope = {
       owner: ownerId,
       branch: branchId,
     };
 
-    const activeLoanStatuses = [
+    // Mikopo hii ndiyo inayohesabiwa kuwa imetolewa.
+    // Mikopo inayosubiri idhini au iliyoghairiwa haijumuishwi.
+    const issuedLoanStatuses = [
+      "active",
+      "overdue",
+      "defaulted",
+      "paid",
+    ];
+
+    // Salio linalodaiwa sasa huhesabiwa kwa mikopo yenye deni.
+    const outstandingLoanStatuses = [
       "active",
       "overdue",
       "defaulted",
@@ -52,12 +94,12 @@ const getMicrofinanceDashboard = async (req, res) => {
     const [
       loanSummaryRows,
       paymentSummaryRows,
-      applicationSummaryRows,
-      securitySummaryRows,
-      recentPayments,
-      latestApprovals,
+      todayLoanSummaryRows,
+      todayPaymentSummaryRows,
+      loansIssuedToday,
+      paymentsReceivedToday,
     ] = await Promise.all([
-      // Muhtasari wa mikopo. Rekodi zilizofutwa hazihesabiwi.
+      // Takwimu za jumla za mikopo.
       DebtLoan.aggregate([
         {
           $match: {
@@ -69,321 +111,201 @@ const getMicrofinanceDashboard = async (req, res) => {
           $group: {
             _id: null,
 
-            totalLoans: { $sum: 1 },
-
-            pendingApprovalLoans: {
+            totalLoans: {
               $sum: {
                 $cond: [
-                  { $eq: ["$status", "pending_approval"] },
+                  { $in: ["$status", issuedLoanStatuses] },
                   1,
                   0,
                 ],
               },
             },
 
-            activeLoans: {
+            totalPrincipal: {
               $sum: {
-                $cond: [{ $eq: ["$status", "active"] }, 1, 0],
+                $cond: [
+                  { $in: ["$status", issuedLoanStatuses] },
+                  "$principalAmount",
+                  0,
+                ],
               },
             },
-
-            overdueLoans: {
-              $sum: {
-                $cond: [{ $eq: ["$status", "overdue"] }, 1, 0],
-              },
-            },
-
-            defaultedLoans: {
-              $sum: {
-                $cond: [{ $eq: ["$status", "defaulted"] }, 1, 0],
-              },
-            },
-
-            paidLoans: {
-              $sum: {
-                $cond: [{ $eq: ["$status", "paid"] }, 1, 0],
-              },
-            },
-
-            cancelledLoans: {
-              $sum: {
-                $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0],
-              },
-            },
-
-            totalPrincipal: { $sum: "$principalAmount" },
 
             outstandingBalance: {
               $sum: {
                 $cond: [
-                  { $in: ["$status", activeLoanStatuses] },
+                  { $in: ["$status", outstandingLoanStatuses] },
                   "$balanceAmount",
                   0,
                 ],
               },
             },
+
+            active: {
+              $sum: {
+                $cond: [{ $eq: ["$status", "active"] }, 1, 0],
+              },
+            },
+
+            overdue: {
+              $sum: {
+                $cond: [{ $eq: ["$status", "overdue"] }, 1, 0],
+              },
+            },
+
+            defaulted: {
+              $sum: {
+                $cond: [{ $eq: ["$status", "defaulted"] }, 1, 0],
+              },
+            },
+
+            paid: {
+              $sum: {
+                $cond: [{ $eq: ["$status", "paid"] }, 1, 0],
+              },
+            },
           },
         },
       ]),
 
-      // Malipo yaliyo-post tu. Refund huhesabiwa tofauti.
+      // Malipo yote yaliyopostiwa.
+      // Refund hazijumuishwi kwenye makusanyo.
       DebtPayment.aggregate([
         {
           $match: {
             ...scope,
             status: "posted",
+            type: "payment",
           },
         },
         {
           $group: {
             _id: null,
-
-            postedPaymentCount: {
-              $sum: {
-                $cond: [{ $eq: ["$type", "payment"] }, 1, 0],
-              },
-            },
-
-            postedPaymentAmount: {
-              $sum: {
-                $cond: [
-                  { $eq: ["$type", "payment"] },
-                  "$amount",
-                  0,
-                ],
-              },
-            },
-
-            postedRefundCount: {
-              $sum: {
-                $cond: [{ $eq: ["$type", "refund"] }, 1, 0],
-              },
-            },
-
-            postedRefundAmount: {
-              $sum: {
-                $cond: [
-                  { $eq: ["$type", "refund"] },
-                  "$amount",
-                  0,
-                ],
-              },
-            },
-
-            todayPayments: {
-              $sum: {
-                $cond: [
-                  {
-                    $and: [
-                      { $eq: ["$type", "payment"] },
-                      { $gte: ["$paymentDate", todayStart] },
-                      { $lt: ["$paymentDate", tomorrowStart] },
-                    ],
-                  },
-                  "$amount",
-                  0,
-                ],
-              },
-            },
-
-            monthPayments: {
-              $sum: {
-                $cond: [
-                  {
-                    $and: [
-                      { $eq: ["$type", "payment"] },
-                      { $gte: ["$paymentDate", monthStart] },
-                      { $lte: ["$paymentDate", now] },
-                    ],
-                  },
-                  "$amount",
-                  0,
-                ],
-              },
-            },
+            totalPaymentCount: { $sum: 1 },
+            totalPaymentAmount: { $sum: "$amount" },
           },
         },
       ]),
 
-      // Maombi yenye branch iliyochaguliwa pekee.
-      LoanApplication.aggregate([
+      // Muhtasari wa mikopo iliyotolewa leo.
+      DebtLoan.aggregate([
         {
           $match: {
             ...scope,
             deletedAt: null,
+            status: { $in: issuedLoanStatuses },
+            createdAt: {
+              $gte: todayStart,
+              $lt: tomorrowStart,
+            },
           },
         },
         {
           $group: {
             _id: null,
-            totalApplications: { $sum: 1 },
-
-            draft: {
-              $sum: {
-                $cond: [{ $eq: ["$status", "draft"] }, 1, 0],
-              },
-            },
-
-            submitted: {
-              $sum: {
-                $cond: [{ $eq: ["$status", "submitted"] }, 1, 0],
-              },
-            },
-
-            underReview: {
-              $sum: {
-                $cond: [
-                  { $eq: ["$status", "under_review"] },
-                  1,
-                  0,
-                ],
-              },
-            },
-
-            approved: {
-              $sum: {
-                $cond: [{ $eq: ["$status", "approved"] }, 1, 0],
-              },
-            },
-
-            rejected: {
-              $sum: {
-                $cond: [{ $eq: ["$status", "rejected"] }, 1, 0],
-              },
-            },
-
-            converted: {
-              $sum: {
-                $cond: [{ $eq: ["$status", "converted"] }, 1, 0],
-              },
-            },
-
-            cancelled: {
-              $sum: {
-                $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0],
-              },
-            },
+            count: { $sum: 1 },
+            amount: { $sum: "$principalAmount" },
           },
         },
       ]),
 
-      // Dhamana/wadhamini haiwezi kuhusishwa na branch nyingine.
-      LoanSecurity.aggregate([
+      // Muhtasari wa malipo yaliyopokelewa leo.
+      DebtPayment.aggregate([
         {
           $match: {
             ...scope,
-            status: "active",
-            deletedAt: null,
+            status: "posted",
+            type: "payment",
+            paymentDate: {
+              $gte: todayStart,
+              $lt: tomorrowStart,
+            },
           },
         },
         {
           $group: {
             _id: null,
-            totalActiveSecurity: { $sum: 1 },
-
-            guarantors: {
-              $sum: {
-                $cond: [{ $eq: ["$type", "guarantor"] }, 1, 0],
-              },
-            },
-
-            collaterals: {
-              $sum: {
-                $cond: [{ $eq: ["$type", "collateral"] }, 1, 0],
-              },
-            },
-
-            collateralEstimatedValue: {
-              $sum: {
-                $cond: [
-                  { $eq: ["$type", "collateral"] },
-                  { $ifNull: ["$collateral.estimatedValue", 0] },
-                  0,
-                ],
-              },
-            },
+            count: { $sum: 1 },
+            amount: { $sum: "$amount" },
           },
         },
       ]),
 
-      // Malipo ya karibuni; posted pekee.
+      // Orodha ya mikopo iliyotolewa leo.
+      DebtLoan.find({
+        ...scope,
+        deletedAt: null,
+        status: { $in: issuedLoanStatuses },
+        createdAt: {
+          $gte: todayStart,
+          $lt: tomorrowStart,
+        },
+      })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .select(
+          "customer loanNumber principalAmount balanceAmount dueDate status createdAt"
+        )
+        .populate("customer", "name fullName phone")
+        .lean(),
+
+      // Orodha ya malipo yaliyopokelewa leo.
       DebtPayment.find({
         ...scope,
         status: "posted",
+        type: "payment",
+        paymentDate: {
+          $gte: todayStart,
+          $lt: tomorrowStart,
+        },
       })
         .sort({ paymentDate: -1, createdAt: -1 })
-        .limit(10)
+        .limit(50)
         .select(
-          "loan customer amount paymentDate type paymentMethod channel reference transactionId"
+          "loan customer amount paymentDate paymentMethod channel reference transactionId"
         )
         .populate("customer", "name fullName phone")
         .populate("loan", "loanNumber")
-        .lean(),
-
-      // Maamuzi ya karibuni ya maombi.
-      LoanApproval.find(scope)
-        .sort({ decidedAt: -1, createdAt: -1 })
-        .limit(10)
-        .select(
-          "applicationId decision approvedAmount approvedTermDays reason decidedBy decidedAt resultingLoanId"
-        )
-        .populate("applicationId", "customerName customerPhone requestedAmount status")
-        .populate("decidedBy", "name fullName")
         .lean(),
     ]);
 
     const loans = loanSummaryRows[0] || {};
     const payments = paymentSummaryRows[0] || {};
-    const applications = applicationSummaryRows[0] || {};
-    const securities = securitySummaryRows[0] || {};
+    const todayLoans = todayLoanSummaryRows[0] || {};
+    const todayPayments = todayPaymentSummaryRows[0] || {};
 
     return res.status(200).json({
       success: true,
       branchId: String(branchId),
       generatedAt: now.toISOString(),
+      timeZone: TIME_ZONE,
 
-      loans: {
-        total: loans.totalLoans || 0,
-        pendingApproval: loans.pendingApprovalLoans || 0,
-        active: loans.activeLoans || 0,
-        overdue: loans.overdueLoans || 0,
-        defaulted: loans.defaultedLoans || 0,
-        paid: loans.paidLoans || 0,
-        cancelled: loans.cancelledLoans || 0,
+      summary: {
+        totalLoans: loans.totalLoans || 0,
         totalPrincipal: loans.totalPrincipal || 0,
         outstandingBalance: loans.outstandingBalance || 0,
+        totalPaymentCount: payments.totalPaymentCount || 0,
+        totalPaymentAmount: payments.totalPaymentAmount || 0,
       },
 
-      collections: {
-        postedPaymentCount: payments.postedPaymentCount || 0,
-        postedPaymentAmount: payments.postedPaymentAmount || 0,
-        postedRefundCount: payments.postedRefundCount || 0,
-        postedRefundAmount: payments.postedRefundAmount || 0,
-        todayPayments: payments.todayPayments || 0,
-        monthPayments: payments.monthPayments || 0,
+      today: {
+        loansCount: todayLoans.count || 0,
+        loansAmount: todayLoans.amount || 0,
+        paymentsCount: todayPayments.count || 0,
+        paymentsAmount: todayPayments.amount || 0,
       },
 
-      applications: {
-        total: applications.totalApplications || 0,
-        draft: applications.draft || 0,
-        submitted: applications.submitted || 0,
-        underReview: applications.underReview || 0,
-        approved: applications.approved || 0,
-        rejected: applications.rejected || 0,
-        converted: applications.converted || 0,
-        cancelled: applications.cancelled || 0,
+      loanStatus: {
+        active: loans.active || 0,
+        overdue: loans.overdue || 0,
+        defaulted: loans.defaulted || 0,
+        paid: loans.paid || 0,
       },
 
-      securities: {
-        activeTotal: securities.totalActiveSecurity || 0,
-        guarantors: securities.guarantors || 0,
-        collaterals: securities.collaterals || 0,
-        collateralEstimatedValue:
-          securities.collateralEstimatedValue || 0,
-      },
-
-      recentPayments,
-      latestApprovals,
+      // Orodha hizi zina kikomo cha rekodi 50.
+      // Takwimu za count na amount hapo juu zinajumuisha rekodi zote za leo.
+      loansIssuedToday,
+      paymentsReceivedToday,
     });
   } catch (error) {
     console.error(
