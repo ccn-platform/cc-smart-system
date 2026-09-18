@@ -53,7 +53,7 @@ app.get(
   (req, res) => {
 
     res.json({
-      latestVersion: "1.7.0",
+      latestVersion: "1.0.7",
 
       minimumVersion: "1.0.0",
 
