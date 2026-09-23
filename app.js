@@ -53,9 +53,9 @@ app.get(
   (req, res) => {
 
     res.json({
-      latestVersion: "1.0.7",
+      latestVersion: "1.0.8",
 
-      minimumVersion: "1.0.0",
+      minimumVersion: "1.0.8",
 
       forceUpdate: false,
 
