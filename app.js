@@ -57,7 +57,7 @@ app.get(
 
       minimumVersion: "1.0.8",
 
-      forceUpdate: false,
+        "forceUpdate": true,
 
       message:
         "Kuna toleo jipya la Biashara Plus lenye maboresho na marekebisho muhimu."
