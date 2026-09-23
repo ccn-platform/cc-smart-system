@@ -1,4 +1,5 @@
- ```js
+ 
+ 
 const express = require("express");
 const path = require("path");
 const cors = require("cors");
@@ -25,9 +26,15 @@ const creditRoutes = require("./routes/creditRoutes");
 const referralRoutes = require("./routes/referralRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const storeAuditRoutes = require("./routes/StoreAuditRoutes");
+
 const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
+
+
+// ==========================================
+// GLOBAL MIDDLEWARE
+// ==========================================
 
 app.use(cors());
 app.use(express.json());
@@ -38,7 +45,12 @@ app.use(express.json());
 // ==========================================
 
 app.use((req, res, next) => {
-  console.log("➡️ REQUEST:", req.method, req.url);
+  console.log(
+    "➡️ REQUEST:",
+    req.method,
+    req.url
+  );
+
   next();
 });
 
@@ -56,23 +68,28 @@ app.get("/", (req, res) => {
 // APP VERSION CONFIGURATION
 // ==========================================
 //
-// HII NDIYO VERSION INAYORUHUSIWA
-// APP YA CHINI YA 1.0.8 ITATAKIWA UPDATE
+// CREDIT ONLINE INATAKIWA TU:
+// 1.0.8 au zaidi.
 //
-// Developer pia lazima afanye update.
 // Hakuna developer bypass.
+// Hakuna developer key.
+// Kila mtu anafuata sheria hii.
 //
 
-const REQUIRED_APP_VERSION = "1.0.8";
+const REQUIRED_CREDIT_VERSION = "1.0.8";
 
 
 // ==========================================
 // VERSION COMPARISON
 // ==========================================
 
-function compareVersions(currentVersion, requiredVersion) {
-
-  const current = String(currentVersion || "0.0.0")
+function compareVersions(
+  currentVersion,
+  requiredVersion
+) {
+  const current = String(
+    currentVersion || "0.0.0"
+  )
     .split(".")
     .map((value) => {
       const number = Number(value);
@@ -82,7 +99,9 @@ function compareVersions(currentVersion, requiredVersion) {
         : 0;
     });
 
-  const required = String(requiredVersion || "0.0.0")
+  const required = String(
+    requiredVersion || "0.0.0"
+  )
     .split(".")
     .map((value) => {
       const number = Number(value);
@@ -99,24 +118,14 @@ function compareVersions(currentVersion, requiredVersion) {
   );
 
   for (let i = 0; i < length; i++) {
+    const currentPart = current[i] || 0;
+    const requiredPart = required[i] || 0;
 
-    const currentPart =
-      current[i] || 0;
-
-    const requiredPart =
-      required[i] || 0;
-
-    if (
-      currentPart >
-      requiredPart
-    ) {
+    if (currentPart > requiredPart) {
       return 1;
     }
 
-    if (
-      currentPart <
-      requiredPart
-    ) {
+    if (currentPart < requiredPart) {
       return -1;
     }
   }
@@ -126,56 +135,38 @@ function compareVersions(currentVersion, requiredVersion) {
 
 
 // ==========================================
-// APP VERSION CHECK API
+// APP VERSION CHECK
 // ==========================================
-//
-// Mobile app itaita endpoint hii
-// wakati wa kuanza app.
-//
-// Mfano:
-//
-// GET /api/app-version
-//
-// Inarudisha:
-// latestVersion: 1.0.8
-// minimumVersion: 1.0.8
-// forceUpdate: true
-//
 
 app.get(
   "/api/app-version",
   (req, res) => {
-
     res.json({
-
       success: true,
 
       latestVersion:
-        REQUIRED_APP_VERSION,
+        REQUIRED_CREDIT_VERSION,
 
       minimumVersion:
-        REQUIRED_APP_VERSION,
+        REQUIRED_CREDIT_VERSION,
 
       forceUpdate: true,
 
       message:
-        "Kuna toleo jipya la Biashara Plus lenye maboresho na marekebisho muhimu. Tafadhali nenda Play Store ufanye update ili kuendelea kutumia app."
+        "Kuna toleo jipya la Biashara Plus lenye maboresho na marekebisho muhimu. Tafadhali nenda Play Store ufanye update ili kuendelea kutumia huduma za Online."
     });
-
   }
 );
 
 
 // ==========================================
-// PUBLIC IP
+// MY IP
 // ==========================================
 
 app.get(
   "/my-ip",
   async (req, res) => {
-
     try {
-
       const response =
         await axios.get(
           "https://api.ipify.org?format=json"
@@ -186,13 +177,10 @@ app.get(
       });
 
     } catch (error) {
-
       res.status(500).json({
         error: error.message
       });
-
     }
-
   }
 );
 
@@ -204,7 +192,6 @@ app.get(
 app.get(
   "/privacy-policy",
   (req, res) => {
-
     res.sendFile(
       path.join(
         __dirname,
@@ -212,16 +199,23 @@ app.get(
         "privacy-policy.html"
       )
     );
-
   }
 );
 
 
 // ==========================================
-// NORMAL ROUTES
+// ADMIN
 // ==========================================
 
-app.use("/", adminRoutes);
+app.use(
+  "/",
+  adminRoutes
+);
+
+
+// ==========================================
+// OTHER ROUTES
+// ==========================================
 
 app.use(
   "/api/reports",
@@ -290,27 +284,20 @@ app.use(
 
 
 // ==========================================
-// CREDIT ONLINE VERSION PROTECTION
+// CREDIT ONLINE VERSION ENFORCEMENT
 // ==========================================
 //
-// MUHIMU:
+// Kila request ya:
 //
-// Hakuna developer key.
+// /api/credit/*
+//
+// lazima iwe na:
+//
+// x-app-version
+//
+// Version lazima iwe 1.0.8 au zaidi.
+//
 // Hakuna developer bypass.
-// Hakuna user bypass.
-//
-// App ya zamani:
-// 1.0.7
-//
-// Itazuiwa.
-//
-// App mpya:
-// 1.0.8
-//
-// Itaendelea.
-//
-// Developer akiwa na 1.0.7:
-// ATAZUIWA PIA.
 //
 
 const creditOnlineVersionCheck = (
@@ -324,7 +311,7 @@ const creditOnlineVersionCheck = (
 
 
   // ----------------------------------------
-  // VERSION HAIJATUMWA
+  // APP VERSION HAIPO
   // ----------------------------------------
 
   if (!appVersion) {
@@ -338,7 +325,6 @@ const creditOnlineVersionCheck = (
     );
 
     return res.status(426).json({
-
       success: false,
 
       updateRequired: true,
@@ -348,26 +334,25 @@ const creditOnlineVersionCheck = (
       currentVersion: null,
 
       minimumVersion:
-        REQUIRED_APP_VERSION,
+        REQUIRED_CREDIT_VERSION,
 
       latestVersion:
-        REQUIRED_APP_VERSION,
+        REQUIRED_CREDIT_VERSION,
 
       message:
         "Tafadhali fanya update ya Biashara Plus kupitia Play Store ili kutumia huduma za Online."
-
     });
   }
 
 
   // ----------------------------------------
-  // COMPARE VERSION
+  // VERSION CHECK
   // ----------------------------------------
 
   const comparison =
     compareVersions(
       appVersion,
-      REQUIRED_APP_VERSION
+      REQUIRED_CREDIT_VERSION
     );
 
 
@@ -384,18 +369,15 @@ const creditOnlineVersionCheck = (
           String(appVersion),
 
         requiredVersion:
-          REQUIRED_APP_VERSION,
+          REQUIRED_CREDIT_VERSION,
 
-        method:
-          req.method,
+        method: req.method,
 
-        url:
-          req.originalUrl
+        url: req.originalUrl
       }
     );
 
     return res.status(426).json({
-
       success: false,
 
       updateRequired: true,
@@ -406,20 +388,19 @@ const creditOnlineVersionCheck = (
         String(appVersion),
 
       minimumVersion:
-        REQUIRED_APP_VERSION,
+        REQUIRED_CREDIT_VERSION,
 
       latestVersion:
-        REQUIRED_APP_VERSION,
+        REQUIRED_CREDIT_VERSION,
 
       message:
         "Toleo lako la Biashara Plus ni la zamani. Tafadhali nenda Play Store ufanye update ili kuendelea kutumia huduma za Online."
-
     });
   }
 
 
   // ----------------------------------------
-  // VERSION INARUHUSIWA
+  // VERSION ACCEPTED
   // ----------------------------------------
 
   console.log(
@@ -435,11 +416,14 @@ const creditOnlineVersionCheck = (
 // CREDIT ROUTES
 // ==========================================
 //
-// KILA REQUEST YA CREDIT
-// lazima ipitie version check.
-//
+// Hakuna developer key.
 // Hakuna developer bypass.
 //
+// 1.0.7  → BLOCK
+// 1.0.8  → ALLOW
+// 1.0.9  → ALLOW
+//
+// ------------------------------------------
 
 app.use(
   "/api/credit",
@@ -449,7 +433,7 @@ app.use(
 
 
 // ==========================================
-// OTHER ROUTES
+// REFERRALS
 // ==========================================
 
 app.use(
@@ -457,10 +441,20 @@ app.use(
   referralRoutes
 );
 
+
+// ==========================================
+// SUBSCRIPTION
+// ==========================================
+
 app.use(
   "/api/subscription",
   subscriptionRoutes
 );
+
+
+// ==========================================
+// STORE AUDIT
+// ==========================================
 
 app.use(
   "/api/store-audit",
@@ -473,15 +467,13 @@ app.use(
 // ==========================================
 
 setInterval(() => {
-
   markOverdueLoans();
-
 }, 60000);
 
 
 // ==========================================
-// EXPORT
+// EXPORT APP
 // ==========================================
 
 module.exports = app;
-```
+ 
