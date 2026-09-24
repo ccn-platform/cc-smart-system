@@ -3687,19 +3687,18 @@ const getCreditReportHistoryByDate =
       // ========================================
 
       const start =
-        new Date(
-          `${selectedDate}T00:00:00.000Z`
-        );
+  new Date(
+    `${selectedDate}T00:00:00.000+03:00`
+  );
 
+const end =
+  new Date(
+    `${selectedDate}T00:00:00.000+03:00`
+  );
 
-      const end =
-        new Date(start);
-
-
-      end.setUTCDate(
-        end.getUTCDate() + 1
-      );
-
+end.setUTCDate(
+  end.getUTCDate() + 1
+);
 
       // ========================================
       // DEBUG
