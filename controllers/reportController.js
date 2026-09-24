@@ -920,25 +920,26 @@ return res.status(200).json(report);
       });
     }
 
-    // ============================================================
-    // UTC DATE RANGE
-    // ============================================================
+   // ============================================================
+// TANZANIA DATE RANGE
+// ============================================================
 
-    const today = new Date();
+const todayKey =
+  getDateKey(new Date());
 
-    today.setUTCHours(
-      0,
-      0,
-      0,
-      0
-    );
+const today =
+  new Date(
+    `${todayKey}T00:00:00.000+03:00`
+  );
 
-    const tomorrow = new Date(today);
+const tomorrow =
+  new Date(
+    `${todayKey}T00:00:00.000+03:00`
+  );
 
-    tomorrow.setUTCDate(
-      today.getUTCDate() + 1
-    );
-
+tomorrow.setUTCDate(
+  tomorrow.getUTCDate() + 1
+);
     // ============================================================
     // IDS
     // ============================================================
