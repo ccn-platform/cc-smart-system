@@ -2286,16 +2286,7 @@ const syncPayment = async (req, res) => {
 
     }
 
-
-    if (!deviceId) {
-
-      return res.status(400).json({
-        success: false,
-        message:
-          "deviceId required"
-      });
-
-    }
+ 
 
 
     const payAmount =
