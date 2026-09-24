@@ -3521,10 +3521,9 @@ const getCurrentCreditReportHistory = async (
     // ========================================
 
     const todayStart =
-      new Date(
-        `${today}T00:00:00.000Z`
-      );
-
+  new Date(
+    `${today}T00:00:00.000+03:00`
+  );
 
     // ========================================
     // TOMORROW
