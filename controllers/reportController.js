@@ -2829,7 +2829,10 @@ return res.status(200).json(
    
  const getCreditReport = async (req, res) => {
   try {
+    // ============================================
     // SECURITY
+    // ============================================
+
     if (!req.ownerId || !req.branchId) {
       return res.status(401).json({
         message: "Unauthorized"
@@ -2846,87 +2849,242 @@ return res.status(200).json(
         req.branchId
       );
 
+    // ============================================
     // PERIOD FILTER
+    // ============================================
+
     const period =
       req.query.period || "today";
+
+    // ============================================
+    // TANZANIA DATE RANGE
+    //
+    // Tanzania = UTC+3
+    //
+    // Example:
+    // 2026-09-24 00:00 Tanzania
+    // =
+    // 2026-09-23 21:00 UTC
+    //
+    // 2026-09-25 00:00 Tanzania
+    // =
+    // 2026-09-24 21:00 UTC
+    // ============================================
 
     const now =
       new Date();
 
     let start = null;
+    let end = null;
 
-    let end =
-      new Date(now);
+    const getTanzaniaDateKey = (
+      date = new Date()
+    ) => {
 
-    end.setHours(
-      23,
-      59,
-      59,
-      999
-    );
+      const tanzaniaTime =
+        new Date(
+          date.getTime() +
+          3 * 60 * 60 * 1000
+        );
+
+      const year =
+        tanzaniaTime.getUTCFullYear();
+
+      const month =
+        String(
+          tanzaniaTime.getUTCMonth() + 1
+        ).padStart(
+          2,
+          "0"
+        );
+
+      const day =
+        String(
+          tanzaniaTime.getUTCDate()
+        ).padStart(
+          2,
+          "0"
+        );
+
+      return `${year}-${month}-${day}`;
+    };
+
+    const createTanzaniaDateRange = (
+      dateKey
+    ) => {
+
+      const rangeStart =
+        new Date(
+          `${dateKey}T00:00:00.000+03:00`
+        );
+
+      const rangeEnd =
+        new Date(
+          `${dateKey}T00:00:00.000+03:00`
+        );
+
+      rangeEnd.setUTCDate(
+        rangeEnd.getUTCDate() + 1
+      );
+
+      return {
+        start: rangeStart,
+        end: rangeEnd
+      };
+    };
+
+    // ============================================
+    // TODAY
+    // ============================================
+
+    const todayKey =
+      getTanzaniaDateKey(
+        now
+      );
+
+    // ============================================
+    // PERIOD RANGE
+    // ============================================
 
     switch (period) {
-      case "today":
+
+      // ==========================================
+      // TODAY
+      // ==========================================
+
+      case "today": {
+
+        const range =
+          createTanzaniaDateRange(
+            todayKey
+          );
+
         start =
-          new Date(now);
+          range.start;
 
-        start.setHours(
-          0,
-          0,
-          0,
-          0
-        );
+        end =
+          range.end;
+
         break;
+      }
 
-      case "week":
+      // ==========================================
+      // LAST 7 DAYS
+      // ==========================================
+
+      case "week": {
+
+        const todayStart =
+          createTanzaniaDateRange(
+            todayKey
+          ).start;
+
         start =
-          new Date(now);
+          new Date(
+            todayStart
+          );
 
-        start.setDate(
-          start.getDate() - 7
+        start.setUTCDate(
+          start.getUTCDate() - 7
         );
 
-        start.setHours(
-          0,
-          0,
-          0,
-          0
-        );
+        end =
+          createTanzaniaDateRange(
+            todayKey
+          ).end;
+
         break;
+      }
 
-      case "month":
+      // ==========================================
+      // LAST 30 DAYS
+      // ==========================================
+
+      case "month": {
+
+        const todayStart =
+          createTanzaniaDateRange(
+            todayKey
+          ).start;
+
         start =
-          new Date(now);
+          new Date(
+            todayStart
+          );
 
-        start.setDate(
-          start.getDate() - 30
+        start.setUTCDate(
+          start.getUTCDate() - 30
         );
 
-        start.setHours(
-          0,
-          0,
-          0,
-          0
-        );
+        end =
+          createTanzaniaDateRange(
+            todayKey
+          ).end;
+
         break;
+      }
 
-      case "all":
+      // ==========================================
+      // ALL
+      // ==========================================
+
+      case "all": {
+
         start = null;
+        end = null;
+
         break;
+      }
 
-      default:
+      // ==========================================
+      // DEFAULT
+      // ==========================================
+
+      default: {
+
+        const range =
+          createTanzaniaDateRange(
+            todayKey
+          );
+
         start =
-          new Date(now);
+          range.start;
 
-        start.setHours(
-          0,
-          0,
-          0,
-          0
-        );
+        end =
+          range.end;
+
+        break;
+      }
     }
 
+    // ============================================
+    // DEBUG DATE RANGE
+    // ============================================
+
+    console.log(
+      "📅 CREDIT REPORT DATE RANGE:",
+      {
+        period,
+        timezone:
+          "Africa/Dar_es_Salaam",
+        todayKey,
+        now:
+          now.toISOString(),
+        start:
+          start
+            ? start.toISOString()
+            : null,
+        end:
+          end
+            ? end.toISOString()
+            : null
+      }
+    );
+
+    // ============================================
     // OUTSTANDING LOANS
+    // ============================================
+
     const outstandingAgg =
       await DebtLoan.aggregate([
         {
@@ -2944,6 +3102,7 @@ return res.status(200).json(
         {
           $group: {
             _id: null,
+
             total: {
               $sum:
                 "$balanceAmount"
@@ -2952,27 +3111,39 @@ return res.status(200).json(
         }
       ]);
 
+    // ============================================
     // LOAN SUMMARY
+    //
+    // DebtLoan → createdAt
+    // ============================================
+
     const loanAgg =
       await DebtLoan.aggregate([
         {
           $match: {
             owner: ownerId,
             branch: branchId,
-            ...(start && {
-              createdAt: {
-                $gte: start,
-                $lte: end
-              }
-            })
+
+            ...(start && end
+              ? {
+                  createdAt: {
+                    $gte: start,
+                    $lt: end
+                  }
+                }
+              : {})
           }
         },
+
         {
           $group: {
-            _id: "$status",
+            _id:
+              "$status",
+
             count: {
               $sum: 1
             },
+
             totalIssued: {
               $sum:
                 "$principalAmount"
@@ -2981,57 +3152,102 @@ return res.status(200).json(
         }
       ]);
 
+    // ============================================
     // PAYMENTS
+    //
+    // IMPORTANT:
+    // DebtPayment → paymentDate
+    //
+    // type:
+    // payment
+    //
+    // status:
+    // posted
+    // ============================================
+
     const paymentAgg =
       await DebtPayment.aggregate([
         {
           $match: {
             owner: ownerId,
             branch: branchId,
-            ...(start && {
-              createdAt: {
-                $gte: start,
-                $lte: end
-              }
-            })
+
+            ...(start && end
+              ? {
+                  paymentDate: {
+                    $gte: start,
+                    $lt: end
+                  }
+                }
+              : {}),
+
+            type:
+              "payment",
+
+            status:
+              "posted"
           }
         },
+
         {
           $group: {
             _id: null,
+
             totalCollected: {
-              $sum: "$amount"
+              $sum: {
+                $abs:
+                  "$amount"
+              }
             }
           }
         }
       ]);
 
+    // ============================================
     // EXPENSES
+    //
+    // CashEntry → createdAt
+    // ============================================
+
     const expenseAgg =
       await CashEntry.aggregate([
         {
           $match: {
             owner: ownerId,
             branch: branchId,
-            status: "active",
-            type: "expense",
-            ...(start && {
-              createdAt: {
-                $gte: start,
-                $lte: end
-              }
-            })
+
+            status:
+              "active",
+
+            type:
+              "expense",
+
+            ...(start && end
+              ? {
+                  createdAt: {
+                    $gte: start,
+                    $lt: end
+                  }
+                }
+              : {})
           }
         },
+
         {
           $group: {
             _id: null,
+
             totalExpense: {
-              $sum: "$amount"
+              $sum:
+                "$amount"
             }
           }
         }
       ]);
+
+    // ============================================
+    // VALUES
+    // ============================================
 
     const outstanding =
       outstandingAgg[0]?.total || 0;
@@ -3043,56 +3259,83 @@ return res.status(200).json(
     let totalLoans = 0;
     let totalIssued = 0;
 
-    loanAgg.forEach((l) => {
-      totalLoans +=
-        l.count || 0;
+    // ============================================
+    // LOAN COUNTS
+    // ============================================
 
-      totalIssued +=
-        l.totalIssued || 0;
+    loanAgg.forEach(
+      (l) => {
 
-      if (
-        l._id === "overdue"
-      ) {
-        overdueCount =
+        totalLoans +=
           l.count || 0;
-      }
 
-      if (
-        l._id === "active"
-      ) {
-        activeCount =
-          l.count || 0;
-      }
+        totalIssued +=
+          l.totalIssued || 0;
 
-      if (
-        l._id === "paid"
-      ) {
-        paidCount =
-          l.count || 0;
+        if (
+          l._id ===
+          "overdue"
+        ) {
+          overdueCount =
+            l.count || 0;
+        }
+
+        if (
+          l._id ===
+          "active"
+        ) {
+          activeCount =
+            l.count || 0;
+        }
+
+        if (
+          l._id ===
+          "paid"
+        ) {
+          paidCount =
+            l.count || 0;
+        }
       }
-    });
+    );
+
+    // ============================================
+    // TOTAL COLLECTED
+    // ============================================
 
     const totalCollected =
       paymentAgg[0]
         ?.totalCollected || 0;
 
+    // ============================================
+    // TOTAL EXPENSE
+    // ============================================
+
     const totalExpense =
       expenseAgg[0]
         ?.totalExpense || 0;
+
+    // ============================================
+    // NET CASH
+    // ============================================
 
     const netCash =
       totalCollected -
       totalExpense;
 
+    // ============================================
     // RISKY CUSTOMERS
+    // ============================================
+
     const riskyCustomers =
       await DebtLoan.find({
         owner: ownerId,
         branch: branchId,
-        status: "overdue"
+        status:
+          "overdue"
       })
         .sort({
-          balanceAmount: -1
+          balanceAmount:
+            -1
         })
         .limit(5)
         .populate(
@@ -3100,64 +3343,94 @@ return res.status(200).json(
           "fullName phone riskScore"
         );
 
+    // ============================================
+    // FINAL REPORT
+    // ============================================
+
     const report = {
-  summary: {
-    totalLoans,
-    totalIssued,
-    totalCollected,
-    outstanding,
-    overdueCount,
-    activeCount,
-    paidCount
-  },
 
-  cashFlow: {
-    issued: totalIssued,
-    collected:
-      totalCollected,
-    expense:
-      totalExpense,
-    net: netCash
-  },
+      summary: {
 
-  loanHealth: {
-    active:
-      activeCount,
-    overdue:
-      overdueCount,
-    paid:
-      paidCount
-  },
+        totalLoans,
 
-  riskyCustomers,
+        totalIssued,
 
-  period
-};
+        totalCollected,
 
-await saveReportHistory(
-  req,
-  "credit",
-  report,
-  start,
-  end
-);
+        outstanding,
 
-return res.status(200).json(report);
+        overdueCount,
+
+        activeCount,
+
+        paidCount
+      },
+
+      cashFlow: {
+
+        issued:
+          totalIssued,
+
+        collected:
+          totalCollected,
+
+        expense:
+          totalExpense,
+
+        net:
+          netCash
+      },
+
+      loanHealth: {
+
+        active:
+          activeCount,
+
+        overdue:
+          overdueCount,
+
+        paid:
+          paidCount
+      },
+
+      riskyCustomers,
+
+      period
+    };
+
+    // ============================================
+    // SAVE REPORT HISTORY
+    // ============================================
+
+    await saveReportHistory(
+      req,
+      "credit",
+      report,
+      start,
+      end
+    );
+
+    // ============================================
+    // RESPONSE
+    // ============================================
+
+    return res.status(200).json(
+      report
+    );
 
   } catch (error) {
+
     console.log(
       "CREDIT REPORT ERROR:",
       error
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       message:
         error.message
     });
   }
 };
- 
- 
  
  // ============================================
 // GET CURRENT CREDIT REPORT HISTORY
