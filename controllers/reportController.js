@@ -92,19 +92,26 @@ require("../models/ReportHistory");
   }
 };
  
-// ============================================
+ // ============================================
 // REPORT DATE KEY
 // ============================================
 
 const getDateKey =
   (date = new Date()) => {
 
+    // Tanzania uses UTC+3 throughout the year.
+    const tanzaniaTime =
+      new Date(
+        date.getTime() +
+        3 * 60 * 60 * 1000
+      );
+
     const year =
-      date.getUTCFullYear();
+      tanzaniaTime.getUTCFullYear();
 
     const month =
       String(
-        date.getUTCMonth() + 1
+        tanzaniaTime.getUTCMonth() + 1
       ).padStart(
         2,
         "0"
@@ -112,7 +119,7 @@ const getDateKey =
 
     const day =
       String(
-        date.getUTCDate()
+        tanzaniaTime.getUTCDate()
       ).padStart(
         2,
         "0"
@@ -121,7 +128,6 @@ const getDateKey =
     return `${year}-${month}-${day}`;
 
   };
- 
  // ============================================
 // BUILD CREDIT HISTORY REPORT
 //
