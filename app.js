@@ -78,7 +78,7 @@ app.get("/", (req, res) => {
 // Kila mtu anafuata sheria hii.
 //
 
-const REQUIRED_CREDIT_VERSION = "1.0.8";
+const REQUIRED_CREDIT_VERSION = "1.0.9";
 
 
 // ==========================================
