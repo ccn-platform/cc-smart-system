@@ -4659,69 +4659,475 @@ return res.status(200).json(
     });
   }
 };
-const getReportHistory = async (req, res) => {
+ const getReportHistory = async (req, res) => {
   try {
 
-    if (!req.ownerId || !req.branchId) {
+    // ========================================
+    // SECURITY
+    // ========================================
+
+    if (
+      !req.ownerId ||
+      !req.branchId
+    ) {
       return res.status(401).json({
         message: "Unauthorized"
       });
     }
 
-    const page =
-      Number(req.query.page) || 1;
 
-    const limit =
-      Number(req.query.limit) || 20;
+    // ========================================
+    // PAGINATION
+    // ========================================
 
-    const skip =
-      (page - 1) * limit;
+    let page =
+      Number(
+        req.query.page
+      ) || 1;
 
-    const filter = {
-      owner: req.ownerId,
-      branch: req.branchId
-    };
+    let limit =
+      Number(
+        req.query.limit
+      ) || 100;
 
-    if (req.query.reportType) {
-      filter.reportType =
-        req.query.reportType;
+
+    // ========================================
+    // SAFETY
+    // ========================================
+
+    if (
+      page < 1
+    ) {
+      page = 1;
     }
 
+
+    if (
+      limit < 1
+    ) {
+      limit = 100;
+    }
+
+
+    // Maximum reports returned
+    if (
+      limit > 100
+    ) {
+      limit = 100;
+    }
+
+
+    const skip =
+      (
+        page - 1
+      ) * limit;
+
+
+    // ========================================
+    // REPORT HISTORY FILTER
+    // ========================================
+    //
+    // IMPORTANT:
+    //
+    // This screen is CREDIT REPORT HISTORY.
+    //
+    // Therefore only:
+    //
+    // reportType = credit_daily
+    //
+    // should be returned.
+    // ========================================
+
+    const filter = {
+
+      owner:
+        req.ownerId,
+
+      branch:
+        req.branchId,
+
+      reportType:
+        "credit_daily"
+
+    };
+
+
+    // ========================================
+    // OPTIONAL DATE FILTER
+    // ========================================
+    //
+    // We do NOT require a date from mobile.
+    //
+    // Mobile asks:
+    //
+    // getReportHistory(1, 100)
+    //
+    // so all available credit history
+    // for this branch is returned.
+    // ========================================
+
+
+    // ========================================
+    // GET HISTORY
+    // ========================================
+
     const reports =
-      await ReportHistory.find(filter)
+      await ReportHistory.find(
+        filter
+      )
         .sort({
+          periodStart: -1,
           createdAt: -1
         })
-        .skip(skip)
-        .limit(limit)
+        .skip(
+          skip
+        )
+        .limit(
+          limit
+        )
         .lean();
+
+
+    // ========================================
+    // TOTAL
+    // ========================================
 
     const total =
       await ReportHistory.countDocuments(
         filter
       );
 
-    return res.status(200).json({
-      total,
-      page,
-      pages: Math.ceil(total / limit),
-      reports
-    });
 
-  } catch (error) {
+    // ========================================
+    // NORMALIZE FOR MOBILE
+    // ========================================
+
+    const normalizedReports =
+      reports
+        .map(
+          (
+            item
+          ) => {
+
+            // ==================================
+            // GET DATE
+            // ==================================
+
+            let date = "";
+
+
+            // ------------------------------
+            // 1. REPORT DATE
+            // ------------------------------
+
+            if (
+              item?.report?.date
+            ) {
+
+              const value =
+                String(
+                  item.report.date
+                );
+
+
+              if (
+                /^\d{4}-\d{2}-\d{2}/.test(
+                  value
+                )
+              ) {
+
+                date =
+                  value.slice(
+                    0,
+                    10
+                  );
+
+              }
+
+            }
+
+
+            // ------------------------------
+            // 2. PERIOD START FALLBACK
+            // ------------------------------
+
+            if (
+              !date &&
+              item?.periodStart
+            ) {
+
+              const parsed =
+                new Date(
+                  item.periodStart
+                );
+
+
+              if (
+                !Number.isNaN(
+                  parsed.getTime()
+                )
+              ) {
+
+                date =
+                  new Intl.DateTimeFormat(
+                    "en-CA",
+                    {
+                      timeZone:
+                        "Africa/Dar_es_Salaam",
+
+                      year:
+                        "numeric",
+
+                      month:
+                        "2-digit",
+
+                      day:
+                        "2-digit"
+                    }
+                  ).format(
+                    parsed
+                  );
+
+              }
+
+            }
+
+
+            // ==================================
+            // INVALID DATE
+            // ==================================
+
+            if (
+              !/^\d{4}-\d{2}-\d{2}$/.test(
+                date
+              )
+            ) {
+
+              console.warn(
+                "⚠️ REPORT HISTORY: INVALID DATE",
+                {
+                  id:
+                    item?._id,
+
+                  periodStart:
+                    item?.periodStart,
+
+                  periodEnd:
+                    item?.periodEnd,
+
+                  reportDate:
+                    item?.report?.date
+                }
+              );
+
+
+              return null;
+
+            }
+
+
+            // ==================================
+            // STABLE MOBILE ID
+            // ==================================
+
+            const mobileReportId =
+              `${String(
+                req.branchId
+              )}_${date}`;
+
+
+            // ==================================
+            // MOBILE REPORT
+            // ==================================
+
+            return {
+
+              id:
+                mobileReportId,
+
+              date,
+
+              reportType:
+                "daily",
+
+              branchId:
+                String(
+                  req.branchId
+                ),
+
+              createdAt:
+                item?.createdAt ||
+                new Date(),
+
+              updatedAt:
+                item?.updatedAt ||
+                item?.createdAt ||
+                new Date(),
+
+              report:
+                item?.report || {}
+
+            };
+
+          }
+        )
+        .filter(
+          Boolean
+        );
+
+
+    // ========================================
+    // REMOVE DUPLICATE DATES
+    // ========================================
+    //
+    // ONE BRANCH
+    // +
+    // ONE DATE
+    // =
+    // ONE REPORT
+    // ========================================
+
+    const reportMap =
+      new Map();
+
+
+    for (
+      const report
+      of normalizedReports
+    ) {
+
+      const key =
+        `${String(
+          req.branchId
+        )}_${report.date}`;
+
+
+      reportMap.set(
+        key,
+        report
+      );
+
+    }
+
+
+    // ========================================
+    // FINAL REPORT LIST
+    // ========================================
+
+    const finalReports =
+      Array.from(
+        reportMap.values()
+      );
+
+
+    // ========================================
+    // SORT NEWEST DATE FIRST
+    // ========================================
+
+    finalReports.sort(
+      (
+        a,
+        b
+      ) => {
+
+        return (
+          new Date(
+            `${b.date}T00:00:00`
+          ).getTime()
+          -
+          new Date(
+            `${a.date}T00:00:00`
+          ).getTime()
+        );
+
+      }
+    );
+
+
+    // ========================================
+    // DEBUG
+    // ========================================
 
     console.log(
-      "REPORT HISTORY ERROR:",
+      "✅ CREDIT REPORT HISTORY:",
+      {
+        ownerId:
+          String(
+            req.ownerId
+          ),
+
+        branchId:
+          String(
+            req.branchId
+          ),
+
+        requestedPage:
+          page,
+
+        requestedLimit:
+          limit,
+
+        databaseCount:
+          reports.length,
+
+        total,
+
+        returnedCount:
+          finalReports.length,
+
+        dates:
+          finalReports.map(
+            (
+              report
+            ) =>
+              report.date
+          )
+      }
+    );
+
+
+    // ========================================
+    // RESPONSE
+    // ========================================
+
+    return res.status(200).json({
+
+      total,
+
+      page,
+
+      pages:
+        Math.ceil(
+          total /
+          limit
+        ),
+
+      reports:
+        finalReports
+
+    });
+
+
+  } catch (
+    error
+  ) {
+
+    console.error(
+      "❌ REPORT HISTORY ERROR:",
       error
     );
 
-    res.status(500).json({
-      message: error.message
+
+    return res.status(500).json({
+
+      message:
+        error?.message ||
+        "Failed to get report history"
+
     });
 
   }
 };
-
 const getReportHistoryById = async (req, res) => {
   try {
 
@@ -4759,6 +5165,8 @@ const getReportHistoryById = async (req, res) => {
 
   }
 };
+
+ 
  module.exports = {
   getDailyReport,
   getReportHistoryById,
