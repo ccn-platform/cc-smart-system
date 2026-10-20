@@ -1,12 +1,5 @@
  
-const axios = require("axios"); 
-
-const authClient = axios.create({
-  timeout: 30000,
-  headers: {
-    "Content-Type": "application/json"
-  }
-});
+const axios = require("axios");
 
 class ClickPesaAuthService {
   async getToken() {
@@ -15,74 +8,110 @@ class ClickPesaAuthService {
     const clientId = process.env.CLICKPESA_CLIENT_ID;
 
     if (!baseUrl || !apiKey || !clientId) {
+      console.error("CLICKPESA AUTH CONFIG ERROR", {
+        baseUrlConfigured: Boolean(baseUrl),
+        apiKeyConfigured: Boolean(apiKey),
+        clientIdConfigured: Boolean(clientId)
+      });
+
       throw new Error(
-        "ClickPesa haijasanidiwa kikamilifu kwenye server."
+        "Mipangilio ya ClickPesa haijakamilika. Tafadhali wasiliana na msimamizi."
       );
     }
 
+    const url =
+      `${baseUrl}/third-parties/generate-token`;
+
     try {
-      const response = await authClient.post(
-        `${baseUrl.replace(/\/+$/, "")}/third-parties/generate-token`,
+      const response = await axios.post(
+        url,
         {},
         {
+          timeout: 15000,
           headers: {
             "api-key": apiKey,
-            "client-id": clientId
+            "client-id": clientId,
+            "Content-Type": "application/json"
           }
         }
       );
 
-      const token = response.data?.token;
+      console.log("CLICKPESA TOKEN RESPONSE:", {
+        status: response.status,
+        tokenReceived: Boolean(response.data?.token)
+      });
 
-      if (typeof token !== "string" || !token.trim()) {
-        console.error("CLICKPESA AUTH: Token missing in response.", {
-          httpStatus: response.status,
-          responseData: response.data
-        });
+      if (!response.data?.token) {
+        console.error(
+          "CLICKPESA AUTH ERROR: Token haikupatikana."
+        );
 
         throw new Error(
-          "ClickPesa haikurudisha token inayohitajika."
+          "ClickPesa haikutoa token. Tafadhali jaribu tena baadaye."
         );
       }
 
-      console.log("CLICKPESA AUTH: Authentication successful.");
+      return response.data.token;
 
-      return token;
     } catch (error) {
+      // Hifadhi maelezo ya hitilafu bila kuonyesha API key
+      // au token kwenye logs.
       const status = error.response?.status;
-      const code = error.code || "NO_ERROR_CODE";
+      const data = error.response?.data;
+      const code = error.code;
 
-      // Rekodi maelezo ya kosa bila kuchapisha credentials au token.
-      console.error("========== CLICKPESA AUTH DEBUG ==========");
-      console.error("HTTP status:", status ?? "Hakuna HTTP response");
-      console.error("Error code:", code);
-      console.error("Error message:", error.message);
-
-      if (error.response) {
-        console.error(
-          "Response body:",
-          typeof error.response.data === "string"
-            ? error.response.data.slice(0, 2000)
-            : JSON.stringify(error.response.data)?.slice(0, 2000)
-        );
-      } else {
-        console.error(
-          "No HTTP response received; request may have timed out or failed to connect."
-        );
-      }
-
+      console.error("========== CLICKPESA AUTH ERROR ==========");
+      console.error("HTTP Status:", status || "N/A");
+      console.error("Error Code:", code || "N/A");
+      console.error("Response:", JSON.stringify(data || {}));
+      console.error("Message:", error.message);
       console.error("==========================================");
 
-      // Hifadhi ujumbe wa ndani ikiwa kosa limetoka kwenye validation yetu.
+      // Hifadhi ujumbe maalumu uliotengenezwa hapo juu.
       if (
         error.message ===
-        "ClickPesa haikurudisha token inayohitajika."
+          "ClickPesa haikutoa token. Tafadhali jaribu tena baadaye."
       ) {
         throw error;
       }
 
+      const rawMessage = String(
+        data?.message ||
+        data?.error?.message ||
+        data?.error ||
+        error.message ||
+        ""
+      );
+
+      if (/not whitelisted|whitelist/i.test(rawMessage)) {
+        throw new Error(
+          "IP ya server haijawekwa kwenye whitelist ya ClickPesa. Tafadhali wasiliana na ClickPesa."
+        );
+      }
+
+      if (
+        status === 401 ||
+        status === 403
+      ) {
+        throw new Error(
+          "ClickPesa imekataa uthibitisho wa akaunti. Hakiki API Key, Client ID na ruhusa za akaunti."
+        );
+      }
+
+      if (
+        code === "ECONNABORTED" ||
+        code === "ECONNREFUSED" ||
+        code === "ENOTFOUND" ||
+        code === "ETIMEDOUT" ||
+        code === "EAI_AGAIN"
+      ) {
+        throw new Error(
+          "Imeshindikana kuwasiliana na ClickPesa. Tafadhali jaribu tena baadaye."
+        );
+      }
+
       throw new Error(
-        "Imeshindikana kupata uthibitisho wa ClickPesa. Angalia Railway Logs kwa maelezo ya kosa."
+        "Imeshindikana kupata token ya ClickPesa. Tafadhali jaribu tena au wasiliana na msimamizi."
       );
     }
   }
