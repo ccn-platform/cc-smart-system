@@ -27,7 +27,7 @@ class ClickPesaAuthService {
         url,
         {},
         {
-          timeout: 15000,
+          timeout: 30000,
           headers: {
             "api-key": apiKey,
             "client-id": clientId,
