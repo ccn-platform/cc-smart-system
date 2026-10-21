@@ -19,6 +19,17 @@ console.log("MIDDLEWARE:", {
 });
 
 // ============================================
+// DAILY REPORT
+// ============================================
+
+router.get(
+  "/daily",
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getDailyReport
+);
+
+// ============================================
 // WEEKLY REPORT
 // ============================================
 
@@ -84,10 +95,12 @@ router.get(
   reportController.getExpenseReport
 );
 
-// ============================================
+// =================================================
 // CURRENT CREDIT REPORT HISTORY
-// GET /reports/credit-history
-// ============================================
+//
+// GET:
+// /reports/credit-history
+// =================================================
 
 router.get(
   "/credit-history",
@@ -98,7 +111,6 @@ router.get(
 
 // ============================================
 // REPORT HISTORY BY ID
-// GET /reports/history/:id
 // ============================================
 
 router.get(
