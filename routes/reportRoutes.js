@@ -1,4 +1,5 @@
-  const express = require("express");
+ 
+const express = require("express");
 
 const router = express.Router();
 
@@ -13,13 +14,8 @@ require("../controllers/reportController");
 // ============================================
 
 console.log("MIDDLEWARE:", {
-
-protect:
-typeof middleware.protect,
-
-branchAccess:
-typeof middleware.branchAccess
-
+  protect: typeof middleware.protect,
+  branchAccess: typeof middleware.branchAccess
 });
 
 // ============================================
@@ -27,15 +23,10 @@ typeof middleware.branchAccess
 // ============================================
 
 router.get(
-
-"/daily",
-
-middleware.protect,
-
-middleware.branchAccess,
-
-reportController.getDailyReport
-
+  "/daily",
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getDailyReport
 );
 
 // ============================================
@@ -43,15 +34,10 @@ reportController.getDailyReport
 // ============================================
 
 router.get(
-
-"/weekly",
-
-middleware.protect,
-
-middleware.branchAccess,
-
-reportController.getWeeklyReport
-
+  "/weekly",
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getWeeklyReport
 );
 
 // ============================================
@@ -59,15 +45,10 @@ reportController.getWeeklyReport
 // ============================================
 
 router.get(
-
-"/monthly",
-
-middleware.protect,
-
-middleware.branchAccess,
-
-reportController.getMonthlyReport
-
+  "/monthly",
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getMonthlyReport
 );
 
 // ============================================
@@ -75,15 +56,10 @@ reportController.getMonthlyReport
 // ============================================
 
 router.get(
-
-"/inventory",
-
-middleware.protect,
-
-middleware.branchAccess,
-
-reportController.getInventoryReport
-
+  "/inventory",
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getInventoryReport
 );
 
 // ============================================
@@ -91,15 +67,10 @@ reportController.getInventoryReport
 // ============================================
 
 router.get(
-
-"/top-products",
-
-middleware.protect,
-
-middleware.branchAccess,
-
-reportController.getTopProductsReport
-
+  "/top-products",
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getTopProductsReport
 );
 
 // ============================================
@@ -107,15 +78,10 @@ reportController.getTopProductsReport
 // ============================================
 
 router.get(
-
-"/credit",
-
-middleware.protect,
-
-middleware.branchAccess,
-
-reportController.getCreditReport
-
+  "/credit",
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getCreditReport
 );
 
 // ============================================
@@ -123,79 +89,24 @@ reportController.getCreditReport
 // ============================================
 
 router.get(
-
-"/expense",
-
-middleware.protect,
-
-middleware.branchAccess,
-
-reportController.getExpenseReport
-
+  "/expense",
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getExpenseReport
 );
 
 // =================================================
-// NEW
 // CURRENT CREDIT REPORT HISTORY
-//
-// USED BY:
-// ReportHistoryScreen
 //
 // GET:
 // /reports/credit-history
 // =================================================
 
 router.get(
-
-"/credit-history",
-
-middleware.protect,
-
-middleware.branchAccess,
-
-reportController
-.getCurrentCreditReportHistory
-
-);
-
-// =================================================
-// NEW
-// CREDIT REPORT HISTORY BY DATE
-//
-// USED BY:
-// HistoryDetailsScreen
-//
-// EXAMPLE:
-// /reports/credit-history/2026-08-28
-// =================================================
-
-router.get(
-
-"/credit-history/:date",
-
-middleware.protect,
-
-middleware.branchAccess,
-
-reportController
-.getCreditReportHistoryByDate
-
-);
-
-// ============================================
-// GENERAL REPORT HISTORY
-// ============================================
-
-router.get(
-
-"/history",
-
-middleware.protect,
-
-middleware.branchAccess,
-
-reportController.getReportHistory
-
+  "/credit-history",
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getCurrentCreditReportHistory
 );
 
 // ============================================
@@ -203,20 +114,14 @@ reportController.getReportHistory
 // ============================================
 
 router.get(
-
-"/history/:id",
-
-middleware.protect,
-
-middleware.branchAccess,
-
-reportController.getReportHistoryById
-
+  "/history/:id",
+  middleware.protect,
+  middleware.branchAccess,
+  reportController.getReportHistoryById
 );
 
 // ============================================
 // EXPORT
 // ============================================
 
-module.exports =
-router;
+module.exports = router;
